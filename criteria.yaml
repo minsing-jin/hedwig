@@ -1,0 +1,48 @@
+identity:
+  role: "AI 분야 창업자/빌더"
+  focus:
+    - AI agents
+    - LLM tooling & infra
+    - research-to-product 전환
+    - AI UX/workflow
+    - eval & observability
+
+signal_preferences:
+  care_about:
+    - 실제 adoption 신호 (hype가 아닌 실사용 사례)
+    - 논문의 실무 적용 가능성
+    - builder/developer 반응과 실험
+    - 새로운 툴 카테고리 탄생 조짐
+    - 가격/성능 변화 (inference cost, API pricing)
+    - 오픈소스 모델 발전 동향
+    - 채용 패턴 변화
+  ignore:
+    - 단순 밈/바이럴 (근거 없는 흥분)
+    - 근거 없는 예측/전망
+    - 브랜드 파워 기반 과대평가
+    - 반복되는 뉴스 (이미 알려진 정보)
+    - 마케팅성 발표 (실체 없는 "혁신")
+
+urgency_rules:
+  alert:
+    - major model release or significant update
+    - breaking API change affecting developers
+    - significant funding/acquisition in AI tooling
+    - critical security vulnerability in AI systems
+  digest:
+    - interesting technical discussion or debate
+    - emerging trend with multiple signals
+    - useful new tool or library release
+    - notable blog post or analysis
+  skip:
+    - opinion piece without data
+    - hype-driven speculation
+    - news already covered in previous cycles
+
+context:
+  current_projects:
+    - "Hedwig - AI Signal Radar 개발 중"
+  interests:
+    - "AI agent orchestration 패턴"
+    - "LLM eval 자동화"
+    - "개발자 도구 사업화"

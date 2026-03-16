@@ -1,0 +1,107 @@
+goal: >
+  Build "Hedwig", a personal AI Signal Radar that monitors 6 platforms
+  (HN, Reddit, GeekNews, X, LinkedIn, Threads) for AI-related signals,
+  filters them via LLM judgment against personalized criteria,
+  delivers individual alerts + daily summaries + weekly briefings to Slack,
+  and evolves filtering criteria based on user feedback (emoji reactions + thread replies).
+
+constraints:
+  - Python-based (scripts + cron)
+  - Runs on local Mac via cron (no cloud infra required)
+  - Single user only (no auth, no multi-tenancy)
+  - OpenAI API for LLM scoring/summarization (2-tier: fast model for filtering, high-performance for interpretation)
+  - PostgreSQL/Supabase for persistent storage
+  - RSS/API workarounds for X and LinkedIn (no paid API), browser automation as fallback
+  - Slack webhook + Slack Events API for delivery and feedback capture
+  - No keyword-based filtering — LLM-only contextual judgment
+  - Devil's Advocate perspective included on each signal in MVP
+
+acceptance_criteria:
+  - Collects posts/signals from HN API successfully
+  - Collects posts/signals from Reddit API (auto-discovered AI-relevant subreddits)
+  - Collects posts/signals from GeekNews
+  - Collects posts/signals from X via RSS/workaround
+  - Collects posts/signals from LinkedIn via RSS/workaround
+  - Collects posts/signals from Threads via RSS/workaround
+  - LLM scores each signal against user criteria (relevance 0-1, urgency level)
+  - Each signal includes a Devil's Advocate counter-perspective
+  - Individual high-relevance signals posted to Slack #alerts channel
+  - Daily summary briefing posted to Slack #daily-brief channel
+  - Weekly briefing with trend patterns + opportunity hypotheses posted to Slack
+  - Slack emoji reactions on signals feed back into criteria refinement
+  - Slack thread replies on signals feed back into criteria refinement
+  - Criteria file evolves over time based on accumulated feedback
+  - Cron job runs reliably 1-2x daily on local Mac
+  - All collected signals persisted to Supabase/PostgreSQL with metadata
+
+ontology_schema:
+  name: SignalRadar
+  description: Domain model for AI signal monitoring, filtering, and delivery
+  fields:
+    - name: signal
+      type: object
+      description: >
+        A unit of information detected from a platform.
+        Contains source, title, url, content_summary, author,
+        published_at, platform, relevance_score, urgency_level,
+        devils_advocate_note, opportunity_note
+    - name: criteria
+      type: object
+      description: >
+        User's filtering criteria. Contains explicit_rules (array of strings),
+        context (current projects/interests), anti_patterns (what to ignore),
+        feedback_history (array of feedback events)
+    - name: briefing
+      type: object
+      description: >
+        Aggregated output. Contains type (alert/daily/weekly),
+        signals (array of signal refs), summary_text,
+        trend_patterns (array), opportunity_hypotheses (array),
+        generated_at
+    - name: feedback
+      type: object
+      description: >
+        User reaction captured from Slack. Contains signal_id,
+        reaction_type (emoji/thread), content, sentiment,
+        captured_at
+    - name: source_config
+      type: object
+      description: >
+        Platform source configuration. Contains platform_name,
+        api_method (api/rss/scrape/browser), endpoints (array),
+        rate_limits, enabled (boolean)
+
+evaluation_principles:
+  - name: signal_quality
+    description: "Filtered signals are genuinely relevant to user's AI interests, not noise"
+    weight: 0.30
+  - name: speed
+    description: "Important signals are captured and delivered within the batch cycle window"
+    weight: 0.20
+  - name: interpretation_depth
+    description: "Each signal includes why it matters + counter-perspective, not just a link"
+    weight: 0.20
+  - name: criteria_evolution
+    description: "Feedback loop measurably improves filtering precision over time"
+    weight: 0.15
+  - name: opportunity_insight
+    description: "Weekly briefings surface actionable opportunities tied to user's context"
+    weight: 0.15
+
+exit_conditions:
+  - name: mvp_complete
+    description: "All 6 sources collecting, LLM filtering working, Slack delivery operational"
+    criteria: "All acceptance criteria pass for at least 3 consecutive daily runs"
+  - name: feedback_loop_active
+    description: "Criteria evolution is measurably working"
+    criteria: "At least 10 feedback events processed and criteria updated accordingly"
+  - name: quality_threshold
+    description: "Signal quality meets user expectations"
+    criteria: "User rates >70% of delivered signals as relevant over a 1-week period"
+
+metadata:
+  version: "1.0.0"
+  created: "2026-03-16"
+  ambiguity_score: 0.15
+  interview_source: "conversation-context"
+  project_name: "hedwig"
