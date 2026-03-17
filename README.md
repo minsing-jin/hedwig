@@ -1,6 +1,14 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/platforms-6-orange" alt="Platforms">
+</p>
+
 # Hedwig
 
-**Personal AI Signal Radar** — 6개 플랫폼의 AI 신호를 자동 수집하고, LLM으로 필터링해서, Slack으로 전달하는 개인 인텔리전스 시스템.
+**Personal AI Signal Radar** — Automatically collects AI signals from 6 platforms, filters them with LLM judgment, and delivers what matters to Slack.
+
+> **[한국어](docs/README.ko.md)** | **[中文](docs/README.zh.md)** | **[日本語](docs/README.ja.md)**
 
 ```
 Collect → Score → Filter → Deliver
@@ -9,19 +17,19 @@ Collect → Score → Filter → Deliver
 
 ## Why
 
-AI 분야 정보가 X, Reddit, HN, LinkedIn, Threads, GeekNews 등에 흩어져 있다.
-매일 플랫폼을 돌아다니며 노이즈 속에서 의미 있는 신호를 찾는 건 피로하다.
+AI information is scattered across X, Reddit, HN, LinkedIn, Threads, GeekNews, and more. Manually scanning each platform for meaningful signals among noise is exhausting.
 
-Hedwig는 **내 기준에 맞는 신호만 골라서** Slack으로 보내준다.
+Hedwig **filters only the signals that match your criteria** and sends them to Slack.
 
 ## Features
 
-- **6개 소스 수집** — HN, Reddit (12개 AI subreddit), GeekNews, AI blogs/newsletters, corporate AI blogs, indie AI press
-- **LLM 2-tier 스코어링** — 빠른 모델로 필터링, 고성능 모델로 해석/요약
-- **Devil's Advocate** — 각 신호에 반대 관점/과열 경고 포함
-- **3단계 출력** — 개별 Alert + Daily Briefing + Weekly Briefing (트렌드 + 기회 포착)
-- **피드백 루프** — Slack 이모지/쓰레드로 반응하면 필터링 기준이 자동 진화
-- **criteria.yaml** — 관심사, 무시할 것, 긴급도 규칙, 현재 프로젝트 컨텍스트를 YAML로 관리
+- **6 Source Collectors** — HN, Reddit (12 AI subreddits), GeekNews, AI blogs/newsletters, corporate AI blogs, indie AI press
+- **2-Tier LLM Scoring** — Fast model for filtering, high-performance model for interpretation/summary
+- **Devil's Advocate** — Every signal includes a counter-perspective and hype warning
+- **3-Level Output** — Individual Alerts + Daily Briefing + Weekly Briefing (trends + opportunity notes)
+- **Feedback Loop** — React with Slack emoji/threads and your filtering criteria evolve automatically
+- **criteria.yaml** — Manage interests, ignore patterns, urgency rules, and project context in YAML
+- **Agent-Ready** — Python API, CLI JSON output, and MCP server for AI agent integration
 
 ## Quick Start
 
@@ -32,29 +40,29 @@ cd hedwig
 uv venv .venv && source .venv/bin/activate
 uv pip install -e .
 
-# 2. Set up environment
+# 2. Configure
 cp .env.example .env
 # Edit .env with your API keys (see Configuration below)
 
 # 3. Create Supabase tables
 # Run migrations/001_create_tables.sql in Supabase SQL Editor
 
-# 4. Test
+# 4. Run
 python -m hedwig.main --dry-run      # Collect only (no API keys needed)
-python -m hedwig.main --collect      # Collect + LLM score
+python -m hedwig.main --collect      # Collect + LLM scoring
 python -m hedwig.main                # Full pipeline
 python -m hedwig.main --weekly       # Weekly briefing
 ```
 
 ## Configuration
 
-### Required API Keys (`.env`)
+### API Keys (`.env`)
 
 | Key | Where to get |
 |-----|-------------|
 | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API Keys |
 | `SUPABASE_URL` | [supabase.com](https://supabase.com) → Project → Settings → API |
-| `SUPABASE_KEY` | Same as above (use `service_role` key) |
+| `SUPABASE_KEY` | Same (use `service_role` key) |
 | `SLACK_WEBHOOK_ALERTS` | [api.slack.com](https://api.slack.com) → Create App → Incoming Webhooks |
 | `SLACK_WEBHOOK_DAILY` | Same app, second webhook for daily/weekly channel |
 
@@ -67,34 +75,23 @@ identity:
 
 signal_preferences:
   care_about:
-    - 실제 adoption 신호
-    - 논문의 실무 적용 가능성
+    - Real adoption signals (not hype)
+    - Practical applicability of papers
   ignore:
-    - 단순 밈/바이럴
-    - 근거 없는 예측
+    - Memes and viral content
+    - Unsubstantiated predictions
 
 context:
   current_projects:
     - "My current project"
 ```
 
-Edit this file to tune what Hedwig considers relevant.
-
 ## Cron Setup
 
 ```bash
 bash setup.sh
-# Registers:
-#   Daily  at 09:00, 19:00
-#   Weekly at Monday 10:00
-```
-
-Or manually:
-```bash
-crontab -e
-# Add:
-0 9,19 * * * cd /path/to/hedwig && .venv/bin/python -m hedwig.main >> logs/hedwig.log 2>&1
-0 10 * * 1 cd /path/to/hedwig && .venv/bin/python -m hedwig.main --weekly >> logs/hedwig.log 2>&1
+# Daily  at 09:00, 19:00
+# Weekly at Monday 10:00
 ```
 
 ## Architecture
@@ -102,21 +99,23 @@ crontab -e
 ```
 hedwig/
 ├── sources/           # 6 platform collectors
-│   ├── hackernews.py  # HN API (top + best stories)
-│   ├── reddit.py      # Reddit JSON API (12 AI subreddits)
+│   ├── hackernews.py  # HN API (top + best)
+│   ├── reddit.py      # Reddit JSON API (12 subreddits)
 │   ├── geeknews.py    # GeekNews RSS
 │   ├── twitter.py     # AI blogs/newsletters (RSS)
 │   ├── linkedin.py    # Corporate AI blogs (RSS)
 │   └── threads.py     # Indie AI press (RSS)
 ├── engine/
-│   ├── scorer.py      # OpenAI 2-tier scoring (gpt-4o-mini → gpt-4o)
+│   ├── scorer.py      # OpenAI 2-tier (gpt-4o-mini → gpt-4o)
 │   └── briefing.py    # Daily/weekly briefing generation
 ├── delivery/
 │   └── slack.py       # Slack Block Kit messages
 ├── storage/
-│   └── supabase.py    # Signal persistence + dedup
+│   └── supabase.py    # Persistence + dedup
 ├── feedback/
-│   └── slack_events.py # Emoji/thread feedback → criteria evolution
+│   └── slack_events.py # Emoji/thread → criteria evolution
+├── agent.py           # Agent API (Python/CLI/JSON)
+├── mcp_server.py      # MCP server for AI agents
 ├── models.py          # Pydantic data models
 ├── config.py          # Environment & criteria loader
 └── main.py            # CLI entry point
@@ -134,46 +133,60 @@ hedwig/
 | Indie AI Press | RSS (TechCrunch AI, The Decoder, etc.) | ~15 |
 | **Total** | | **~200** |
 
-## Slack Output
+## Slack Output Examples
 
 ### Individual Alert (`#alerts`)
 ```
 🟢 [HACKER] LLM Architecture Gallery
 relevance: 0.85 | urgency: alert
 
-💡 왜 중요한가: LLM 아키텍처를 시각적으로 비교한 갤러리로,
-   모델 설계 패턴을 빠르게 파악할 수 있음
+💡 Why it matters: Visual gallery comparing LLM architectures,
+   useful for quickly grasping model design patterns
 
-😈 반대 관점: 시각화는 유용하지만 실제 성능 차이를 설명하진 않음
+😈 Counter-view: Visualization is helpful but doesn't explain
+   actual performance differences
 ```
 
-### Daily Briefing (`#daily-brief`)
-- 🔴 즉시 주목 (Alert 레벨)
-- 🟡 오늘의 주요 흐름
-- 🟢 참고할 만한 것
-- 💡 오늘의 인사이트
+### Daily Briefing
+🔴 Immediate attention &nbsp;|&nbsp; 🟡 Key trends &nbsp;|&nbsp; 🟢 Worth noting &nbsp;|&nbsp; 💡 Insights
 
 ### Weekly Briefing
-- 📊 핵심 트렌드
-- 🔥 Top 5 신호
-- 📈 약신호 추적
-- 🎯 기회 포착 (Opportunity Notes)
-- ⚖️ 과열 경고
+📊 Trends &nbsp;|&nbsp; 🔥 Top 5 &nbsp;|&nbsp; 📈 Weak signals &nbsp;|&nbsp; 🎯 Opportunities &nbsp;|&nbsp; ⚖️ Hype warnings
 
-## OpenClaw / Codex Integration
+## Agent Integration
 
-Hedwig can be used as a tool by AI agents (OpenClaw, Codex, etc.):
+Hedwig can be used as a tool by AI agents:
 
-```bash
-# Collect and return JSON (for agent consumption)
-python -m hedwig.agent
+### Python API
+```python
+from hedwig.agent import pipeline, collect, score, briefing
 
-# Or import directly
-from hedwig.sources.hackernews import HackerNewsSource
-from hedwig.engine.scorer import score_posts
+signals = await pipeline(top=10)
+posts = await collect(sources=["hackernews", "reddit"])
+text = await briefing("weekly")
 ```
 
-See `hedwig/agent.py` for the agent-friendly interface.
+### CLI (JSON output)
+```bash
+python -m hedwig.agent --top 10
+python -m hedwig.agent --source reddit
+python -m hedwig.agent --briefing daily
+```
+
+### MCP Server
+```json
+{
+  "mcpServers": {
+    "hedwig": {
+      "command": "python",
+      "args": ["-m", "hedwig.mcp_server"],
+      "cwd": "/path/to/hedwig"
+    }
+  }
+}
+```
+
+Tools: `hedwig_collect`, `hedwig_score`, `hedwig_briefing`, `hedwig_pipeline`
 
 ## License
 
