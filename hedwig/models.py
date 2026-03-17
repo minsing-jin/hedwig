@@ -13,6 +13,7 @@ class Platform(str, Enum):
     TWITTER = "twitter"
     LINKEDIN = "linkedin"
     THREADS = "threads"
+    YOUTUBE = "youtube"
 
 
 class UrgencyLevel(str, Enum):

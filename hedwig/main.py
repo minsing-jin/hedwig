@@ -22,6 +22,7 @@ from hedwig.sources.linkedin import LinkedInSource
 from hedwig.sources.reddit import RedditSource
 from hedwig.sources.threads import ThreadsSource
 from hedwig.sources.twitter import TwitterSource
+from hedwig.sources.youtube import YouTubeSource
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +41,7 @@ async def collect_all() -> list:
         ("Twitter/X", TwitterSource()),
         ("LinkedIn", LinkedInSource()),
         ("Threads", ThreadsSource()),
+        ("YouTube", YouTubeSource()),
     ]
 
     all_posts = []

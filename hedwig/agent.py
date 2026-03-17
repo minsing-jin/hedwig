@@ -38,6 +38,7 @@ async def collect(sources: list[str] | None = None) -> list[dict]:
     from hedwig.sources.reddit import RedditSource
     from hedwig.sources.threads import ThreadsSource
     from hedwig.sources.twitter import TwitterSource
+    from hedwig.sources.youtube import YouTubeSource
 
     source_map = {
         "hackernews": HackerNewsSource,
@@ -46,6 +47,7 @@ async def collect(sources: list[str] | None = None) -> list[dict]:
         "twitter": TwitterSource,
         "linkedin": LinkedInSource,
         "threads": ThreadsSource,
+        "youtube": YouTubeSource,
     }
 
     active = sources or list(source_map.keys())

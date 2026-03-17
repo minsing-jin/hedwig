@@ -98,7 +98,7 @@ TOOLS = [
             "properties": {
                 "sources": {
                     "type": "array",
-                    "items": {"type": "string", "enum": ["hackernews", "reddit", "geeknews", "twitter", "linkedin", "threads"]},
+                    "items": {"type": "string", "enum": ["hackernews", "reddit", "geeknews", "twitter", "linkedin", "threads", "youtube"]},
                     "description": "Which sources to collect from. Default: all.",
                 },
                 "limit": {"type": "integer", "description": "Max posts to return. Default: 50."},
@@ -113,7 +113,7 @@ TOOLS = [
             "properties": {
                 "sources": {
                     "type": "array",
-                    "items": {"type": "string", "enum": ["hackernews", "reddit", "geeknews", "twitter", "linkedin", "threads"]},
+                    "items": {"type": "string", "enum": ["hackernews", "reddit", "geeknews", "twitter", "linkedin", "threads", "youtube"]},
                     "description": "Which sources to collect from. Default: all.",
                 },
                 "top": {"type": "integer", "description": "Return top N signals. Default: 20."},
@@ -142,7 +142,7 @@ TOOLS = [
             "properties": {
                 "sources": {
                     "type": "array",
-                    "items": {"type": "string", "enum": ["hackernews", "reddit", "geeknews", "twitter", "linkedin", "threads"]},
+                    "items": {"type": "string", "enum": ["hackernews", "reddit", "geeknews", "twitter", "linkedin", "threads", "youtube"]},
                     "description": "Which sources. Default: all.",
                 },
                 "top": {"type": "integer", "description": "Top N signals. Default: 20."},
