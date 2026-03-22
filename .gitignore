@@ -4,3 +4,10 @@ __pycache__/
 .venv/
 dist/
 *.egg-info/
+.claude/auto-resume/
+.tools/
+.local-home/
+.codex/
+.agents/
+.omx/
+AGENTS.md

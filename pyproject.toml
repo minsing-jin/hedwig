@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 hedwig = "hedwig.main:main"
+hedwig-openclaw = "hedwig.adapters.openclaw:main"
 
 [build-system]
 requires = ["hatchling"]

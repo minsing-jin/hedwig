@@ -94,6 +94,69 @@ bash setup.sh
 # Weekly at Monday 10:00
 ```
 
+## Claude Code Auto-Resume
+
+This project includes a **project-only**, **opt-in** Claude Code skill that helps recover from Claude's 5-hour usage limit.
+
+- Skill name: `/claude-limit-auto-resume`
+- Scope: `.claude/skills/claude-limit-auto-resume/`
+- State: local only under `.claude/auto-resume/`
+- Default: off
+
+### Enable
+
+Inside Claude Code for this project:
+
+```text
+/claude-limit-auto-resume enable
+```
+
+Or from the shell:
+
+```bash
+./scripts/claude-auto-resume enable
+```
+
+### Start a managed Claude session
+
+After enabling, start future Claude sessions through the wrapper:
+
+```bash
+./scripts/claude-auto-resume wrap -- claude
+```
+
+When Claude hits a usage limit, the wrapper:
+
+1. Detects the limit message
+2. Saves a local handoff under `.claude/auto-resume/handoffs/`
+3. Waits for the reset window
+4. Relaunches Claude with `--resume` when a session id is available, otherwise `--continue`
+
+### Disable or inspect
+
+```text
+/claude-limit-auto-resume status
+/claude-limit-auto-resume doctor
+/claude-limit-auto-resume disable
+```
+
+### Limits
+
+- Existing unmanaged Claude sessions are not retroactively adopted.
+- Claude's native `--resume` can still lose some context after usage limits, so this workflow saves a project-local handoff file to improve recovery.
+- Recent transcript excerpts are stored locally while the watchdog is active. Treat the feature as a convenience layer, not a security boundary.
+
+## Local Codex Workflow
+
+Use the repo-local wrappers if you want `oh-my-codex` and `ouroboros` isolated to this project:
+
+```bash
+bash scripts/setup-codex-local.sh
+bin/omx
+bin/ooo init start "your idea here"
+bash scripts/doctor-codex-local.sh
+```
+
 ## Architecture
 
 ```

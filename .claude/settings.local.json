@@ -4,7 +4,9 @@
       "Bash(claude plugin:*)",
       "Bash(python3:*)",
       "Bash(uv venv:*)",
-      "Bash(.venv/bin/python -c \"\nimport asyncio\nfrom hedwig.sources.hackernews import HackerNewsSource\nfrom hedwig.sources.reddit import RedditSource\nfrom hedwig.sources.geeknews import GeekNewsSource\n\nasync def test\\(\\):\n    hn = HackerNewsSource\\(\\)\n    reddit = RedditSource\\(\\)\n    geeknews = GeekNewsSource\\(\\)\n\n    hn_posts = await hn.fetch\\(limit=10\\)\n    print\\(f'HN: {len\\(hn_posts\\)} posts'\\)\n    for p in hn_posts[:3]:\n        print\\(f'  - {p.title[:80]}'\\)\n\n    reddit_posts = await reddit.fetch\\(limit=10\\)\n    print\\(f'Reddit: {len\\(reddit_posts\\)} posts'\\)\n    for p in reddit_posts[:3]:\n        print\\(f'  - [{p.extra.get\\(\\\\\"subreddit\\\\\",\\\\\"\\\\\"\\)}] {p.title[:80]}'\\)\n\n    gn_posts = await geeknews.fetch\\(limit=10\\)\n    print\\(f'GeekNews: {len\\(gn_posts\\)} posts'\\)\n    for p in gn_posts[:3]:\n        print\\(f'  - {p.title[:80]}'\\)\n\nasyncio.run\\(test\\(\\)\\)\n\" 2>&1)"
+      "Bash(.venv/bin/python -c \"\nimport asyncio\nfrom hedwig.sources.hackernews import HackerNewsSource\nfrom hedwig.sources.reddit import RedditSource\nfrom hedwig.sources.geeknews import GeekNewsSource\n\nasync def test\\(\\):\n    hn = HackerNewsSource\\(\\)\n    reddit = RedditSource\\(\\)\n    geeknews = GeekNewsSource\\(\\)\n\n    hn_posts = await hn.fetch\\(limit=10\\)\n    print\\(f'HN: {len\\(hn_posts\\)} posts'\\)\n    for p in hn_posts[:3]:\n        print\\(f'  - {p.title[:80]}'\\)\n\n    reddit_posts = await reddit.fetch\\(limit=10\\)\n    print\\(f'Reddit: {len\\(reddit_posts\\)} posts'\\)\n    for p in reddit_posts[:3]:\n        print\\(f'  - [{p.extra.get\\(\\\\\"subreddit\\\\\",\\\\\"\\\\\"\\)}] {p.title[:80]}'\\)\n\n    gn_posts = await geeknews.fetch\\(limit=10\\)\n    print\\(f'GeekNews: {len\\(gn_posts\\)} posts'\\)\n    for p in gn_posts[:3]:\n        print\\(f'  - {p.title[:80]}'\\)\n\nasyncio.run\\(test\\(\\)\\)\n\" 2>&1)",
+      "Bash(uv pip:*)",
+      "Bash(python:*)"
     ]
   }
 }
