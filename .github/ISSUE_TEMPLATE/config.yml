@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contribution Workflow
+    url: https://github.com/minsing-jin/hedwig/blob/main/AGENTS.md
+    about: Review the Codex issue-first and PR-first workflow for this repository.

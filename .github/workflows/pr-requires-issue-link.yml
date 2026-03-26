@@ -1,0 +1,21 @@
+name: PR Requires Issue Link
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require issue-closing reference in PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          pattern='(Close|Closes|Closed|Fix|Fixes|Fixed|Resolve|Resolves|Resolved)[[:space:]]+#([0-9]+)'
+          if printf '%s' "${PR_BODY:-}" | grep -Eiq "$pattern"; then
+            exit 0
+          fi
+          echo "PR body must include an issue-closing reference such as 'Closes #123'." >&2
+          exit 1

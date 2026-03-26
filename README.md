@@ -146,17 +146,6 @@ When Claude hits a usage limit, the wrapper:
 - Claude's native `--resume` can still lose some context after usage limits, so this workflow saves a project-local handoff file to improve recovery.
 - Recent transcript excerpts are stored locally while the watchdog is active. Treat the feature as a convenience layer, not a security boundary.
 
-## Local Codex Workflow
-
-Use the repo-local wrappers if you want `oh-my-codex` and `ouroboros` isolated to this project:
-
-```bash
-bash scripts/setup-codex-local.sh
-bin/omx
-bin/ooo init start "your idea here"
-bash scripts/doctor-codex-local.sh
-```
-
 ## Architecture
 
 ```

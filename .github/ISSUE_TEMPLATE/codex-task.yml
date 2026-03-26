@@ -1,0 +1,48 @@
+name: Codex Task
+description: Track a Codex-driven implementation task before work starts.
+title: "[codex] "
+labels:
+  - codex
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should change?
+      placeholder: Describe the user-visible or engineering outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Context
+      description: Why is this work needed?
+      placeholder: Current behavior, pain point, or missing capability.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in scope and what is intentionally out of scope?
+      placeholder: In scope / out of scope boundaries.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Concrete conditions that define done.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification Plan
+      description: Which commands or checks should prove the change?
+      placeholder: pytest ..., manual flow, screenshots, etc.
+    validations:
+      required: true
