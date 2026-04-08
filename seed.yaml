@@ -1,42 +1,166 @@
 goal: >
-  Build "Hedwig", a personal AI Signal Radar that monitors 6 platforms
-  (HN, Reddit, GeekNews, X, LinkedIn, Threads) for AI-related signals,
-  filters them via LLM judgment against personalized criteria,
-  delivers individual alerts + daily summaries + weekly briefings to Slack,
-  and evolves filtering criteria based on user feedback (emoji reactions + thread replies).
+  Build "Hedwig", a self-evolving personal AI Signal Radar.
+  Monitors 15+ platforms (SNS, tech communities, academic, prediction markets, web)
+  for AI-related signals, filters via LLM judgment against user-defined personalized criteria,
+  delivers to Slack/Discord channels (alerts, daily brief, weekly brief),
+  and autonomously evolves its filtering criteria, source selection, interpretation perspective,
+  and exploration direction based on boolean user feedback (upvote/downvote)
+  and voluntary natural-language feedback — like Karpathy's autoresearch pattern
+  applied to personal information curation.
+  The core moat: a self-improving recommendation algorithm whose control belongs
+  to the individual, not a corporation.
+
+vision: >
+  Algorithm sovereignty for individuals. Every person should own and control
+  the algorithm that decides what information reaches them. Hedwig proves this
+  is possible by letting the user shape their algorithm through Socratic onboarding,
+  boolean feedback, and natural-language direction — while the system autonomously
+  improves itself within those user-defined boundaries.
 
 constraints:
-  - Python-based (scripts + cron)
-  - Runs on local Mac via cron (no cloud infra required)
-  - Single user only (no auth, no multi-tenancy)
-  - OpenAI API for LLM scoring/summarization (2-tier: fast model for filtering, high-performance for interpretation)
-  - PostgreSQL/Supabase for persistent storage
-  - RSS/API workarounds for X and LinkedIn (no paid API), browser automation as fallback
-  - Slack webhook + Slack Events API for delivery and feedback capture
+  - Python-based, runs on local Mac (no cloud infra for v1)
+  - Single user only (no auth, no multi-tenancy) — product-ization is future work
+  - LLM API for scoring/summarization (2-tier: fast model for filtering, high-performance for interpretation)
+  - PostgreSQL/Supabase for persistent storage + evolution history
+  - Slack + Discord webhooks for delivery
   - No keyword-based filtering — LLM-only contextual judgment
-  - Devil's Advocate perspective included on each signal in MVP
+  - Devil's Advocate counter-perspective on every signal
+  - User feedback is boolean (upvote/downvote) + optional natural-language
+  - System must never ask the user unprompted questions — Socratic dialogue only when user initiates
+  - Source layer must be plugin-based — user can add custom RSS, Discord channels, Telegram, API endpoints
+  - Hybrid rebuild: preserve existing engine/delivery/models/storage, rebuild source/evolution/onboarding
 
-acceptance_criteria:
-  - Collects posts/signals from HN API successfully
-  - Collects posts/signals from Reddit API (auto-discovered AI-relevant subreddits)
-  - Collects posts/signals from GeekNews
-  - Collects posts/signals from X via RSS/workaround
-  - Collects posts/signals from LinkedIn via RSS/workaround
-  - Collects posts/signals from Threads via RSS/workaround
-  - LLM scores each signal against user criteria (relevance 0-1, urgency level)
-  - Each signal includes a Devil's Advocate counter-perspective
-  - Individual high-relevance signals posted to Slack #alerts channel
-  - Daily summary briefing posted to Slack #daily-brief channel
-  - Weekly briefing with trend patterns + opportunity hypotheses posted to Slack
-  - Slack emoji reactions on signals feed back into criteria refinement
-  - Slack thread replies on signals feed back into criteria refinement
-  - Criteria file evolves over time based on accumulated feedback
-  - Cron job runs reliably 1-2x daily on local Mac
-  - All collected signals persisted to Supabase/PostgreSQL with metadata
+sources:
+  builtin:
+    sns:
+      - X (via RSS proxies + cookie-based scraping)
+      - Reddit (public API + smart subreddit discovery)
+      - LinkedIn (corporate AI blog RSS)
+      - Threads (newsletter RSS)
+      - Bluesky (AT Protocol)
+      - TikTok (via ScrapeCreators or equivalent)
+      - Instagram (via ScrapeCreators or equivalent)
+    tech_communities:
+      - Hacker News (Firebase API)
+      - GeekNews (RSS)
+      - YouTube (RSS + transcript extraction)
+      - Polymarket (prediction markets API)
+    academic:
+      - arXiv (API)
+      - Semantic Scholar (API)
+      - Papers With Code (API/RSS)
+    web:
+      - Exa / Brave / Perplexity semantic web search
+    newsletters:
+      - RSS-based (Ben's Bites, Latent Space, The Decoder, etc.)
+  user_extensible:
+    - Custom RSS feeds
+    - Custom Discord server/channel
+    - Custom Telegram channel
+    - Custom API endpoint (with user-defined schema)
+
+socratic_onboarding:
+  philosophy: >
+    Inspired by Ouroboros Socratic interview. The system does not assume
+    what the user wants. It asks until ambiguity <= 0.2 across all dimensions:
+    what topics, what depth, what urgency thresholds, what sources matter most,
+    what to ignore, what opportunities to watch for.
+  triggers:
+    - initial: Deep Socratic interview on first use — crystallizes criteria, urgency rules, context
+    - on_demand: User can say "기준 바꿔줘" anytime to re-enter Socratic dialogue
+  outputs:
+    - Personalized criteria (replaces criteria.yaml)
+    - Urgency classification rules (alert/digest/skip) — determined by LLM analysis during onboarding
+    - Source priority weights
+    - User context profile (role, projects, interests, anti-patterns)
+  method: >
+    LLM-driven conversational interview. Asks one question at a time.
+    Drills into ambiguous areas. Does not proceed until each dimension is clear.
+    Produces structured criteria output at the end.
+
+evolution_engine:
+  philosophy: >
+    Autoresearch pattern (Karpathy) applied to information curation.
+    The system modifies its own algorithm parameters, measures user satisfaction
+    via upvote ratio, keeps improvements, discards regressions.
+    The user controls direction; the system optimizes execution.
+
+  daily_loop:
+    description: "Short-horizon micro-evolution"
+    cycle: |
+      criteria vN → collect from all sources → LLM filter/score → deliver to channels
+      → collect boolean feedback (upvote/downvote) + optional natural-language feedback
+      → LLM analyzes feedback patterns → generates criteria vN+1
+      → next day runs with vN+1
+    mutations:
+      - criteria weight adjustments (topic relevance thresholds)
+      - urgency classification tuning
+      - source reliability scoring updates
+    fitness_metric: "upvote_ratio = upvotes / (upvotes + downvotes) — higher is better"
+
+  weekly_loop:
+    description: "Long-horizon deep evolution"
+    cycle: |
+      aggregate 7 days of feedback + signals + user natural-language input
+      → LLM deep analysis: taste patterns, interest drift, blind spots
+      → update user memory/profile (long-term preference model)
+      → source evolution: add/remove/reprioritize sources and sub-sources
+      → interpretation evolution: adjust explanation style and depth
+      → exploration evolution: propose new search directions and keywords
+      → generate criteria vN+7 (major update)
+    mutations:
+      - new subreddit/RSS feed/channel discovery and auto-addition
+      - removal of consistently low-value sources
+      - interpretation perspective shifts (e.g., more technical depth, less hype coverage)
+      - new exploration directions ("이런 방향도 찾아볼까?")
+    memory:
+      description: >
+        Persistent user preference model that accumulates across weeks.
+        Tracks: confirmed interests, rejected topics, evolving context,
+        long-term taste trajectory. Used to improve weekly evolution quality.
+      storage: "Supabase user_memory table + versioned criteria history"
+
+  feedback_design:
+    primary: "boolean — upvote/downvote (Tinder-style swipe or button)"
+    secondary: "natural-language — user voluntarily provides direction anytime"
+    never: "system never asks unprompted questions"
+    algorithm_reference: >
+      Concrete feedback-to-evolution mapping to be designed based on
+      recommendation system research (YouTube, X, Instagram algorithm papers,
+      collaborative filtering, content-based filtering, bandit algorithms).
+
+  self_improvement_dimensions:
+    - name: criteria_evolution
+      description: "Filter criteria get sharper — fewer false positives, fewer missed signals"
+    - name: source_evolution
+      description: "System discovers and adds valuable new sources, drops noisy ones"
+    - name: interpretation_evolution
+      description: "Signal explanations become more useful and aligned with user's thinking"
+    - name: exploration_evolution
+      description: "System proposes new research directions the user hadn't considered"
+
+delivery:
+  channels:
+    - name: alerts
+      description: "Urgent signals — new model releases, breaking API changes, critical news"
+      platform: Slack + Discord
+    - name: daily-brief
+      description: "Daily summary — filtered signals, trends, Devil's Advocate notes"
+      platform: Slack + Discord
+    - name: weekly-brief
+      description: "Weekly deep analysis — patterns, opportunities, taste evolution report"
+      platform: Slack + Discord
+  future_work:
+    - Native app with generative UI
+  format:
+    - Each signal includes: title, source, relevance score, why_relevant, devils_advocate
+    - Daily brief in Korean with trend analysis
+    - Weekly brief includes opportunity hypotheses and exploration suggestions
 
 ontology_schema:
   name: SignalRadar
-  description: Domain model for AI signal monitoring, filtering, and delivery
+  version: "2.0"
+  description: Domain model for self-evolving AI signal curation
   fields:
     - name: signal
       type: object
@@ -44,64 +168,127 @@ ontology_schema:
         A unit of information detected from a platform.
         Contains source, title, url, content_summary, author,
         published_at, platform, relevance_score, urgency_level,
-        devils_advocate_note, opportunity_note
+        devils_advocate_note, opportunity_note, exploration_tags
     - name: criteria
       type: object
       description: >
-        User's filtering criteria. Contains explicit_rules (array of strings),
-        context (current projects/interests), anti_patterns (what to ignore),
-        feedback_history (array of feedback events)
+        User's filtering criteria — auto-generated by Socratic onboarding,
+        auto-evolved by daily/weekly loops. Contains versioned rules,
+        topic weights, urgency thresholds, anti_patterns,
+        source_preferences, interpretation_style.
+        Versioned: every mutation is stored with timestamp and diff.
+    - name: user_memory
+      type: object
+      description: >
+        Long-horizon user preference model. Contains confirmed_interests,
+        rejected_topics, taste_trajectory (array of weekly snapshots),
+        context (role, projects, goals), natural_language_feedback_history.
+        Grows over weeks. Never deleted, only appended.
     - name: briefing
       type: object
       description: >
         Aggregated output. Contains type (alert/daily/weekly),
         signals (array of signal refs), summary_text,
         trend_patterns (array), opportunity_hypotheses (array),
+        exploration_suggestions (array), evolution_report (weekly only),
         generated_at
     - name: feedback
       type: object
       description: >
-        User reaction captured from Slack. Contains signal_id,
-        reaction_type (emoji/thread), content, sentiment,
+        User reaction. Contains signal_id,
+        vote (boolean: up/down), natural_language (optional string),
         captured_at
-    - name: source_config
+    - name: source_plugin
       type: object
       description: >
-        Platform source configuration. Contains platform_name,
-        api_method (api/rss/scrape/browser), endpoints (array),
-        rate_limits, enabled (boolean)
+        Platform source configuration — plugin architecture.
+        Contains plugin_id, platform_name, plugin_type (builtin/custom),
+        fetch_method (api/rss/scrape/browser), endpoints (array),
+        reliability_score (auto-evolved), enabled (boolean),
+        added_by (system/user), added_at, last_useful_signal_at
+    - name: evolution_log
+      type: object
+      description: >
+        Record of each evolution cycle. Contains cycle_type (daily/weekly),
+        cycle_number, mutations_applied (array), fitness_before, fitness_after,
+        kept (boolean), criteria_diff, timestamp
 
 evaluation_principles:
   - name: signal_quality
-    description: "Filtered signals are genuinely relevant to user's AI interests, not noise"
-    weight: 0.30
-  - name: speed
-    description: "Important signals are captured and delivered within the batch cycle window"
-    weight: 0.20
+    description: "Filtered signals are genuinely relevant — upvote ratio > 70%"
+    weight: 0.25
+  - name: self_improvement
+    description: "Upvote ratio measurably increases over consecutive weeks"
+    weight: 0.25
   - name: interpretation_depth
-    description: "Each signal includes why it matters + counter-perspective, not just a link"
-    weight: 0.20
-  - name: criteria_evolution
-    description: "Feedback loop measurably improves filtering precision over time"
+    description: "Each signal includes actionable why + counter-perspective, not just a link"
+    weight: 0.15
+  - name: source_coverage
+    description: "No major AI event is missed across all monitored platforms"
     weight: 0.15
   - name: opportunity_insight
     description: "Weekly briefings surface actionable opportunities tied to user's context"
-    weight: 0.15
+    weight: 0.10
+  - name: noise_reduction
+    description: "User spends less time filtering — system handles the cognitive load"
+    weight: 0.10
 
 exit_conditions:
-  - name: mvp_complete
-    description: "All 6 sources collecting, LLM filtering working, Slack delivery operational"
-    criteria: "All acceptance criteria pass for at least 3 consecutive daily runs"
-  - name: feedback_loop_active
-    description: "Criteria evolution is measurably working"
-    criteria: "At least 10 feedback events processed and criteria updated accordingly"
-  - name: quality_threshold
+  - name: mvp_operational
+    description: "Core pipeline running with self-evolution"
+    criteria: >
+      All 15+ sources collecting, LLM filtering working, Slack/Discord delivery operational,
+      Socratic onboarding produces valid criteria, daily evolution loop executes,
+      for at least 3 consecutive daily runs.
+  - name: evolution_active
+    description: "Self-improvement is measurably working"
+    criteria: >
+      At least 7 daily evolution cycles completed. Criteria diff log shows
+      meaningful mutations. Upvote ratio on week 2 > week 1.
+  - name: weekly_loop_active
+    description: "Long-horizon evolution is working"
+    criteria: >
+      At least 2 weekly evolution cycles completed. Source list has been
+      auto-modified (added or removed). User memory contains accumulated profile.
+  - name: user_satisfaction
     description: "Signal quality meets user expectations"
-    criteria: "User rates >70% of delivered signals as relevant over a 1-week period"
+    criteria: "User upvote ratio > 70% sustained over 2+ weeks"
+
+architecture:
+  hybrid_rebuild:
+    preserve:
+      - hedwig/engine/scorer.py (LLM scoring — extend, don't rewrite)
+      - hedwig/engine/briefing.py (daily/weekly briefing generation)
+      - hedwig/delivery/slack.py (Slack Block Kit delivery)
+      - hedwig/storage/supabase.py (DB layer — extend schema)
+      - hedwig/models.py (Pydantic models — extend)
+      - hedwig/config.py (config loading)
+    rebuild:
+      - hedwig/sources/ (plugin architecture, 15+ sources, user-extensible)
+      - hedwig/evolution/ (daily loop, weekly loop, mutation engine, fitness tracking)
+      - hedwig/onboarding/ (Socratic interview, criteria generation)
+      - hedwig/feedback/ (boolean + natural-language capture, Slack/Discord)
+      - hedwig/memory/ (user preference model, long-horizon tracking)
+    remove:
+      - hedwig/claude_auto_resume.py (not Hedwig-related)
+      - hedwig/adapters/ (rebuild later if needed)
+      - hedwig/agent.py (rebuild later if needed)
+      - hedwig/mcp_server.py (rebuild later if needed)
+    add:
+      - hedwig/delivery/discord.py (Discord webhook delivery)
 
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
   created: "2026-03-16"
-  ambiguity_score: 0.15
-  interview_source: "conversation-context"
+  updated: "2026-04-08"
+  ambiguity_score: 0.12
+  interview_source: "ouroboros-socratic-interview-v1 + v2"
+  interview_v1_date: "2026-03-16"
+  interview_v2_date: "2026-04-08"
   project_name: "hedwig"
+  converged_decisions: 23
+  reference_projects:
+    - name: "karpathy/autoresearch"
+      relevance: "Self-improvement loop pattern — experiment, measure, keep/discard, repeat"
+    - name: "mvanhorn/last30days-skill"
+      relevance: "Source coverage reference — Polymarket, Bluesky, cookie-based X, smart discovery"
