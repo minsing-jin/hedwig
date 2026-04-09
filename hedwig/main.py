@@ -1,8 +1,10 @@
 """
 Hedwig v2.0 — Self-Evolving Personal AI Signal Radar
 
+Pipeline: Agent Strategy → Collect → Normalize → Pre-score → LLM Score → Deliver → Evolve
+
 Usage:
-    python -m hedwig                  # Daily: collect + score + deliver + evolve
+    python -m hedwig                  # Daily: agent-driven collect + score + deliver + evolve
     python -m hedwig --weekly         # Weekly: deep analysis + macro-evolution
     python -m hedwig --dry-run        # Collect only (no API keys needed)
     python -m hedwig --collect        # Collect + score (needs OPENAI_API_KEY)
@@ -30,16 +32,15 @@ logger = logging.getLogger("hedwig")
 
 
 # ---------------------------------------------------------------------------
-# Collection — plugin-based, all registered sources
+# Collection — agent-driven intelligent strategy
 # ---------------------------------------------------------------------------
 
 async def collect_all(enabled_only: bool = True) -> list:
-    """Collect posts from all registered source plugins concurrently."""
+    """Fallback: collect from all sources without agent strategy."""
     from hedwig.sources import get_registered_sources
 
     registry = get_registered_sources()
     all_posts = []
-    source_stats: dict[str, int] = {}
 
     tasks = []
     names = []
@@ -53,14 +54,70 @@ async def collect_all(enabled_only: bool = True) -> list:
     for name, result in zip(names, results):
         if isinstance(result, Exception):
             logger.warning(f"[{name}] failed: {result}")
-            source_stats[name] = 0
         else:
             logger.info(f"[{name}] {len(result)} posts collected")
             all_posts.extend(result)
-            source_stats[name] = len(result)
 
     logger.info(f"Total: {len(all_posts)} posts from {len(registry)} sources")
     return all_posts
+
+
+async def agent_collect(llm_client=None) -> tuple[list, dict]:
+    """Agent-driven collection: LLM generates strategy, then executes it.
+
+    Returns (posts, strategy_dict).
+    """
+    from hedwig.config import CRITERIA_PATH, USER_MEMORY_PATH
+    from hedwig.engine.agent_collector import AgentCollector
+    from hedwig.memory import MemoryStore
+
+    logger.info("Agent generating collection strategy...")
+
+    # Load user memory for context
+    memory_store = MemoryStore(path=USER_MEMORY_PATH)
+    latest_memory = memory_store.get_latest()
+    memory_summary = ""
+    if latest_memory:
+        memory_summary = (
+            f"Interests: {latest_memory.confirmed_interests}\n"
+            f"Rejected: {latest_memory.rejected_topics}\n"
+            f"Trajectory: {latest_memory.taste_trajectory}"
+        )
+
+    collector = AgentCollector(llm_client=llm_client, criteria_path=CRITERIA_PATH)
+    strategy = await collector.generate_strategy(
+        user_memory_summary=memory_summary,
+    )
+
+    focus = strategy.get("focus_keywords", [])
+    explore = strategy.get("exploration_queries", [])
+    if focus:
+        logger.info(f"Focus keywords: {focus[:5]}")
+    if explore:
+        logger.info(f"Exploration: {explore[:3]}")
+
+    posts = await collector.collect_with_strategy(strategy)
+    return posts, strategy
+
+
+async def normalize_and_prescore(posts: list, criteria_keywords: list[str]) -> list:
+    """Normalize content via r.jina.ai, then pre-score to filter noise.
+
+    Returns top posts sorted by pre-score (above threshold).
+    """
+    from hedwig.engine.normalizer import normalize_batch
+    from hedwig.engine.pre_scorer import pre_filter
+
+    # Normalize content (r.jina.ai for richer LLM input)
+    logger.info(f"Normalizing {len(posts)} posts via r.jina.ai...")
+    posts = await normalize_batch(posts, max_concurrent=5)
+
+    # Pre-score: numeric filtering before expensive LLM calls
+    logger.info("Pre-scoring (engagement + authority + recency + convergence)...")
+    scored = pre_filter(posts, criteria_keywords, threshold=0.10)
+    logger.info(f"Pre-filter: {len(posts)} → {len(scored)} posts (above threshold)")
+
+    return [post for post, score in scored]
 
 
 # ---------------------------------------------------------------------------
@@ -163,29 +220,51 @@ async def run_dry():
 # ---------------------------------------------------------------------------
 
 async def run_daily(collect_only: bool = False):
-    """Daily pipeline: collect → score → deliver → evolve."""
+    """Daily pipeline: Agent Strategy → Collect → Normalize → Pre-score → LLM Score → Deliver → Evolve."""
     logger.info(f"━━━ Hedwig v2.0 Daily Run — {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ━━━")
 
-    # 1. Collect from all plugins
-    posts = await collect_all()
+    # 0. Setup LLM client
+    llm = None
+    from hedwig.config import OPENAI_API_KEY, check_required_keys
+    if OPENAI_API_KEY:
+        try:
+            from openai import AsyncOpenAI
+            llm = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        except ImportError:
+            pass
+
+    # 1. Agent-driven collection (LLM generates strategy)
+    if llm and not collect_only:
+        posts, strategy = await agent_collect(llm_client=llm)
+        focus_keywords = strategy.get("focus_keywords", [])
+    else:
+        posts = await collect_all()
+        focus_keywords = _extract_keywords_from_criteria()
+
     if not posts:
         logger.warning("No posts collected. Exiting.")
         return
 
-    # 2. Check keys
-    from hedwig.config import check_required_keys
+    # 2. Normalize content via r.jina.ai + pre-score
+    posts = await normalize_and_prescore(posts, focus_keywords)
+
+    if not posts:
+        logger.warning("All posts filtered out by pre-scorer.")
+        return
+
+    # 3. Check keys for LLM scoring
     mode = "score" if collect_only else "full"
     missing = check_required_keys(mode)
     if missing:
         logger.error(f"Missing env vars: {', '.join(missing)}")
         return
 
-    # 3. Score
+    # 4. LLM Score (only pre-filtered posts — saves API cost)
     from hedwig.engine.scorer import score_posts
-    logger.info(f"Scoring {len(posts)} posts...")
+    logger.info(f"LLM scoring {len(posts)} pre-filtered posts...")
     scored = await score_posts(posts)
 
-    # 4. Filter
+    # 5. Filter into channels
     alerts, digest = filter_signals(scored)
     skipped = len(scored) - len(alerts) - len(digest)
     logger.info(f"Results: {len(alerts)} alerts, {len(digest)} digest, {skipped} skipped")
@@ -197,15 +276,11 @@ async def run_daily(collect_only: bool = False):
             print_signal(s, "DIGEST")
         return
 
-    # 5. Deliver to Slack
+    # 6. Deliver to Slack + Discord
     from hedwig.delivery.slack import send_alert as slack_alert, send_daily_briefing as slack_daily
+    from hedwig.delivery.discord import send_alert as discord_alert, send_daily_briefing as discord_daily
     for signal in alerts[:10]:
-        ok = await slack_alert(signal)
-        logger.info(f"Slack alert {'ok' if ok else 'fail'}: {signal.raw.title[:50]}")
-
-    # 6. Deliver to Discord
-    from hedwig.delivery.discord import send_alert as discord_alert
-    for signal in alerts[:10]:
+        await slack_alert(signal)
         await discord_alert(signal)
 
     # 7. Daily briefing
@@ -215,7 +290,6 @@ async def run_daily(collect_only: bool = False):
         logger.info("Generating daily briefing...")
         briefing_text = await generate_daily_briefing(briefing_signals)
         await slack_daily(briefing_text)
-        from hedwig.delivery.discord import send_daily_briefing as discord_daily
         await discord_daily(briefing_text)
         logger.info("Daily briefing sent")
 
@@ -225,10 +299,23 @@ async def run_daily(collect_only: bool = False):
     saved = save_signals(relevant)
     logger.info(f"Saved {saved} signals to Supabase")
 
-    # 9. Daily evolution
+    # 9. Daily evolution (self-improvement)
     await run_evolution_daily()
 
     logger.info("━━━ Hedwig v2.0 Daily Run Complete ━━━")
+
+
+def _extract_keywords_from_criteria() -> list[str]:
+    """Extract focus keywords from criteria.yaml for pre-scoring."""
+    from hedwig.config import load_criteria
+    criteria = load_criteria()
+    keywords = []
+    prefs = criteria.get("signal_preferences", {})
+    keywords.extend(prefs.get("care_about", []))
+    ctx = criteria.get("context", {})
+    keywords.extend(ctx.get("interests", []))
+    # Flatten any nested structures to strings
+    return [str(k) for k in keywords if k]
 
 
 # ---------------------------------------------------------------------------

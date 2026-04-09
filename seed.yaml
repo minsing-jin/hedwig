@@ -276,19 +276,91 @@ architecture:
       - hedwig/mcp_server.py (rebuild later if needed)
     add:
       - hedwig/delivery/discord.py (Discord webhook delivery)
+      - hedwig/engine/agent_collector.py (AI-driven collection strategy)
+      - hedwig/engine/normalizer.py (r.jina.ai content normalization)
+      - hedwig/engine/pre_scorer.py (multi-signal pre-scoring before LLM)
+
+collection_pipeline:
+  description: >
+    Agent-driven intelligent collection. Not mechanical polling —
+    the LLM decides what to collect, from where, and how deep.
+  stages:
+    - name: strategy_generation
+      description: >
+        LLM analyzes criteria + user memory + source reliability
+        to generate a collection plan: which sources, what queries,
+        how many posts, what to explore.
+    - name: agent_collection
+      description: >
+        Execute the strategy — priority sources first, exploration
+        sources for discovery, skip low-value sources.
+    - name: content_normalization
+      description: >
+        r.jina.ai converts raw URLs to clean LLM-ready markdown.
+        Strips ads, nav, noise. Handles JS-rendered SPAs.
+    - name: pre_scoring
+      description: >
+        Multi-signal numeric scoring BEFORE expensive LLM calls.
+        Engagement velocity + source authority + recency decay +
+        cross-platform convergence + text relevance.
+        Filters out noise, saves API costs.
+    - name: llm_scoring
+      description: >
+        LLM scores pre-filtered signals against user criteria.
+        Devil's Advocate perspective on each signal.
+    - name: delivery
+      description: >
+        Route to Alert/Daily/Weekly channels on Slack + Discord.
+
+competitive_analysis:
+  analyzed_on: "2026-04-08"
+  tools:
+    - name: "Panniantong/Agent-Reach"
+      stars: 16400
+      role: "Multi-platform social data collector CLI (15+ platforms)"
+      hedwig_takeaway: "Cookie-based X/LinkedIn direct collection patterns"
+    - name: "eze-is/web-access"
+      stars: 4300
+      role: "Claude Code web browsing skill (CDP browser control)"
+      hedwig_takeaway: "CDP fallback for JS-rendered pages"
+    - name: "epiral/bb-browser"
+      stars: 4300
+      role: "Browser-as-API (103 commands, 36 platforms)"
+      hedwig_takeaway: "Login-required platform access via browser automation"
+    - name: "jina-ai/reader"
+      stars: 10500
+      role: "URL-to-Markdown converter (r.jina.ai)"
+      hedwig_takeaway: "INTEGRATED — content normalization for all 16 sources"
+    - name: "mvanhorn/last30days-skill"
+      stars: 1000
+      role: "On-demand topic research across 10+ sources"
+      hedwig_takeaway: "INTEGRATED — multi-signal pre-scoring algorithm"
+  hedwig_moat: >
+    None of these tools have: Socratic onboarding, self-evolving criteria,
+    autoresearch-style improvement loop, boolean feedback system,
+    long-horizon user memory, or Devil's Advocate perspective.
+    Hedwig's value is NOT in collection (others do it better) but in
+    intelligent, personalized, self-improving JUDGMENT.
 
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   created: "2026-03-16"
-  updated: "2026-04-08"
-  ambiguity_score: 0.12
-  interview_source: "ouroboros-socratic-interview-v1 + v2"
+  updated: "2026-04-09"
+  ambiguity_score: 0.10
+  interview_source: "ouroboros-socratic-interview-v1 + v2 + competitive-analysis"
   interview_v1_date: "2026-03-16"
   interview_v2_date: "2026-04-08"
+  competitive_analysis_date: "2026-04-08"
   project_name: "hedwig"
   converged_decisions: 23
   reference_projects:
     - name: "karpathy/autoresearch"
       relevance: "Self-improvement loop pattern — experiment, measure, keep/discard, repeat"
     - name: "mvanhorn/last30days-skill"
-      relevance: "Source coverage reference — Polymarket, Bluesky, cookie-based X, smart discovery"
+      relevance: "Multi-signal scoring algorithm — engagement velocity, convergence, authority"
+    - name: "Panniantong/Agent-Reach"
+      relevance: "Cookie-based direct platform collection patterns (16.4K stars)"
+    - name: "jina-ai/reader"
+      relevance: "URL-to-Markdown normalization — integrated into pipeline (10.5K stars)"
+    - name: "epiral/bb-browser"
+      relevance: "Browser-as-API for login-required platforms (4.3K stars)"
