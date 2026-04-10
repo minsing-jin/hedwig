@@ -18,13 +18,35 @@ logger = logging.getLogger(__name__)
 
 
 class AuthError(Exception):
+    """Raised when a Supabase Auth operation fails."""
     pass
+
+
+def _require_supabase_credentials() -> None:
+    """Validate that Supabase credentials are present, raise AuthError if not.
+
+    Raises a clear, actionable error message naming the specific missing
+    environment variable(s) so the developer knows exactly what to set.
+    """
+    missing: list[str] = []
+    if not SUPABASE_URL:
+        missing.append("SUPABASE_URL")
+    if not SUPABASE_KEY:
+        missing.append("SUPABASE_KEY")
+    if missing:
+        names = ", ".join(missing)
+        raise AuthError(
+            f"Supabase credentials not configured: {names} environment variable(s) "
+            f"must be set. Get these from your Supabase project dashboard → "
+            f"Settings → API. Example: "
+            f"SUPABASE_URL='https://<project>.supabase.co' "
+            f"SUPABASE_KEY='eyJ...'"
+        )
 
 
 async def sign_up(email: str, password: str) -> dict:
     """Create a new user account via Supabase Auth."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise AuthError("Supabase not configured")
+    _require_supabase_credentials()
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
@@ -42,8 +64,7 @@ async def sign_up(email: str, password: str) -> dict:
 
 async def sign_in(email: str, password: str) -> dict:
     """Sign in an existing user."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise AuthError("Supabase not configured")
+    _require_supabase_credentials()
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
@@ -61,8 +82,7 @@ async def sign_in(email: str, password: str) -> dict:
 
 async def sign_out(access_token: str) -> bool:
     """Invalidate a user session."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return False
+    _require_supabase_credentials()
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
             f"{SUPABASE_URL}/auth/v1/logout",
@@ -76,8 +96,7 @@ async def sign_out(access_token: str) -> bool:
 
 async def get_user(access_token: str) -> Optional[dict]:
     """Get current user from access token."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return None
+    _require_supabase_credentials()
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(
             f"{SUPABASE_URL}/auth/v1/user",
@@ -93,8 +112,7 @@ async def get_user(access_token: str) -> Optional[dict]:
 
 async def refresh_token(refresh_token: str) -> Optional[dict]:
     """Refresh an expired access token."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return None
+    _require_supabase_credentials()
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
             f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",

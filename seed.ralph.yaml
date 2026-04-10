@@ -1,0 +1,81 @@
+goal: >
+  Complete Hedwig v3.0 SaaS transformation. The foundation is already built
+  (see hedwig/saas, hedwig/native, hedwig/dashboard). This Ralph loop must
+  verify each component works end-to-end, fix any broken integration points,
+  write integration tests, and ensure the full signup-to-first-run flow
+  works for a new user. Focus on gaps between code that exists and code
+  that actually runs successfully.
+
+constraints:
+  - Preserve all existing code in hedwig/ directory
+  - Do not remove or rename existing modules
+  - All changes must pass Python import check before committing
+  - New tests go in tests/ directory
+  - Follow existing code style (Pydantic models, async where applicable)
+  - Do not add new external dependencies without updating pyproject.toml
+  - Do not modify seed.yaml or docs/interviews/ content
+  - Commit each verified fix as a separate git commit
+  - Never push to main without running tests first
+
+acceptance_criteria:
+  - Integration test exists that imports all modules in hedwig/saas
+  - Integration test exists that imports all modules in hedwig/native
+  - Integration test exists that imports all modules in hedwig/dashboard
+  - Dashboard SaaS mode starts and serves the landing page HTTP 200
+  - Dashboard signup form renders correctly with all required fields
+  - Stripe billing module raises clear error when STRIPE_SECRET_KEY missing
+  - Supabase auth module raises clear error when credentials missing
+  - Pre-scorer returns values between 0.0 and 1.0 for test inputs
+  - Agent collector default strategy returns valid plan structure
+  - Source plugin registry contains at least 16 sources
+  - r.jina.ai normalizer handles timeout gracefully
+  - Migration SQL file exists at migrations/001_multi_tenant_schema.sql
+  - README.md mentions v3.0 SaaS features
+  - pyproject.toml version is 3.0.0 or higher
+
+ontology_schema:
+  name: HedwigV3Verification
+  description: Domain model for verifying Hedwig v3.0 SaaS foundation
+  fields:
+    - name: module
+      type: object
+      description: "A Python module with import status and test coverage"
+    - name: integration_test
+      type: object
+      description: "A pytest file verifying cross-module interaction"
+    - name: route
+      type: object
+      description: "A FastAPI HTTP route with method, path, and expected status"
+    - name: migration
+      type: object
+      description: "A SQL migration file with version and target tables"
+
+evaluation_principles:
+  - name: no_regression
+    description: "No existing functionality breaks"
+    weight: 0.40
+  - name: integration_completeness
+    description: "All SaaS + native + dashboard modules work together"
+    weight: 0.30
+  - name: error_handling
+    description: "Graceful degradation when optional keys missing"
+    weight: 0.20
+  - name: documentation_accuracy
+    description: "README and docs match actual capabilities"
+    weight: 0.10
+
+exit_conditions:
+  - name: all_tests_pass
+    description: "All integration tests pass"
+    criteria: "pytest tests/ exits with code 0"
+  - name: imports_clean
+    description: "All modules import without errors"
+    criteria: "python -c 'import hedwig.saas; import hedwig.native; import hedwig.dashboard.app' succeeds"
+  - name: dashboard_runs
+    description: "Dashboard starts successfully in both modes"
+    criteria: "Both standard and SaaS modes bind to port and serve HTTP"
+
+metadata:
+  version: "1.0.0"
+  project_name: "hedwig-ralph-v3"
+  purpose: "Verify Hedwig v3.0 end-to-end and fill remaining gaps"

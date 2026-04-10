@@ -65,8 +65,8 @@ def compute_engagement_velocity(post: RawPost) -> float:
     score_ratio = post.score / max(baseline["score"], 1)
     comment_ratio = post.comments_count / max(baseline["comments"], 1) if baseline["comments"] else 0
 
-    # Weighted combination, capped at 1.0
-    velocity = min(1.0, (score_ratio * 0.6 + comment_ratio * 0.4))
+    # Weighted combination, clamped to 0.0-1.0
+    velocity = max(0.0, min(1.0, (score_ratio * 0.6 + comment_ratio * 0.4)))
     return velocity
 
 
@@ -156,7 +156,8 @@ def pre_score(
         + 0.20 * recency
         + 0.15 * convergence
     )
-    return round(score, 4)
+    # Defence-in-depth: guarantee 0.0-1.0 contract
+    return round(max(0.0, min(1.0, score)), 4)
 
 
 def pre_filter(

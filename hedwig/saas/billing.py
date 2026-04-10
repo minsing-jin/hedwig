@@ -30,7 +30,19 @@ TIER_TO_PRICE = {
 
 
 class BillingError(Exception):
+    """Raised when a billing operation fails or Stripe is misconfigured."""
     pass
+
+
+def _require_stripe_key() -> str:
+    """Return the Stripe secret key or raise a clear error if missing."""
+    if not STRIPE_SECRET_KEY:
+        raise BillingError(
+            "STRIPE_SECRET_KEY environment variable is not set. "
+            "Set it to your Stripe secret key (sk_live_… or sk_test_…) "
+            "to enable billing features."
+        )
+    return STRIPE_SECRET_KEY
 
 
 async def create_checkout_session(
@@ -41,8 +53,7 @@ async def create_checkout_session(
     cancel_url: str,
 ) -> dict:
     """Create a Stripe Checkout session for upgrading to a paid tier."""
-    if not STRIPE_SECRET_KEY:
-        raise BillingError("Stripe not configured")
+    key = _require_stripe_key()
 
     price_id = TIER_TO_PRICE.get(tier)
     if not price_id:
@@ -52,7 +63,7 @@ async def create_checkout_session(
         resp = await client.post(
             f"{STRIPE_API}/checkout/sessions",
             headers={
-                "Authorization": f"Bearer {STRIPE_SECRET_KEY}",
+                "Authorization": f"Bearer {key}",
                 "Content-Type": "application/x-www-form-urlencoded",
             },
             data={
@@ -78,14 +89,13 @@ async def create_customer_portal_session(
     return_url: str,
 ) -> dict:
     """Create a Stripe Customer Portal session for managing subscription."""
-    if not STRIPE_SECRET_KEY:
-        raise BillingError("Stripe not configured")
+    key = _require_stripe_key()
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
             f"{STRIPE_API}/billing_portal/sessions",
             headers={
-                "Authorization": f"Bearer {STRIPE_SECRET_KEY}",
+                "Authorization": f"Bearer {key}",
                 "Content-Type": "application/x-www-form-urlencoded",
             },
             data={

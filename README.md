@@ -2,12 +2,45 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/sources-16+-orange" alt="Sources">
-  <img src="https://img.shields.io/badge/version-2.1-purple" alt="Version">
+  <img src="https://img.shields.io/badge/version-3.0-purple" alt="Version">
 </p>
 
 # Hedwig
 
 **Self-Evolving Personal AI Signal Radar** — Algorithm sovereignty for individuals.
+
+## What's New in v3.0 — SaaS + Native
+
+Hedwig v3.0 transforms from a single-user CLI tool into a full **SaaS platform** with multi-tenant support, while retaining the original self-hosted experience.
+
+### SaaS Features
+
+- **Multi-tenant Architecture** — Each user gets isolated data with Supabase Row-Level Security (RLS). Signals, feedback, criteria, and evolution logs are all user-scoped.
+- **Supabase Auth Integration** — Signup, signin, session management, and JWT verification via Supabase Auth. Cookie-based sessions for the web dashboard.
+- **Stripe Billing** — Three subscription tiers (Free / Pro $19/mo / Team $49/mo) with Stripe Checkout, Customer Portal, and webhook handling for subscription lifecycle events.
+- **Quota Enforcement** — Free tier limits (5 sources, 50 signals/day, daily evolution only, 2-week memory). Pro and Team tiers unlock unlimited sources, signals, weekly evolution, and extended memory.
+- **Web Dashboard** — FastAPI-powered UI with setup wizard, Socratic onboarding, signal viewer, criteria editor, source browser, and pipeline controls. Runs in both single-user and SaaS modes.
+- **Landing Page & Auth Pages** — SaaS mode adds a landing page, signup form, and login page for new user registration.
+- **Database Migration** — Multi-tenant schema migration (`migrations/001_multi_tenant_schema.sql`) adds user_id columns, subscription/usage tables, RLS policies, and auto-provisioning triggers.
+
+### Native Desktop App
+
+- **pywebview Integration** — Run Hedwig as a native desktop window (`python -m hedwig --native`) wrapping the FastAPI dashboard.
+- **macOS Menu Bar Tray** — System tray icon with quick actions: open dashboard, run daily/dry/weekly pipelines, Socratic onboarding, and signal viewer (via `rumps`).
+- **Cross-platform** — Native app works on macOS, Windows, and Linux via pywebview.
+
+### Subscription Tiers
+
+| Feature | Free | Pro ($19/mo) | Team ($49/mo) |
+|---------|------|-------------|---------------|
+| Sources | 5 | Unlimited | Unlimited |
+| Signals/day | 50 | Unlimited | Unlimited |
+| Evolution | Daily only | Daily + Weekly | Daily + Weekly |
+| Memory horizon | 2 weeks | Unlimited | Unlimited |
+| Custom sources | No | Yes | Yes |
+| Shared criteria | No | No | Yes |
+| Team channels | — | — | 5 |
+| Users per team | — | — | 10 |
 
 > **[한국어](docs/README.ko.md)** | **[English](README.md)** | **[中文](docs/README.zh.md)**
 
@@ -61,7 +94,7 @@ AI signals are scattered across 15+ platforms. Manually scanning them for meanin
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Daily Pipeline (Hedwig v2.1)               │
+│                  Daily Pipeline (Hedwig v3.0)               │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  1. Agent Strategy      LLM decides what to collect, from   │
@@ -113,6 +146,26 @@ python -m hedwig --dry-run
 python -m hedwig
 ```
 
+### Web Dashboard
+
+```bash
+# Single-user mode (local setup wizard + pipeline controls)
+python -m hedwig dashboard
+
+# SaaS mode (multi-tenant with auth, billing, landing page)
+python -m hedwig dashboard --saas
+```
+
+### Native Desktop App
+
+```bash
+# Install native dependencies
+uv pip install -e ".[native]"
+
+# Run as native desktop window
+python -m hedwig --native
+```
+
 ---
 
 ## CLI Commands
@@ -126,6 +179,9 @@ python -m hedwig
 | `python -m hedwig` | **Daily full pipeline** (collect → score → deliver → evolve) |
 | `python -m hedwig --weekly` | **Weekly briefing** + macro-evolution + memory update |
 | `python -m hedwig --evolve` | Manual evolution cycle |
+| `python -m hedwig dashboard` | **v3.0** — Web dashboard (single-user mode) |
+| `python -m hedwig dashboard --saas` | **v3.0** — Web dashboard (SaaS multi-tenant mode) |
+| `python -m hedwig --native` | **v3.0** — Native desktop app via pywebview |
 
 ---
 
@@ -147,6 +203,15 @@ python -m hedwig
 | `DISCORD_WEBHOOK_ALERTS` | Discord alert channel |
 | `DISCORD_WEBHOOK_DAILY` | Discord daily channel |
 | `DISCORD_WEBHOOK_WEEKLY` | Discord weekly channel |
+
+### SaaS Billing (v3.0, optional)
+
+| Key | Purpose |
+|-----|---------|
+| `STRIPE_SECRET_KEY` | Stripe secret key for subscription billing |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature verification |
+| `STRIPE_PRICE_PRO` | Stripe Price ID for Pro tier |
+| `STRIPE_PRICE_TEAM` | Stripe Price ID for Team tier |
 
 ### Optional (for expanded sources)
 
@@ -248,9 +313,28 @@ hedwig/
 ├── storage/
 │   └── supabase.py          # DB (signals, feedback, evolution, memory)
 │
+├── saas/                 # v3.0 — Multi-tenant SaaS infrastructure
+│   ├── auth.py           # Supabase Auth (signup, signin, JWT)
+│   ├── billing.py        # Stripe subscriptions & checkout
+│   ├── quota.py          # Usage tracking & tier limit enforcement
+│   └── models.py         # UserProfile, Subscription, Usage models
+│
+├── dashboard/            # v3.0 — Web UI (FastAPI + Jinja2)
+│   ├── app.py            # Dashboard server (single-user & SaaS modes)
+│   ├── env_manager.py    # .env file management for setup wizard
+│   ├── validator.py      # API key validation against live endpoints
+│   └── db_setup.py       # Supabase table auto-creation
+│
+├── native/               # v3.0 — Desktop app (pywebview + rumps)
+│   ├── app.py            # Native window wrapping the dashboard
+│   └── tray.py           # macOS menu bar tray integration
+│
 ├── models.py                # Pydantic data models
 ├── config.py                # Environment & criteria loader
 └── main.py                  # CLI orchestration
+
+migrations/
+└── 001_multi_tenant_schema.sql  # v3.0 — Multi-tenant DB migration
 ```
 
 ---

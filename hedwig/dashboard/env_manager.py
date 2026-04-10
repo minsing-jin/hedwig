@@ -109,7 +109,7 @@ class EnvManager:
         existing = self.load()
         existing.update({k: v for k, v in values.items() if v})
 
-        lines = ["# Hedwig v2.1 environment configuration", ""]
+        lines = ["# Hedwig v3.0 environment configuration", ""]
 
         lines.append("# Required")
         for key in self.REQUIRED_KEYS:
