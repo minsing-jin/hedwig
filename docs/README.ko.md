@@ -1,36 +1,61 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/platforms-6-orange" alt="Platforms">
+  <img src="https://img.shields.io/badge/sources-16+-orange" alt="Sources">
+  <img src="https://img.shields.io/badge/version-2.1-purple" alt="Version">
 </p>
 
 # Hedwig
 
-**개인용 AI 시그널 레이더** — 6개 플랫폼의 AI 신호를 자동 수집하고, LLM으로 필터링해서, Slack으로 전달하는 개인 인텔리전스 시스템.
+**자기진화하는 개인 AI 시그널 레이더** — 개인을 위한 알고리즘 주권.
 
-> **[English](../README.md)** | **[中文](README.zh.md)** | **[日本語](README.ja.md)**
+> **[한국어](README.ko.md)** | **[English](../README.md)** | **[中文](README.zh.md)**
 
 ```
-수집 → 스코어링 → 필터링 → 전달
-(6개 플랫폼)  (OpenAI)   (criteria.yaml)  (Slack)
+소크라틱 온보딩 → 에이전트 수집 → 정제 → 사전 스코어링 → LLM 스코어링 → 배달 → 자기 진화
 ```
 
-## 왜 만들었나
+---
 
-AI 분야 정보가 X, Reddit, HN, LinkedIn, Threads, GeekNews 등에 흩어져 있다.
-매일 여러 플랫폼을 돌아다니며 노이즈 속에서 의미 있는 신호를 찾는 건 피로하다.
+## 해자(Moat): Hedwig가 다른 이유
 
-Hedwig는 **내 기준에 맞는 신호만 골라서** Slack으로 보내준다.
+대부분의 정보 도구는 **손**입니다 — 당신이 가리키는 걸 가져다 줄 뿐. Hedwig는 **두뇌 + 손**입니다 — 당신이 무엇을 원하는지 학습하고, 스스로 개선합니다.
 
-## 주요 기능
+| 기능 | 다른 도구 (Agent-Reach, last30days, bb-browser, r.jina.ai) | **Hedwig** |
+|---|---|---|
+| **무엇을 수집할지 누가 결정?** | 당신이 매번 직접 | AI 에이전트가 진화하는 기준으로 결정 |
+| **취향을 어떻게 학습?** | 학습 안 함 | 소크라틱 온보딩 + boolean 피드백 + 자연어 + 주간 메모리 |
+| **시간이 지나면?** | 변화 없음 (정적 도구) | 일간 미세조정 + 주간 대폭 진화 |
+| **알고리즘 소유권** | 기업 (YouTube, X) 또는 고정 (오픈소스) | **당신이 완전히 통제** |
+| **Devil's Advocate** | 없음 | 모든 시그널에 반론 포함 |
 
-- **6개 소스 수집** — HN, Reddit (12개 AI subreddit), GeekNews, AI 블로그/뉴스레터, 기업 AI 블로그, 인디 AI 프레스
-- **LLM 2-tier 스코어링** — 빠른 모델로 필터링, 고성능 모델로 해석/요약
-- **Devil's Advocate** — 각 신호에 반대 관점/과열 경고 포함
-- **3단계 출력** — 개별 Alert + 일일 브리핑 + 주간 브리핑 (트렌드 + 기회 포착)
-- **피드백 루프** — Slack 이모지/쓰레드로 반응하면 필터링 기준이 자동 진화
-- **criteria.yaml** — 관심사, 무시할 것, 긴급도 규칙, 현재 프로젝트 컨텍스트를 YAML로 관리
-- **에이전트 호환** — Python API, CLI JSON 출력, MCP 서버로 AI 에이전트 연동 지원
+### Hedwig만의 5가지 해자
+
+1. **소크라틱 온보딩** — LLM이 질문을 통해 기준을 명확히 합니다 (ambiguity ≤ 0.2). Ouroboros 철학 기반. 수동 설정 파일 없음.
+
+2. **자기진화 알고리즘** — [Karpathy autoresearch](https://github.com/karpathy/autoresearch) 패턴 기반의 일간 미세조정 + 주간 대폭 진화. 시스템이 기준을 실험하고, upvote 비율로 측정하고, 개선은 유지하고 퇴보는 폐기합니다.
+
+3. **Boolean 피드백** — upvote/downvote만. 시스템이 패턴 해석을 담당. 방향을 주고 싶을 때만 자연어로 추가 입력 가능.
+
+4. **Long-Horizon 메모리** — 주간 사용자 취향 스냅샷이 취향 궤적을 추적합니다. 시스템은 몇 달에 걸친 관심사 변화를 이해합니다.
+
+5. **알고리즘 주권** — engagement(=광고 수익)을 최적화하는 YouTube/X와 달리, Hedwig는 *당신이 정의한 관련성*을 최적화합니다. fitness function을 당신이 통제합니다.
+
+---
+
+## 무엇을 하는가
+
+AI 시그널은 15개 이상의 플랫폼에 흩어져 있습니다. noise 속에서 의미 있는 signal을 수동으로 찾는 건 피곤합니다. Hedwig는:
+
+1. **소크라틱 인터뷰**로 당신이 원하는 것을 구체화
+2. **AI 에이전트**가 16개+ 소스에서 지능적으로 수집
+3. **콘텐츠 정제** — r.jina.ai로 깨끗한 마크다운 (광고/네비 제거)
+4. **수치 기반 사전 스코어링** — LLM 호출 전 5-factor 필터링
+5. **LLM 스코어링** — 모든 시그널에 Devil's Advocate 반론 포함
+6. **Slack + Discord 배달** — Alert / Daily / Weekly 3개 채널
+7. **자기 진화** — 일간(미세) + 주간(대폭) boolean 피드백 기반
+
+---
 
 ## 빠른 시작
 
@@ -41,96 +66,114 @@ cd hedwig
 uv venv .venv && source .venv/bin/activate
 uv pip install -e .
 
-# 2. 환경 설정
+# 2. API 키 설정
 cp .env.example .env
-# .env 파일에 API 키 입력 (아래 설정 참조)
 
 # 3. Supabase 테이블 생성
-# Supabase SQL Editor에서 migrations/001_create_tables.sql 실행
+# hedwig/storage/supabase.py의 SCHEMA_SQL을 Supabase SQL Editor에서 실행
 
-# 4. 실행
-python -m hedwig.main --dry-run      # 수집만 (API 키 불필요)
-python -m hedwig.main --collect      # 수집 + LLM 스코어링
-python -m hedwig.main                # 풀 파이프라인
-python -m hedwig.main --weekly       # 주간 브리핑
+# 4. 소크라틱 온보딩 (첫 실행)
+python -m hedwig --onboard
+
+# 5. 수집 테스트 (API 키 불필요)
+python -m hedwig --dry-run
+
+# 6. 전체 파이프라인 실행
+python -m hedwig
 ```
 
-## 설정
+---
 
-### API 키 (`.env`)
+## CLI 명령어
 
-| 키 | 발급처 |
-|----|--------|
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API Keys |
-| `SUPABASE_URL` | [supabase.com](https://supabase.com) → 프로젝트 → Settings → API |
-| `SUPABASE_KEY` | 위와 같음 (`service_role` 키 사용) |
-| `SLACK_WEBHOOK_ALERTS` | [api.slack.com](https://api.slack.com) → 앱 생성 → Incoming Webhooks |
-| `SLACK_WEBHOOK_DAILY` | 같은 앱, 일일/주간 채널용 두 번째 webhook |
+| 명령어 | 설명 |
+|--------|------|
+| `python -m hedwig --onboard` | 소크라틱 인터뷰로 기준 정의 |
+| `python -m hedwig --sources` | 16개 소스 플러그인 목록 |
+| `python -m hedwig --dry-run` | 수집만 (API 키 불필요) |
+| `python -m hedwig --collect` | 수집 + LLM 스코어링, 콘솔 출력 |
+| `python -m hedwig` | **일간 전체 파이프라인** (수집 → 스코어 → 배달 → 진화) |
+| `python -m hedwig --weekly` | **주간 브리핑** + 대폭 진화 + 메모리 업데이트 |
+| `python -m hedwig --evolve` | 수동 진화 사이클 |
 
-### 필터링 기준 (`criteria.yaml`)
+---
 
-```yaml
-identity:
-  role: "AI 빌더"
-  focus: [AI agents, LLM tooling, infra]
+## 사용 방법 (단계별)
 
-signal_preferences:
-  care_about:
-    - 실제 adoption 신호 (hype 아님)
-    - 논문의 실무 적용 가능성
-  ignore:
-    - 단순 밈/바이럴
-    - 근거 없는 예측
-
-context:
-  current_projects:
-    - "현재 프로젝트 이름"
-```
-
-## Cron 설정
-
+### 1일차 — 온보딩
 ```bash
-bash setup.sh
-# 매일 09:00, 19:00 자동 실행
-# 매주 월요일 10:00 주간 브리핑
+python -m hedwig --onboard
 ```
+시스템이 소크라틱 질문을 던집니다: 어떤 주제, 얼마나 깊이, 무엇을 무시할지, 어떤 긴급도 규칙을 적용할지. 결과를 `criteria.yaml`에 저장합니다.
 
-## Slack 출력 예시
-
-### 개별 Alert (`#alerts`)
-```
-🟢 [HACKER] LLM Architecture Gallery
-relevance: 0.85 | urgency: alert
-
-💡 왜 중요한가: LLM 아키텍처를 시각적으로 비교한 갤러리로,
-   모델 설계 패턴을 빠르게 파악할 수 있음
-
-😈 반대 관점: 시각화는 유용하지만 실제 성능 차이를 설명하진 않음
-```
-
-### 일일 브리핑
-🔴 즉시 주목 &nbsp;|&nbsp; 🟡 주요 흐름 &nbsp;|&nbsp; 🟢 참고 &nbsp;|&nbsp; 💡 인사이트
-
-### 주간 브리핑
-📊 트렌드 &nbsp;|&nbsp; 🔥 Top 5 &nbsp;|&nbsp; 📈 약신호 &nbsp;|&nbsp; 🎯 기회 포착 &nbsp;|&nbsp; ⚖️ 과열 경고
-
-## 에이전트 연동
-
-```python
-from hedwig.agent import pipeline, collect, score, briefing
-
-signals = await pipeline(top=10)
-posts = await collect(sources=["hackernews", "reddit"])
-text = await briefing("weekly")
-```
-
+### 2일차 — 첫 실행
 ```bash
-python -m hedwig.agent --top 10
-python -m hedwig.agent --briefing daily
+python -m hedwig
+```
+에이전트가 당신의 기준으로 16개 소스에서 수집, LLM으로 필터, Slack/Discord에 배달.
+
+### 3일차+ — 반응
+받은 시그널에 upvote/downvote. 설정 필요 없음 — 시스템이 반응을 읽습니다.
+
+### 매일 (자동)
+각 일간 실행에 미세 진화 단계 포함: LLM이 피드백 분석, criteria에 작은 조정.
+
+### 매주
+```bash
+python -m hedwig --weekly
+```
+깊은 분석: 취향 궤적, 소스 진화, 새로운 탐색 방향. 장기 메모리 업데이트.
+
+### 언제든 — 재조정
+```bash
+python -m hedwig --onboard
 ```
 
-자세한 내용은 [영어 README](../README.md)의 Agent Integration 섹션 참조.
+### Cron 설정
+```bash
+# 일간 실행 (오전 9시, 오후 7시)
+0 9,19 * * * cd /path/to/hedwig && .venv/bin/python -m hedwig
+
+# 주간 실행 (월요일 오전 10시)
+0 10 * * 1 cd /path/to/hedwig && .venv/bin/python -m hedwig --weekly
+```
+
+---
+
+## 16개 내장 소스 플러그인
+
+| 카테고리 | 소스 |
+|---|---|
+| **SNS** | X/Twitter, Reddit, LinkedIn, Threads, Bluesky, TikTok, Instagram |
+| **테크 커뮤니티** | Hacker News, GeekNews, YouTube, Polymarket |
+| **학술** | arXiv, Semantic Scholar, Papers With Code |
+| **웹** | Exa 시맨틱 검색 |
+| **뉴스레터** | Ben's Bites, Latent Space, The Decoder 등 |
+
+**+ 사용자 확장 가능:** 커스텀 RSS, Discord, Telegram, API 엔드포인트.
+
+---
+
+## 영감 & 통합
+
+| 프로젝트 | 스타 | Hedwig가 차용한 것 |
+|---|---|---|
+| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | — | 자기 개선 루프 패턴 |
+| [jina-ai/reader](https://github.com/jina-ai/reader) | 10.5K | **통합** — URL→Markdown 정제 |
+| [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill) | 1K | **통합** — 5-factor 스코어링 알고리즘 |
+| [Panniantong/Agent-Reach](https://github.com/Panniantong/Agent-Reach) | 16.4K | 쿠키 기반 수집 패턴 (예정) |
+| [epiral/bb-browser](https://github.com/epiral/bb-browser) | 4.3K | 브라우저-as-API (예정) |
+
+**하지만 이들 중 어느 것도 Hedwig가 하는 걸 하지 않습니다:** 소크라틱 온보딩, 자기진화 기준, boolean 피드백 학습, Devil's Advocate, long-horizon 메모리. 이것이 Hedwig만의 해자입니다.
+
+---
 
 ## 라이선스
 
 MIT
+
+---
+
+<p align="center">
+  <i>당신에게 도달하는 정보를 결정하는 알고리즘은 당신의 것이어야 합니다.</i>
+</p>

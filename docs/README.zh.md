@@ -1,36 +1,61 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/platforms-6-orange" alt="Platforms">
+  <img src="https://img.shields.io/badge/sources-16+-orange" alt="Sources">
+  <img src="https://img.shields.io/badge/version-2.1-purple" alt="Version">
 </p>
 
 # Hedwig
 
-**个人 AI 信号雷达** — 自动从6个平台收集AI信号，通过LLM过滤，将重要信息推送到Slack的个人情报系统。
+**自进化的个人AI信号雷达** — 个人算法主权。
 
-> **[English](../README.md)** | **[한국어](README.ko.md)** | **[日本語](README.ja.md)**
+> **[한국어](README.ko.md)** | **[English](../README.md)** | **[中文](README.zh.md)**
 
 ```
-采集 → 评分 → 过滤 → 推送
-(6个平台)  (OpenAI)  (criteria.yaml)  (Slack)
+苏格拉底式引导 → 智能体收集 → 内容净化 → 预评分 → LLM评分 → 分发 → 自我进化
 ```
 
-## 为什么
+---
 
-AI领域的信息分散在X、Reddit、HN、LinkedIn、Threads、GeekNews等多个平台。
-每天在各平台间切换，从噪音中筛选有意义的信号，令人疲惫不堪。
+## 护城河:Hedwig 的独特之处
 
-Hedwig **只筛选符合你标准的信号**，推送到Slack。
+大多数信息工具是**手** — 只取回你指向的东西。Hedwig 是**大脑 + 手** — 它学习你关心什么,并随时间改进自己。
 
-## 主要功能
+| 能力 | 其他工具 (Agent-Reach, last30days, bb-browser, r.jina.ai) | **Hedwig** |
+|---|---|---|
+| **谁决定收集什么?** | 你每次都要亲自决定 | AI 智能体,基于不断进化的标准 |
+| **如何学习你的偏好?** | 不学习 | 苏格拉底式引导 + 布尔反馈 + 自然语言 + 周度记忆 |
+| **随时间如何变化?** | 不变化(静态工具) | 每日微进化 + 每周宏进化 |
+| **算法所有权** | 企业(YouTube、X)或固定(开源工具) | **你完全掌控** |
+| **魔鬼代言人** | 无 | 每个信号都包含反对观点 |
 
-- **6个数据源采集** — HN、Reddit（12个AI子版块）、GeekNews、AI博客/通讯、企业AI博客、独立AI媒体
-- **LLM 双层评分** — 快速模型过滤，高性能模型解读/摘要
-- **Devil's Advocate** — 每个信号附带反面观点和炒作预警
-- **3级输出** — 即时警报 + 每日简报 + 每周简报（趋势 + 机会洞察）
-- **反馈循环** — 通过Slack表情/回复反应，过滤标准自动进化
-- **criteria.yaml** — 用YAML管理兴趣、忽略项、紧急度规则、项目上下文
-- **Agent兼容** — Python API、CLI JSON输出、MCP服务器，支持AI代理集成
+### Hedwig 的五大独特护城河
+
+1. **苏格拉底式引导** — LLM 通过提问使你的标准清晰化(ambiguity ≤ 0.2)。灵感来自 Ouroboros 哲学。无需手动配置文件。
+
+2. **自进化算法** — 基于 [Karpathy autoresearch](https://github.com/karpathy/autoresearch) 模式的每日微变异 + 每周宏变异。系统实验标准,测量你的 upvote 比率,保留改进,丢弃退步。
+
+3. **仅布尔反馈** — 只需 upvote/downvote。系统承担解读模式的重担。需要指引时可选自然语言输入。
+
+4. **长期记忆** — 每周用户偏好快照追踪你的品味轨迹。系统理解你的兴趣如何在数月间演变,不只是本周。
+
+5. **算法主权** — 与优化用户停留时间(=广告收入)的 YouTube/X 不同,Hedwig 优化*你定义的相关性*。你控制适应度函数。
+
+---
+
+## 它做什么
+
+AI 信号散布在 15+ 个平台上。手动扫描噪音中的有意义信号令人疲惫。Hedwig:
+
+1. **苏格拉底式访谈**具体化你所关心的内容
+2. **AI 智能体**根据你的标准从 16+ 个源智能收集
+3. **内容净化** — 通过 r.jina.ai 获得干净的 markdown(去广告/导航)
+4. **数字预评分** — 在昂贵的 LLM 调用之前进行 5-factor 过滤
+5. **LLM 评分** — 每个信号都包含魔鬼代言人反对观点
+6. **分发到 Slack + Discord** — Alert / Daily / Weekly 三个频道
+7. **自我进化** — 每日(微)+ 每周(宏),基于布尔反馈
+
+---
 
 ## 快速开始
 
@@ -41,96 +66,114 @@ cd hedwig
 uv venv .venv && source .venv/bin/activate
 uv pip install -e .
 
-# 2. 配置环境
+# 2. 配置 API 密钥
 cp .env.example .env
-# 在 .env 中填入API密钥（参见下方配置说明）
 
-# 3. 创建Supabase表
-# 在Supabase SQL编辑器中运行 migrations/001_create_tables.sql
+# 3. 创建 Supabase 表
+# 在 Supabase SQL Editor 中运行 hedwig/storage/supabase.py 的 SCHEMA_SQL
 
-# 4. 运行
-python -m hedwig.main --dry-run      # 仅采集（无需API密钥）
-python -m hedwig.main --collect      # 采集 + LLM评分
-python -m hedwig.main                # 完整流程
-python -m hedwig.main --weekly       # 每周简报
+# 4. 苏格拉底式引导(首次设置)
+python -m hedwig --onboard
+
+# 5. 测试收集(无需 API 密钥)
+python -m hedwig --dry-run
+
+# 6. 运行完整流程
+python -m hedwig
 ```
 
-## 配置
+---
 
-### API 密钥 (`.env`)
+## CLI 命令
 
-| 密钥 | 获取地址 |
-|------|---------|
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API Keys |
-| `SUPABASE_URL` | [supabase.com](https://supabase.com) → 项目 → Settings → API |
-| `SUPABASE_KEY` | 同上（使用 `service_role` 密钥） |
-| `SLACK_WEBHOOK_ALERTS` | [api.slack.com](https://api.slack.com) → 创建应用 → Incoming Webhooks |
-| `SLACK_WEBHOOK_DAILY` | 同一应用，为每日/每周频道创建第二个webhook |
+| 命令 | 功能 |
+|---|---|
+| `python -m hedwig --onboard` | 运行苏格拉底式访谈定义你的标准 |
+| `python -m hedwig --sources` | 列出所有 16 个已注册源插件 |
+| `python -m hedwig --dry-run` | 仅收集(无需 API 密钥) |
+| `python -m hedwig --collect` | 收集 + LLM 评分,打印到控制台 |
+| `python -m hedwig` | **每日完整流程**(收集 → 评分 → 分发 → 进化) |
+| `python -m hedwig --weekly` | **周简报** + 宏进化 + 记忆更新 |
+| `python -m hedwig --evolve` | 手动进化周期 |
 
-### 过滤标准 (`criteria.yaml`)
+---
 
-```yaml
-identity:
-  role: "AI 构建者"
-  focus: [AI agents, LLM tooling, infra]
+## 如何使用(分步)
 
-signal_preferences:
-  care_about:
-    - 真实采用信号（非炒作）
-    - 论文的实际应用可能性
-  ignore:
-    - 纯粹的梗和病毒内容
-    - 无根据的预测
-
-context:
-  current_projects:
-    - "当前项目名称"
-```
-
-## 定时任务
-
+### 第 1 天 — 引导
 ```bash
-bash setup.sh
-# 每天 09:00、19:00 自动运行
-# 每周一 10:00 生成周报
+python -m hedwig --onboard
 ```
+系统提出一系列苏格拉底式问题:哪些主题重要、想要多深入、忽略什么、应用什么紧急规则。结果写入 `criteria.yaml`。
 
-## Slack 输出示例
-
-### 即时警报 (`#alerts`)
-```
-🟢 [HACKER] LLM Architecture Gallery
-relevance: 0.85 | urgency: alert
-
-💡 为什么重要：可视化比较LLM架构的画廊，
-   可快速掌握模型设计模式
-
-😈 反面观点：可视化有用，但无法解释实际性能差异
-```
-
-### 每日简报
-🔴 即时关注 &nbsp;|&nbsp; 🟡 主要趋势 &nbsp;|&nbsp; 🟢 值得注意 &nbsp;|&nbsp; 💡 洞察
-
-### 每周简报
-📊 趋势 &nbsp;|&nbsp; 🔥 Top 5 &nbsp;|&nbsp; 📈 弱信号 &nbsp;|&nbsp; 🎯 机会发现 &nbsp;|&nbsp; ⚖️ 炒作预警
-
-## Agent 集成
-
-```python
-from hedwig.agent import pipeline, collect, score, briefing
-
-signals = await pipeline(top=10)
-posts = await collect(sources=["hackernews", "reddit"])
-text = await briefing("weekly")
-```
-
+### 第 2 天 — 首次运行
 ```bash
-python -m hedwig.agent --top 10
-python -m hedwig.agent --briefing daily
+python -m hedwig
+```
+智能体根据你的标准从 16 个源收集,通过 LLM 过滤,分发到 Slack/Discord。
+
+### 第 3 天及以后 — 反应
+对收到的信号 upvote/downvote。无需任何配置 — 系统读取你的反应。
+
+### 每日(自动)
+每次日运行都包含微进化步骤:LLM 分析反馈,对标准进行微调。
+
+### 每周
+```bash
+python -m hedwig --weekly
+```
+深度分析:品味轨迹、源演进、新探索方向。更新你的长期记忆。
+
+### 随时 — 重新校准
+```bash
+python -m hedwig --onboard
 ```
 
-详细信息请参阅[英文README](../README.md)的Agent Integration部分。
+### Cron 设置
+```bash
+# 每日运行
+0 9,19 * * * cd /path/to/hedwig && .venv/bin/python -m hedwig
+
+# 每周运行(周一 10:00)
+0 10 * * 1 cd /path/to/hedwig && .venv/bin/python -m hedwig --weekly
+```
+
+---
+
+## 16 个内置源插件
+
+| 类别 | 源 |
+|---|---|
+| **社交媒体** | X/Twitter, Reddit, LinkedIn, Threads, Bluesky, TikTok, Instagram |
+| **技术社区** | Hacker News, GeekNews, YouTube, Polymarket |
+| **学术** | arXiv, Semantic Scholar, Papers With Code |
+| **网络** | Exa 语义搜索 |
+| **新闻通讯** | Ben's Bites, Latent Space, The Decoder 等 |
+
+**+ 用户可扩展:** 添加自定义 RSS、Discord/Telegram 频道、API 端点。
+
+---
+
+## 灵感 & 集成
+
+| 项目 | Stars | Hedwig 借用的 |
+|---|---|---|
+| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | — | 自我改进循环模式 |
+| [jina-ai/reader](https://github.com/jina-ai/reader) | 10.5K | **已集成** — URL 到 Markdown 净化 |
+| [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill) | 1K | **已集成** — 5-factor 多信号评分算法 |
+| [Panniantong/Agent-Reach](https://github.com/Panniantong/Agent-Reach) | 16.4K | 基于 cookie 的平台收集模式(计划中) |
+| [epiral/bb-browser](https://github.com/epiral/bb-browser) | 4.3K | 登录所需平台的浏览器即 API(计划中) |
+
+**但它们都没做 Hedwig 做的事:** 苏格拉底式引导、自进化标准、布尔反馈学习、魔鬼代言人、长期记忆。这些是 Hedwig 的独特护城河。
+
+---
 
 ## 许可证
 
 MIT
+
+---
+
+<p align="center">
+  <i>决定哪些信息到达你的算法应该属于你。</i>
+</p>

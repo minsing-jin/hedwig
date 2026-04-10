@@ -1,35 +1,91 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/platforms-6-orange" alt="Platforms">
+  <img src="https://img.shields.io/badge/sources-16+-orange" alt="Sources">
+  <img src="https://img.shields.io/badge/version-2.1-purple" alt="Version">
 </p>
 
 # Hedwig
 
-**Personal AI Signal Radar** — Automatically collects AI signals from 6 platforms, filters them with LLM judgment, and delivers what matters to Slack.
+**Self-Evolving Personal AI Signal Radar** — Algorithm sovereignty for individuals.
 
-> **[한국어](docs/README.ko.md)** | **[中文](docs/README.zh.md)** | **[日本語](docs/README.ja.md)**
+> **[한국어](docs/README.ko.md)** | **[English](README.md)** | **[中文](docs/README.zh.md)**
 
 ```
-Collect → Score → Filter → Deliver
-  (6 platforms)  (OpenAI)  (criteria.yaml)  (Slack)
+Socratic Onboarding → Agent Collection → Normalize → Pre-score → LLM Score → Deliver → Self-Evolve
 ```
 
-## Why
+---
 
-AI information is scattered across X, Reddit, HN, LinkedIn, Threads, GeekNews, and more. Manually scanning each platform for meaningful signals among noise is exhausting.
+## The Moat: Why Hedwig Is Different
 
-Hedwig **filters only the signals that match your criteria** and sends them to Slack.
+Most information tools are **hands** — they fetch what you point at. Hedwig is a **brain + hands** — it learns what you care about and improves itself over time.
 
-## Features
+| Capability | Others (Agent-Reach, last30days, bb-browser, r.jina.ai) | **Hedwig** |
+|---|---|---|
+| **Who decides what to collect?** | You, every single time | AI agent, using evolving criteria |
+| **How does it learn your taste?** | It doesn't | Socratic onboarding + boolean feedback + natural language + weekly memory |
+| **Does it improve over time?** | No — static tools | Yes — daily micro-evolution + weekly macro-evolution |
+| **Algorithm ownership** | Corporate (YouTube, X) or fixed (open-source tools) | **You own it. Fully controllable.** |
+| **Devil's Advocate** | No | Every signal includes a counter-perspective |
 
-- **6 Source Collectors** — HN, Reddit (12 AI subreddits), GeekNews, AI blogs/newsletters, corporate AI blogs, indie AI press
-- **2-Tier LLM Scoring** — Fast model for filtering, high-performance model for interpretation/summary
-- **Devil's Advocate** — Every signal includes a counter-perspective and hype warning
-- **3-Level Output** — Individual Alerts + Daily Briefing + Weekly Briefing (trends + opportunity notes)
-- **Feedback Loop** — React with Slack emoji/threads and your filtering criteria evolve automatically
-- **criteria.yaml** — Manage interests, ignore patterns, urgency rules, and project context in YAML
-- **Agent-Ready** — Python API, CLI JSON output, and MCP server for AI agent integration
+### Hedwig's Five Unique Moats
+
+1. **Socratic Onboarding** — LLM asks you questions until your criteria are clear (ambiguity ≤ 0.2), inspired by Ouroboros philosophy. No manual config files.
+
+2. **Self-Evolving Algorithm** — Daily micro-mutations + weekly macro-mutations following the [Karpathy autoresearch](https://github.com/karpathy/autoresearch) pattern. The system experiments with criteria, measures your upvote ratio, keeps improvements, discards regressions.
+
+3. **Boolean-Only Feedback** — Just upvote/downvote. The system does the heavy lifting of interpreting patterns. Optional natural language when you want to direct it.
+
+4. **Long-Horizon Memory** — Weekly user preference snapshots track your taste trajectory. The system understands how your interests shift over months, not just this week.
+
+5. **Algorithm Sovereignty** — Unlike YouTube/X recommendation algorithms optimized for engagement (= ad revenue), Hedwig optimizes for *your* definition of relevance. You control the fitness function.
+
+---
+
+## What It Does
+
+AI signals are scattered across 15+ platforms. Manually scanning them for meaningful signals among noise is exhausting. Hedwig:
+
+1. **Interviews you Socratically** to crystallize what you care about
+2. **Sends an AI agent** to intelligently collect from 16+ sources based on your criteria
+3. **Normalizes content** via r.jina.ai (clean markdown, no ads/nav noise)
+4. **Pre-scores numerically** (engagement velocity, source authority, recency, convergence) before expensive LLM calls
+5. **LLM-scores with Devil's Advocate** counter-perspective on every signal
+6. **Delivers to Slack + Discord** in three channels: Alerts / Daily / Weekly
+7. **Self-evolves** daily (micro) and weekly (macro) based on your boolean feedback
+
+---
+
+## Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Daily Pipeline (Hedwig v2.1)               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Agent Strategy      LLM decides what to collect, from   │
+│     Generation          where, how deep, what to explore    │
+│          ↓                                                  │
+│  2. Agent Collection    Execute strategy — priority first,  │
+│                         exploration for discovery           │
+│          ↓                                                  │
+│  3. Content             r.jina.ai → clean markdown          │
+│     Normalization       (strips ads, nav, handles SPAs)     │
+│          ↓                                                  │
+│  4. Pre-scoring         5-factor numeric filtering BEFORE   │
+│                         expensive LLM calls                 │
+│          ↓                                                  │
+│  5. LLM Scoring         Relevance + Devil's Advocate        │
+│          ↓                                                  │
+│  6. Delivery            Slack + Discord channels            │
+│          ↓                                                  │
+│  7. Evolution           Daily: micro-mutations              │
+│                         Weekly: macro-evolution + memory    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Quick Start
 
@@ -40,206 +96,187 @@ cd hedwig
 uv venv .venv && source .venv/bin/activate
 uv pip install -e .
 
-# 2. Configure
+# 2. Configure API keys
 cp .env.example .env
-# Edit .env with your API keys (see Configuration below)
+# Edit .env (see Configuration below)
 
 # 3. Create Supabase tables
-# Run migrations/001_create_tables.sql in Supabase SQL Editor
+# Run hedwig/storage/supabase.py SCHEMA_SQL in Supabase SQL Editor
 
-# 4. Run
-python -m hedwig.main --dry-run      # Collect only (no API keys needed)
-python -m hedwig.main --collect      # Collect + LLM scoring
-python -m hedwig.main                # Full pipeline
-python -m hedwig.main --weekly       # Weekly briefing
+# 4. Socratic onboarding (first-time setup)
+python -m hedwig --onboard
+
+# 5. Test collection (no API keys needed)
+python -m hedwig --dry-run
+
+# 6. Run full pipeline
+python -m hedwig
 ```
+
+---
+
+## CLI Commands
+
+| Command | What it does |
+|---------|--------------|
+| `python -m hedwig --onboard` | Run Socratic interview to define your criteria |
+| `python -m hedwig --sources` | List all 16 registered source plugins |
+| `python -m hedwig --dry-run` | Collect only (no API keys needed) |
+| `python -m hedwig --collect` | Collect + LLM scoring, print to console |
+| `python -m hedwig` | **Daily full pipeline** (collect → score → deliver → evolve) |
+| `python -m hedwig --weekly` | **Weekly briefing** + macro-evolution + memory update |
+| `python -m hedwig --evolve` | Manual evolution cycle |
+
+---
 
 ## Configuration
 
-### API Keys (`.env`)
+### Required API Keys (`.env`)
 
 | Key | Where to get |
 |-----|-------------|
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API Keys |
-| `SUPABASE_URL` | [supabase.com](https://supabase.com) → Project → Settings → API |
-| `SUPABASE_KEY` | Same (use `service_role` key) |
-| `SLACK_WEBHOOK_ALERTS` | [api.slack.com](https://api.slack.com) → Create App → Incoming Webhooks |
-| `SLACK_WEBHOOK_DAILY` | Same app, second webhook for daily/weekly channel |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) |
+| `SUPABASE_URL` / `SUPABASE_KEY` | [supabase.com](https://supabase.com) — Project → Settings → API |
 
-### Filtering Criteria (`criteria.yaml`)
+### Delivery (Slack and/or Discord)
 
-```yaml
-identity:
-  role: "AI builder"
-  focus: [AI agents, LLM tooling, infra]
+| Key | Purpose |
+|-----|---------|
+| `SLACK_WEBHOOK_ALERTS` | `#alerts` channel webhook |
+| `SLACK_WEBHOOK_DAILY` | `#daily-brief` channel webhook |
+| `DISCORD_WEBHOOK_ALERTS` | Discord alert channel |
+| `DISCORD_WEBHOOK_DAILY` | Discord daily channel |
+| `DISCORD_WEBHOOK_WEEKLY` | Discord weekly channel |
 
-signal_preferences:
-  care_about:
-    - Real adoption signals (not hype)
-    - Practical applicability of papers
-  ignore:
-    - Memes and viral content
-    - Unsubstantiated predictions
+### Optional (for expanded sources)
 
-context:
-  current_projects:
-    - "My current project"
-```
+| Key | Enables |
+|-----|---------|
+| `EXA_API_KEY` | Semantic web search (1000/mo free) |
+| `SCRAPECREATORS_API_KEY` | TikTok + Instagram collection |
 
-## Cron Setup
+---
 
+## 16 Source Plugins (Built-in)
+
+| Category | Sources |
+|----------|---------|
+| **SNS** | X/Twitter (RSS proxy), Reddit (12 AI subreddits), LinkedIn (corporate blogs), Threads (newsletters), Bluesky (AT Protocol), TikTok, Instagram |
+| **Tech Communities** | Hacker News (Firebase API), GeekNews, YouTube (RSS), Polymarket |
+| **Academic** | arXiv, Semantic Scholar, Papers With Code |
+| **Web** | Exa semantic search |
+| **Newsletters** | Ben's Bites, Latent Space, The Decoder, AINews, etc. |
+
+**Plus user-extensible:** Add custom RSS feeds, Discord/Telegram channels, or API endpoints.
+
+---
+
+## How to Use It (Step-by-Step)
+
+### Day 1 — Onboarding
 ```bash
-bash setup.sh
-# Daily  at 09:00, 19:00
-# Weekly at Monday 10:00
+python -m hedwig --onboard
 ```
+The system asks you a series of Socratic questions: what topics matter, what depth you want, what to ignore, what urgency rules to apply. It writes the result to `criteria.yaml`.
 
-## Claude Code Auto-Resume
-
-This project includes a **project-only**, **opt-in** Claude Code skill that helps recover from Claude's 5-hour usage limit.
-
-- Skill name: `/claude-limit-auto-resume`
-- Scope: `.claude/skills/claude-limit-auto-resume/`
-- State: local only under `.claude/auto-resume/`
-- Default: off
-
-### Enable
-
-Inside Claude Code for this project:
-
-```text
-/claude-limit-auto-resume enable
-```
-
-Or from the shell:
-
+### Day 2 — First Run
 ```bash
-./scripts/claude-auto-resume enable
+python -m hedwig
 ```
+The agent collects from 16 sources based on your criteria, filters via LLM, delivers to Slack/Discord.
 
-### Start a managed Claude session
+### Day 3+ — React
+Upvote/downvote the signals you receive. No need to configure anything — the system reads your reactions.
 
-After enabling, start future Claude sessions through the wrapper:
+### Daily (automatic)
+Each daily run includes a micro-evolution step: LLM analyzes your feedback, makes small adjustments to criteria.
 
+### Weekly
 ```bash
-./scripts/claude-auto-resume wrap -- claude
+python -m hedwig --weekly
+```
+Deep analysis: taste trajectory, source evolution, new exploration directions. Updates your long-horizon memory.
+
+### Anytime — Recalibrate
+```bash
+python -m hedwig --onboard
+```
+Re-enter Socratic mode when you want to change direction.
+
+### Cron Setup
+```bash
+# Daily runs
+0 9,19 * * * cd /path/to/hedwig && .venv/bin/python -m hedwig
+
+# Weekly run (Mondays 10:00)
+0 10 * * 1 cd /path/to/hedwig && .venv/bin/python -m hedwig --weekly
 ```
 
-When Claude hits a usage limit, the wrapper:
-
-1. Detects the limit message
-2. Saves a local handoff under `.claude/auto-resume/handoffs/`
-3. Waits for the reset window
-4. Relaunches Claude with `--resume` when a session id is available, otherwise `--continue`
-
-### Disable or inspect
-
-```text
-/claude-limit-auto-resume status
-/claude-limit-auto-resume doctor
-/claude-limit-auto-resume disable
-```
-
-### Limits
-
-- Existing unmanaged Claude sessions are not retroactively adopted.
-- Claude's native `--resume` can still lose some context after usage limits, so this workflow saves a project-local handoff file to improve recovery.
-- Recent transcript excerpts are stored locally while the watchdog is active. Treat the feature as a convenience layer, not a security boundary.
+---
 
 ## Architecture
 
 ```
 hedwig/
-├── sources/           # 6 platform collectors
-│   ├── hackernews.py  # HN API (top + best)
-│   ├── reddit.py      # Reddit JSON API (12 subreddits)
-│   ├── geeknews.py    # GeekNews RSS
-│   ├── twitter.py     # AI blogs/newsletters (RSS)
-│   ├── linkedin.py    # Corporate AI blogs (RSS)
-│   └── threads.py     # Indie AI press (RSS)
+├── sources/              # 16 source plugins + user-extensible
+│   ├── base.py           # Plugin registry, RSSSource, CustomRSSSource
+│   ├── hackernews.py, reddit.py, arxiv.py, bluesky.py, ...
+│
 ├── engine/
-│   ├── scorer.py      # OpenAI 2-tier (gpt-4o-mini → gpt-4o)
-│   └── briefing.py    # Daily/weekly briefing generation
-├── delivery/
-│   └── slack.py       # Slack Block Kit messages
-├── storage/
-│   └── supabase.py    # Persistence + dedup
+│   ├── agent_collector.py   # AI-driven collection strategy
+│   ├── normalizer.py        # r.jina.ai content cleaning
+│   ├── pre_scorer.py        # 5-factor numeric pre-scoring
+│   ├── scorer.py            # LLM scoring with Devil's Advocate
+│   └── briefing.py          # Daily/weekly briefing generation
+│
+├── onboarding/
+│   └── interviewer.py       # Socratic interview engine
+│
+├── evolution/
+│   └── engine.py            # Daily + weekly self-improvement loops
+│
+├── memory/
+│   └── store.py             # Long-horizon user preference model
+│
 ├── feedback/
-│   └── slack_events.py # Emoji/thread → criteria evolution
-├── agent.py           # Agent API (Python/CLI/JSON)
-├── mcp_server.py      # MCP server for AI agents
-├── models.py          # Pydantic data models
-├── config.py          # Environment & criteria loader
-└── main.py            # CLI entry point
+│   └── collector.py         # Boolean vote + natural language
+│
+├── delivery/
+│   ├── slack.py             # Slack Block Kit delivery
+│   └── discord.py           # Discord webhook delivery
+│
+├── storage/
+│   └── supabase.py          # DB (signals, feedback, evolution, memory)
+│
+├── models.py                # Pydantic data models
+├── config.py                # Environment & criteria loader
+└── main.py                  # CLI orchestration
 ```
 
-## Data Sources
+---
 
-| Platform | Method | Posts/run |
-|----------|--------|-----------|
-| HackerNews | Firebase API | ~50 |
-| Reddit | JSON API (no auth) | ~48 |
-| GeekNews | RSS | ~30 |
-| AI Blogs | RSS (karpathy, simonwillison, latent.space, etc.) | ~45 |
-| Corp AI Blogs | RSS (OpenAI, Google AI, HuggingFace, etc.) | ~15 |
-| Indie AI Press | RSS (TechCrunch AI, The Decoder, etc.) | ~15 |
-| **Total** | | **~200** |
+## Inspirations & Integrations
 
-## Slack Output Examples
+Hedwig stands on the shoulders of giants. What we absorbed:
 
-### Individual Alert (`#alerts`)
-```
-🟢 [HACKER] LLM Architecture Gallery
-relevance: 0.85 | urgency: alert
+| Project | Stars | What Hedwig Borrows |
+|---------|-------|---------------------|
+| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | — | Self-improvement loop pattern (experiment → measure → keep/discard) |
+| [jina-ai/reader](https://github.com/jina-ai/reader) | 10.5K | **Integrated** — URL-to-Markdown normalization for all 16 sources |
+| [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill) | 1K | **Integrated** — 5-factor multi-signal scoring algorithm |
+| [Panniantong/Agent-Reach](https://github.com/Panniantong/Agent-Reach) | 16.4K | Cookie-based platform collection patterns (planned) |
+| [epiral/bb-browser](https://github.com/epiral/bb-browser) | 4.3K | Browser-as-API for login-required platforms (planned) |
 
-💡 Why it matters: Visual gallery comparing LLM architectures,
-   useful for quickly grasping model design patterns
+**But none of them do what Hedwig does:** Socratic onboarding, self-evolving criteria, boolean feedback learning, Devil's Advocate, long-horizon memory. Those are Hedwig's unique moat.
 
-😈 Counter-view: Visualization is helpful but doesn't explain
-   actual performance differences
-```
-
-### Daily Briefing
-🔴 Immediate attention &nbsp;|&nbsp; 🟡 Key trends &nbsp;|&nbsp; 🟢 Worth noting &nbsp;|&nbsp; 💡 Insights
-
-### Weekly Briefing
-📊 Trends &nbsp;|&nbsp; 🔥 Top 5 &nbsp;|&nbsp; 📈 Weak signals &nbsp;|&nbsp; 🎯 Opportunities &nbsp;|&nbsp; ⚖️ Hype warnings
-
-## Agent Integration
-
-Hedwig can be used as a tool by AI agents:
-
-### Python API
-```python
-from hedwig.agent import pipeline, collect, score, briefing
-
-signals = await pipeline(top=10)
-posts = await collect(sources=["hackernews", "reddit"])
-text = await briefing("weekly")
-```
-
-### CLI (JSON output)
-```bash
-python -m hedwig.agent --top 10
-python -m hedwig.agent --source reddit
-python -m hedwig.agent --briefing daily
-```
-
-### MCP Server
-```json
-{
-  "mcpServers": {
-    "hedwig": {
-      "command": "python",
-      "args": ["-m", "hedwig.mcp_server"],
-      "cwd": "/path/to/hedwig"
-    }
-  }
-}
-```
-
-Tools: `hedwig_collect`, `hedwig_score`, `hedwig_briefing`, `hedwig_pipeline`
+---
 
 ## License
 
 MIT
+
+---
+
+<p align="center">
+  <i>The algorithm that decides what information reaches you should belong to you.</i>
+</p>
