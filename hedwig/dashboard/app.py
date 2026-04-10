@@ -32,11 +32,18 @@ BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="Hedwig Dashboard", version="2.1.0")
+def create_app(saas_mode: bool = False) -> FastAPI:
+    """Create the FastAPI app.
+
+    Args:
+        saas_mode: If True, enables multi-tenant routes (landing, auth, billing).
+                   If False, single-user mode (original dashboard).
+    """
+    app = FastAPI(title="Hedwig Dashboard", version="3.0.0")
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
     env_manager = EnvManager(env_path=Path.cwd() / ".env")
+    app.state.saas_mode = saas_mode
 
     # -----------------------------------------------------------------------
     # Home / Status
@@ -279,7 +286,132 @@ def create_app() -> FastAPI:
         CRITERIA_PATH.write_text(content)
         return JSONResponse({"ok": True})
 
+    # -----------------------------------------------------------------------
+    # SaaS routes (landing, auth, billing) — only when saas_mode=True
+    # -----------------------------------------------------------------------
+
+    if saas_mode:
+        _register_saas_routes(app)
+
     return app
+
+
+def _register_saas_routes(app: FastAPI):
+    """Register multi-tenant SaaS routes (landing, auth, billing)."""
+    from hedwig.saas import auth as saas_auth
+    from hedwig.saas import billing as saas_billing
+    from hedwig.saas.models import SubscriptionTier
+
+    # ------- Landing -------
+
+    @app.get("/landing", response_class=HTMLResponse)
+    async def landing(request: Request):
+        return TEMPLATES.TemplateResponse("landing.html", {"request": request})
+
+    # ------- Auth pages -------
+
+    @app.get("/signup", response_class=HTMLResponse)
+    async def signup_page(request: Request):
+        return TEMPLATES.TemplateResponse("signup.html", {"request": request})
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request):
+        return TEMPLATES.TemplateResponse("login.html", {"request": request})
+
+    # ------- Auth API -------
+
+    @app.post("/auth/signup")
+    async def auth_signup(request: Request):
+        form = await request.form()
+        email = form.get("email", "")
+        password = form.get("password", "")
+        try:
+            result = await saas_auth.sign_up(email, password)
+            response = JSONResponse({"ok": True, "user": result.get("user", {})})
+            if result.get("access_token"):
+                response.set_cookie(
+                    "hedwig_access_token",
+                    result["access_token"],
+                    httponly=True,
+                    secure=False,
+                    samesite="lax",
+                )
+            return response
+        except saas_auth.AuthError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    @app.post("/auth/login")
+    async def auth_login(request: Request):
+        form = await request.form()
+        email = form.get("email", "")
+        password = form.get("password", "")
+        try:
+            result = await saas_auth.sign_in(email, password)
+            response = JSONResponse({"ok": True, "user": result.get("user", {})})
+            if result.get("access_token"):
+                response.set_cookie(
+                    "hedwig_access_token",
+                    result["access_token"],
+                    httponly=True,
+                    secure=False,
+                    samesite="lax",
+                )
+            return response
+        except saas_auth.AuthError as e:
+            return JSONResponse({"error": str(e)}, status_code=401)
+
+    @app.post("/auth/logout")
+    async def auth_logout(request: Request):
+        token = request.cookies.get("hedwig_access_token", "")
+        if token:
+            await saas_auth.sign_out(token)
+        response = JSONResponse({"ok": True})
+        response.delete_cookie("hedwig_access_token")
+        return response
+
+    @app.get("/auth/me")
+    async def auth_me(request: Request):
+        user = await saas_auth.get_current_user(request)
+        if not user:
+            return JSONResponse({"authenticated": False}, status_code=401)
+        return JSONResponse({"authenticated": True, "user": user})
+
+    # ------- Billing -------
+
+    @app.post("/billing/checkout")
+    async def billing_checkout(request: Request):
+        user = await saas_auth.require_auth(request)
+        form = await request.form()
+        tier_str = form.get("tier", "pro")
+        try:
+            tier = SubscriptionTier(tier_str)
+            base_url = str(request.base_url).rstrip("/")
+            session = await saas_billing.create_checkout_session(
+                user_id=user["id"],
+                user_email=user["email"],
+                tier=tier,
+                success_url=f"{base_url}/?upgraded=true",
+                cancel_url=f"{base_url}/billing/cancel",
+            )
+            return JSONResponse({"url": session.get("url")})
+        except (ValueError, saas_billing.BillingError) as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    @app.post("/billing/webhook")
+    async def billing_webhook(request: Request):
+        # TODO: verify signature with STRIPE_WEBHOOK_SECRET
+        event = await request.json()
+        result = await saas_billing.handle_webhook(event)
+        if result:
+            # Ralph loop handles DB updates based on webhook results
+            logger.info(f"Webhook: {result}")
+        return JSONResponse({"received": True})
+
+    @app.get("/billing/portal")
+    async def billing_portal(request: Request):
+        user = await saas_auth.require_auth(request)
+        # TODO: look up stripe_customer_id from subscriptions table
+        return JSONResponse({"ok": True, "message": "Portal route placeholder"})
 
 
 # ---------------------------------------------------------------------------
@@ -325,12 +457,13 @@ def _count_sources() -> int:
         return 0
 
 
-def run(host: str = "127.0.0.1", port: int = 8765):
+def run(host: str = "127.0.0.1", port: int = 8765, saas: bool = False):
     """Run the dashboard web server."""
     import uvicorn
 
-    print(f"\n🦉 Hedwig Dashboard running at http://{host}:{port}\n")
-    uvicorn.run(create_app(), host=host, port=port, log_level="info")
+    mode = "SaaS" if saas else "Single-user"
+    print(f"\n🦉 Hedwig Dashboard ({mode}) running at http://{host}:{port}\n")
+    uvicorn.run(create_app(saas_mode=saas), host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

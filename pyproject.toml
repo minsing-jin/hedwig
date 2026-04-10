@@ -1,7 +1,7 @@
 [project]
 name = "hedwig"
-version = "2.1.0"
-description = "Self-Evolving Personal AI Signal Radar — algorithm sovereignty for individuals"
+version = "3.0.0"
+description = "Self-Evolving Personal AI Signal Radar — algorithm sovereignty for individuals (SaaS + Native)"
 requires-python = ">=3.10"
 dependencies = [
     "openai>=1.0",
@@ -16,6 +16,13 @@ dependencies = [
     "uvicorn>=0.27",
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+native = [
+    "pywebview>=5.0",
+    "pyobjc>=10.0; sys_platform == 'darwin'",
+    "rumps>=0.4; sys_platform == 'darwin'",
 ]
 
 [project.scripts]

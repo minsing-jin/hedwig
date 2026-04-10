@@ -496,12 +496,21 @@ def main():
     parser.add_argument("--evolve", action="store_true", help="Run evolution cycle manually")
     parser.add_argument("--sources", action="store_true", help="List all source plugins")
     parser.add_argument("--dashboard", action="store_true", help="Start web dashboard UI")
+    parser.add_argument("--saas", action="store_true", help="Enable SaaS mode (landing, auth, billing)")
+    parser.add_argument("--native", action="store_true", help="Run as native desktop app")
+    parser.add_argument("--tray", action="store_true", help="Run as macOS menubar tray app")
     parser.add_argument("--port", type=int, default=8765, help="Dashboard port (default: 8765)")
     args = parser.parse_args()
 
-    if args.dashboard:
+    if args.native:
+        from hedwig.native import run_native
+        run_native()
+    elif args.tray:
+        from hedwig.native.tray import run_tray
+        run_tray()
+    elif args.dashboard:
         from hedwig.dashboard import run as run_dashboard
-        run_dashboard(port=args.port)
+        run_dashboard(port=args.port, saas=args.saas)
     elif args.sources:
         list_sources()
     elif args.onboard:

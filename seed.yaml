@@ -342,17 +342,119 @@ competitive_analysis:
     Hedwig's value is NOT in collection (others do it better) but in
     intelligent, personalized, self-improving JUDGMENT.
 
+# ---------------------------------------------------------------------------
+# v3.0 — SaaS Conversion + Native App
+# ---------------------------------------------------------------------------
+
+saas_conversion:
+  vision: >
+    Transform Hedwig from a single-user personal tool into a multi-tenant
+    SaaS that democratizes algorithm sovereignty — anyone can own their
+    personal information algorithm.
+  business_model:
+    tiers:
+      - name: free
+        price_monthly: 0
+        limits:
+          sources: 5
+          signals_per_day: 50
+          evolution_cycles: daily_only
+          user_memory_weeks: 2
+      - name: pro
+        price_monthly: 19
+        limits:
+          sources: unlimited
+          signals_per_day: unlimited
+          evolution_cycles: daily_weekly
+          user_memory_weeks: unlimited
+          custom_sources: true
+      - name: team
+        price_monthly: 49
+        limits:
+          all_pro_features: true
+          shared_criteria: true
+          team_channels: 5
+          users_per_team: 10
+  multi_tenancy:
+    auth_provider: "Supabase Auth (email/password + OAuth)"
+    isolation: "Row-Level Security (RLS) with user_id on every table"
+    data_model_changes:
+      - Add user_id UUID FK to: signals, feedback, evolution_logs, criteria_versions, user_memory, source_plugins
+      - Add users table (auth.users reference)
+      - Add subscriptions table (user_id, tier, stripe_customer_id, status, current_period_end)
+      - Add usage_tracking table (for quota enforcement)
+      - RLS policies: users can only SELECT/UPDATE their own rows
+  billing:
+    provider: "Stripe"
+    integration_points:
+      - Checkout session creation at /billing/checkout
+      - Webhook at /billing/webhook for subscription events
+      - Customer portal at /billing/portal
+      - Usage metering for free tier limits
+  deployment:
+    target: "Vercel (frontend) + Railway/Fly.io (backend) + Supabase (DB/auth)"
+    monorepo: true
+    environments: [development, staging, production]
+
+native_app:
+  vision: >
+    Desktop app that runs entirely locally — no cloud required.
+    Users who want full privacy can self-host. Same dashboard UI.
+  technology: "pywebview (Python + webview, lightest option)"
+  features:
+    - Native window with Hedwig icon
+    - Auto-start FastAPI dashboard server
+    - Tray icon with quick actions (run daily, open dashboard, quit)
+    - Background daemon mode for cron
+    - Native notifications for alerts
+    - Auto-update via GitHub releases
+  distribution:
+    - macOS: .app bundle via py2app or PyInstaller
+    - Windows: .exe via PyInstaller
+    - Linux: .AppImage
+
+generative_ui:
+  vision: >
+    Dashboard UI that evolves with user preferences.
+    LLM generates custom visualizations based on signal patterns.
+  features:
+    - Dynamic dashboard layouts per user context
+    - LLM-generated chart components
+    - Personalized insight cards
+  phase: "Phase 2 — after SaaS MVP validates product-market fit"
+
+ralph_handoff:
+  strategy: >
+    Ouroboros Ralph loop handles iterative implementation and verification.
+    Each iteration: build a component, run tests, evaluate, fix, repeat
+    until all acceptance criteria pass.
+  loop_goals:
+    - All SaaS data model migrations applied
+    - Supabase Auth fully integrated in dashboard
+    - Stripe checkout flow works end-to-end
+    - Native app builds successfully on macOS
+    - Landing page deployed and accessible
+    - Signup → payment → onboarding → first run flow verified
+  exit_conditions:
+    - All tasks in phase 1 (data model + auth) complete
+    - All tasks in phase 2 (billing + native) complete
+    - Integration test suite passes
+    - Can sign up as new user and complete full flow
+
 metadata:
-  version: "2.1.0"
+  version: "3.0.0"
   created: "2026-03-16"
-  updated: "2026-04-09"
-  ambiguity_score: 0.10
-  interview_source: "ouroboros-socratic-interview-v1 + v2 + competitive-analysis"
+  updated: "2026-04-10"
+  ambiguity_score: 0.15  # higher due to new SaaS scope
+  interview_source: "ouroboros-socratic-interview-v1 + v2 + v3-saas-pivot"
   interview_v1_date: "2026-03-16"
   interview_v2_date: "2026-04-08"
+  interview_v3_date: "2026-04-10"
   competitive_analysis_date: "2026-04-08"
+  saas_pivot_date: "2026-04-10"
   project_name: "hedwig"
-  converged_decisions: 23
+  converged_decisions: 28
+  product_phase: "personal_tool_validated → saas_conversion"
   reference_projects:
     - name: "karpathy/autoresearch"
       relevance: "Self-improvement loop pattern — experiment, measure, keep/discard, repeat"
@@ -364,3 +466,7 @@ metadata:
       relevance: "URL-to-Markdown normalization — integrated into pipeline (10.5K stars)"
     - name: "epiral/bb-browser"
       relevance: "Browser-as-API for login-required platforms (4.3K stars)"
+    - name: "supabase"
+      relevance: "Auth + RLS multi-tenancy infrastructure"
+    - name: "stripe"
+      relevance: "Subscription billing for SaaS tiers"

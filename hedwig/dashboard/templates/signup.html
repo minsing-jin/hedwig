@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Sign Up{% endblock %}
+{% block content %}
+
+<div class="auth-container">
+  <div class="auth-card">
+    <h1>🦉 Start Your Hedwig</h1>
+    <p class="muted">Get your own self-evolving AI signal radar. Free to start.</p>
+
+    <form id="signup-form" class="form">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required minlength="8" placeholder="At least 8 characters">
+      </div>
+      <button type="submit" class="btn btn-primary btn-large">Create Account</button>
+    </form>
+
+    <div class="auth-footer">
+      <p>Already have an account? <a href="/login" class="link">Sign in</a></p>
+      <p class="muted">By signing up, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>.</p>
+    </div>
+
+    <div id="error" class="alert" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+document.getElementById('signup-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById('error');
+  errorEl.style.display = 'none';
+
+  const formData = new FormData(e.target);
+  const resp = await fetch('/auth/signup', { method: 'POST', body: formData });
+  const data = await resp.json();
+
+  if (resp.ok) {
+    window.location.href = '/onboarding';
+  } else {
+    errorEl.textContent = '❌ ' + (data.detail || data.error || 'Signup failed');
+    errorEl.style.display = 'block';
+  }
+});
+</script>
+
+{% endblock %}
