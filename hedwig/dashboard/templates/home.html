@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Home{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🦉 Hedwig Dashboard</h1>
+  <p class="subtitle">Self-Evolving Personal AI Signal Radar</p>
+</div>
+
+<div class="grid-4">
+  <div class="card stat">
+    <div class="stat-label">Sources</div>
+    <div class="stat-value">{{ source_count }}</div>
+    <div class="stat-sub">registered plugins</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">Recent Signals</div>
+    <div class="stat-value">{{ recent_signals|length }}</div>
+    <div class="stat-sub">last 3 days</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">Evolution Cycles</div>
+    <div class="stat-value">{{ recent_evolution|length }}</div>
+    <div class="stat-sub">recent</div>
+  </div>
+  <div class="card stat">
+    <div class="stat-label">Status</div>
+    <div class="stat-value">{% if status.ready %}✅{% else %}⚠️{% endif %}</div>
+    <div class="stat-sub">{% if status.ready %}Ready{% else %}Setup needed{% endif %}</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Pipeline Control</h2>
+  <div class="button-row">
+    <button class="btn btn-primary" hx-post="/run/daily" hx-swap="none"
+            onclick="showToast('Daily run started')">
+      ▶ Run Daily Pipeline
+    </button>
+    <button class="btn" hx-post="/run/dry" hx-swap="none"
+            onclick="showToast('Dry run started')">
+      🧪 Dry Run (collect only)
+    </button>
+    <button class="btn" hx-post="/run/weekly" hx-swap="none"
+            onclick="showToast('Weekly run started')">
+      📊 Weekly Brief + Macro-Evolution
+    </button>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="section">
+    <h2>Recent Signals</h2>
+    {% if recent_signals %}
+    <div class="signal-list">
+      {% for s in recent_signals[:10] %}
+      <div class="signal-item">
+        <div class="signal-meta">
+          <span class="platform">{{ s.platform }}</span>
+          <span class="score">{{ "%.2f"|format(s.relevance_score or 0) }}</span>
+        </div>
+        <div class="signal-title">
+          <a href="{{ s.url }}" target="_blank">{{ s.title[:80] }}</a>
+        </div>
+        <div class="vote-buttons">
+          <button class="vote-up" hx-post="/feedback/{{ s.id }}/up" hx-swap="none"
+                  onclick="this.classList.add('voted'); showToast('👍 Upvoted')">👍</button>
+          <button class="vote-down" hx-post="/feedback/{{ s.id }}/down" hx-swap="none"
+                  onclick="this.classList.add('voted'); showToast('👎 Downvoted')">👎</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <a href="/signals" class="link">View all signals →</a>
+    {% else %}
+    <p class="muted">No signals yet. Run the daily pipeline to collect.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h2>Evolution History</h2>
+    {% if recent_evolution %}
+    <div class="evolution-list">
+      {% for e in recent_evolution %}
+      <div class="evolution-item">
+        <div class="evolution-header">
+          <span class="cycle-type">{{ e.cycle_type }}</span>
+          <span class="cycle-num">#{{ e.cycle_number }}</span>
+        </div>
+        <div class="evolution-summary">{{ e.analysis_summary[:200] }}</div>
+        {% if e.mutations_applied %}
+        <div class="mutations">
+          {% for m in e.mutations_applied[:3] %}
+          <span class="mutation">{{ m[:60] }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No evolution cycles yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+{% endblock %}

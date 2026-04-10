@@ -1,0 +1,337 @@
+"""
+Hedwig Dashboard — FastAPI web UI for setup, feedback, and monitoring.
+
+Run with:
+    python -m hedwig dashboard
+    # or
+    python -m hedwig.dashboard.app
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from hedwig.dashboard.db_setup import create_tables, get_schema_sql
+from hedwig.dashboard.env_manager import EnvManager
+from hedwig.dashboard.validator import test_all
+
+logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="Hedwig Dashboard", version="2.1.0")
+    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+    env_manager = EnvManager(env_path=Path.cwd() / ".env")
+
+    # -----------------------------------------------------------------------
+    # Home / Status
+    # -----------------------------------------------------------------------
+
+    @app.get("/", response_class=HTMLResponse)
+    async def home(request: Request):
+        status = env_manager.get_status()
+        if not status["ready"]:
+            return RedirectResponse(url="/setup", status_code=303)
+
+        # Load recent signals, feedback, evolution
+        recent_signals = _load_recent_signals(limit=20)
+        recent_evolution = _load_recent_evolution(limit=5)
+        criteria = _load_criteria()
+        source_count = _count_sources()
+
+        return TEMPLATES.TemplateResponse(
+            "home.html",
+            {
+                "request": request,
+                "status": status,
+                "recent_signals": recent_signals,
+                "recent_evolution": recent_evolution,
+                "criteria": criteria,
+                "source_count": source_count,
+            },
+        )
+
+    # -----------------------------------------------------------------------
+    # Setup wizard
+    # -----------------------------------------------------------------------
+
+    @app.get("/setup", response_class=HTMLResponse)
+    async def setup_get(request: Request):
+        values = env_manager.load()
+        metadata = EnvManager.all_key_metadata()
+        status = env_manager.get_status()
+        return TEMPLATES.TemplateResponse(
+            "setup.html",
+            {
+                "request": request,
+                "values": values,
+                "metadata": metadata,
+                "required_keys": EnvManager.REQUIRED_KEYS,
+                "delivery_keys": EnvManager.DELIVERY_KEYS,
+                "optional_keys": EnvManager.OPTIONAL_KEYS,
+                "status": status,
+            },
+        )
+
+    @app.post("/setup/save")
+    async def setup_save(request: Request):
+        form = await request.form()
+        values = {k: v for k, v in form.items() if v}
+        env_manager.save(values)
+        return JSONResponse({"ok": True, "message": "Saved to .env"})
+
+    @app.post("/setup/test")
+    async def setup_test(request: Request):
+        form = await request.form()
+        values = {k: v for k, v in form.items() if v}
+        # Save first, then test what's saved
+        env_manager.save(values)
+        results = await test_all(env_manager.load())
+
+        html_lines = ["<div class='test-results'>"]
+        for key, (ok, msg) in results.items():
+            icon = "✅" if ok else "❌"
+            cls = "ok" if ok else "fail"
+            html_lines.append(
+                f"<div class='test-row {cls}'>{icon} <strong>{key}</strong>: {msg}</div>"
+            )
+        html_lines.append("</div>")
+        return HTMLResponse("".join(html_lines))
+
+    @app.post("/setup/create-tables")
+    async def setup_create_tables():
+        values = env_manager.load()
+        url = values.get("SUPABASE_URL", "")
+        key = values.get("SUPABASE_KEY", "")
+        ok, msg = await create_tables(url, key)
+        if ok:
+            return HTMLResponse(
+                "<div class='test-row ok'>✅ Supabase tables created</div>"
+            )
+        # Manual mode fallback
+        sql = get_schema_sql()
+        return HTMLResponse(
+            f"""
+            <div class='test-row fail'>
+              ❌ Auto-creation unavailable. Please run this SQL manually in
+              Supabase SQL Editor:
+            </div>
+            <details>
+              <summary>Show SQL</summary>
+              <pre style='max-height:400px;overflow:auto'>{sql}</pre>
+            </details>
+            """
+        )
+
+    # -----------------------------------------------------------------------
+    # Onboarding (Socratic interview)
+    # -----------------------------------------------------------------------
+
+    _onboarding_session: dict = {}
+
+    @app.get("/onboarding", response_class=HTMLResponse)
+    async def onboarding_get(request: Request):
+        return TEMPLATES.TemplateResponse("onboarding.html", {"request": request})
+
+    @app.post("/onboarding/start")
+    async def onboarding_start():
+        from hedwig.config import CRITERIA_PATH, OPENAI_API_KEY
+        from hedwig.onboarding import SocraticInterviewer
+
+        llm = None
+        if OPENAI_API_KEY:
+            try:
+                from openai import AsyncOpenAI
+                llm = AsyncOpenAI(api_key=OPENAI_API_KEY)
+            except Exception:
+                pass
+
+        interviewer = SocraticInterviewer(llm_client=llm, criteria_path=CRITERIA_PATH)
+        first = (
+            interviewer.start_recalibrate()
+            if CRITERIA_PATH.exists()
+            else interviewer.start_initial()
+        )
+        _onboarding_session["interviewer"] = interviewer
+        return JSONResponse({"message": first, "complete": False})
+
+    @app.post("/onboarding/respond")
+    async def onboarding_respond(request: Request):
+        form = await request.form()
+        user_input = form.get("message", "")
+        interviewer = _onboarding_session.get("interviewer")
+        if not interviewer:
+            return JSONResponse({"error": "No active session"}, status_code=400)
+
+        response = await interviewer.respond(user_input)
+        return JSONResponse(
+            {
+                "message": response,
+                "complete": interviewer.is_complete,
+            }
+        )
+
+    # -----------------------------------------------------------------------
+    # Signals & feedback
+    # -----------------------------------------------------------------------
+
+    @app.get("/signals", response_class=HTMLResponse)
+    async def signals_view(request: Request):
+        signals = _load_recent_signals(limit=50)
+        return TEMPLATES.TemplateResponse(
+            "signals.html", {"request": request, "signals": signals}
+        )
+
+    @app.post("/feedback/{signal_id}/{vote}")
+    async def submit_feedback(signal_id: str, vote: str):
+        if vote not in ("up", "down"):
+            return JSONResponse({"error": "Invalid vote"}, status_code=400)
+
+        from hedwig.feedback import FeedbackCollector
+        from hedwig.models import VoteType
+        from hedwig.storage.supabase import save_feedback
+
+        collector = FeedbackCollector()
+        fb = collector.from_direct(
+            signal_id=signal_id,
+            vote=VoteType.UP if vote == "up" else VoteType.DOWN,
+        )
+        save_feedback(fb)
+
+        return JSONResponse({"ok": True, "vote": vote})
+
+    # -----------------------------------------------------------------------
+    # Pipeline control
+    # -----------------------------------------------------------------------
+
+    @app.post("/run/daily")
+    async def run_daily():
+        """Trigger a daily run in background."""
+        subprocess.Popen(
+            [sys.executable, "-m", "hedwig"],
+            cwd=str(Path.cwd()),
+        )
+        return JSONResponse({"ok": True, "message": "Daily run started"})
+
+    @app.post("/run/dry")
+    async def run_dry():
+        subprocess.Popen(
+            [sys.executable, "-m", "hedwig", "--dry-run"],
+            cwd=str(Path.cwd()),
+        )
+        return JSONResponse({"ok": True, "message": "Dry run started"})
+
+    @app.post("/run/weekly")
+    async def run_weekly():
+        subprocess.Popen(
+            [sys.executable, "-m", "hedwig", "--weekly"],
+            cwd=str(Path.cwd()),
+        )
+        return JSONResponse({"ok": True, "message": "Weekly run started"})
+
+    # -----------------------------------------------------------------------
+    # Sources view
+    # -----------------------------------------------------------------------
+
+    @app.get("/sources", response_class=HTMLResponse)
+    async def sources_view(request: Request):
+        from hedwig.sources import get_registered_sources
+        registry = get_registered_sources()
+        sources = [
+            {"id": pid, "meta": cls.metadata()} for pid, cls in sorted(registry.items())
+        ]
+        return TEMPLATES.TemplateResponse(
+            "sources.html", {"request": request, "sources": sources}
+        )
+
+    # -----------------------------------------------------------------------
+    # Criteria editor
+    # -----------------------------------------------------------------------
+
+    @app.get("/criteria", response_class=HTMLResponse)
+    async def criteria_view(request: Request):
+        from hedwig.config import CRITERIA_PATH
+        content = ""
+        if CRITERIA_PATH.exists():
+            content = CRITERIA_PATH.read_text()
+        return TEMPLATES.TemplateResponse(
+            "criteria.html", {"request": request, "content": content}
+        )
+
+    @app.post("/criteria/save")
+    async def criteria_save(content: str = Form(...)):
+        from hedwig.config import CRITERIA_PATH
+        CRITERIA_PATH.write_text(content)
+        return JSONResponse({"ok": True})
+
+    return app
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _load_recent_signals(limit: int = 20) -> list[dict]:
+    try:
+        from hedwig.storage.supabase import get_recent_signals
+        return get_recent_signals(days=3)[:limit]
+    except Exception:
+        return []
+
+
+def _load_recent_evolution(limit: int = 5) -> list[dict]:
+    from hedwig.config import EVOLUTION_LOG_PATH
+    if not EVOLUTION_LOG_PATH.exists():
+        return []
+    logs = []
+    for line in EVOLUTION_LOG_PATH.read_text().strip().split("\n"):
+        if not line.strip():
+            continue
+        try:
+            logs.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return list(reversed(logs))[:limit]
+
+
+def _load_criteria() -> dict:
+    from hedwig.config import load_criteria
+    try:
+        return load_criteria()
+    except Exception:
+        return {}
+
+
+def _count_sources() -> int:
+    try:
+        from hedwig.sources import get_registered_sources
+        return len(get_registered_sources())
+    except Exception:
+        return 0
+
+
+def run(host: str = "127.0.0.1", port: int = 8765):
+    """Run the dashboard web server."""
+    import uvicorn
+
+    print(f"\n🦉 Hedwig Dashboard running at http://{host}:{port}\n")
+    uvicorn.run(create_app(), host=host, port=port, log_level="info")
+
+
+if __name__ == "__main__":
+    run()

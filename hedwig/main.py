@@ -488,16 +488,21 @@ def list_sources():
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Hedwig v2.0 — Self-Evolving AI Signal Radar")
+    parser = argparse.ArgumentParser(description="Hedwig v2.1 — Self-Evolving AI Signal Radar")
     parser.add_argument("--weekly", action="store_true", help="Weekly briefing + macro-evolution")
     parser.add_argument("--dry-run", action="store_true", help="Collect only (no API keys needed)")
     parser.add_argument("--collect", action="store_true", help="Collect + score (needs OPENAI_API_KEY)")
     parser.add_argument("--onboard", action="store_true", help="Run Socratic onboarding interview")
     parser.add_argument("--evolve", action="store_true", help="Run evolution cycle manually")
     parser.add_argument("--sources", action="store_true", help="List all source plugins")
+    parser.add_argument("--dashboard", action="store_true", help="Start web dashboard UI")
+    parser.add_argument("--port", type=int, default=8765, help="Dashboard port (default: 8765)")
     args = parser.parse_args()
 
-    if args.sources:
+    if args.dashboard:
+        from hedwig.dashboard import run as run_dashboard
+        run_dashboard(port=args.port)
+    elif args.sources:
         list_sources()
     elif args.onboard:
         asyncio.run(run_onboard())

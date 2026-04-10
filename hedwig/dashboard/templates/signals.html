@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Signals{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>📡 Recent Signals</h1>
+  <p class="subtitle">Click 👍/👎 to teach the algorithm what matters to you.</p>
+</div>
+
+{% if signals %}
+<div class="signal-list-full">
+  {% for s in signals %}
+  <div class="signal-card">
+    <div class="signal-header">
+      <span class="platform">{{ s.platform }}</span>
+      <span class="urgency {{ s.urgency }}">{{ s.urgency }}</span>
+      <span class="score">{{ "%.2f"|format(s.relevance_score or 0) }}</span>
+    </div>
+    <h3 class="signal-title">
+      <a href="{{ s.url }}" target="_blank">{{ s.title }}</a>
+    </h3>
+    <div class="signal-body">
+      {% if s.why_relevant %}
+      <p class="why">💡 {{ s.why_relevant }}</p>
+      {% endif %}
+      {% if s.devils_advocate %}
+      <p class="devil">😈 {{ s.devils_advocate }}</p>
+      {% endif %}
+    </div>
+    <div class="signal-footer">
+      <span class="author">{{ s.author }}</span>
+      <div class="vote-buttons">
+        <button class="vote-up" hx-post="/feedback/{{ s.id }}/up" hx-swap="none"
+                onclick="this.classList.add('voted'); showToast('👍 Upvoted')">
+          👍 Upvote
+        </button>
+        <button class="vote-down" hx-post="/feedback/{{ s.id }}/down" hx-swap="none"
+                onclick="this.classList.add('voted'); showToast('👎 Downvoted')">
+          👎 Downvote
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <p>No signals yet. Go to <a href="/">Home</a> and click "Run Daily Pipeline".</p>
+</div>
+{% endif %}
+
+<div id="toast" class="toast"></div>
+<script>
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+{% endblock %}

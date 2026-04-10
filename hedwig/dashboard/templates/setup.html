@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Setup{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>⚙️ Setup Wizard</h1>
+  <p class="subtitle">Configure Hedwig in your browser — no .env editing required.</p>
+</div>
+
+{% if not status.ready %}
+<div class="alert">
+  ⚠️ Hedwig is not yet configured. Fill in the required fields below.
+</div>
+{% else %}
+<div class="alert success">
+  ✅ Hedwig is configured and ready. You can update any field below.
+</div>
+{% endif %}
+
+<form id="setup-form" class="form">
+  <section class="form-section">
+    <h2>1. Required Keys</h2>
+    <p class="muted">LLM + Storage — minimum required for Hedwig to run.</p>
+
+    {% for key, meta in required_keys.items() %}
+    <div class="field">
+      <label for="{{ key }}">{{ meta.label }}</label>
+      <input
+        type="{% if meta.secret %}password{% else %}text{% endif %}"
+        id="{{ key }}"
+        name="{{ key }}"
+        value="{{ values.get(key, '') }}"
+        placeholder="{{ meta.help }}"
+      >
+      <small class="help">{{ meta.help }}</small>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="form-section">
+    <h2>2. Delivery Channels</h2>
+    <p class="muted">At least one delivery channel (Slack or Discord) is required.</p>
+
+    <h3>Slack</h3>
+    {% for key, meta in delivery_keys.items() %}
+    {% if meta.group == "slack" %}
+    <div class="field">
+      <label for="{{ key }}">{{ meta.label }}</label>
+      <input
+        type="{% if meta.secret %}password{% else %}text{% endif %}"
+        id="{{ key }}"
+        name="{{ key }}"
+        value="{{ values.get(key, '') }}"
+        placeholder="{{ meta.help }}"
+      >
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <h3>Discord</h3>
+    {% for key, meta in delivery_keys.items() %}
+    {% if meta.group == "discord" %}
+    <div class="field">
+      <label for="{{ key }}">{{ meta.label }}</label>
+      <input
+        type="{% if meta.secret %}password{% else %}text{% endif %}"
+        id="{{ key }}"
+        name="{{ key }}"
+        value="{{ values.get(key, '') }}"
+        placeholder="{{ meta.help }}"
+      >
+    </div>
+    {% endif %}
+    {% endfor %}
+  </section>
+
+  <section class="form-section">
+    <h2>3. Optional Keys</h2>
+    <p class="muted">Expand source coverage with these optional APIs.</p>
+
+    {% for key, meta in optional_keys.items() %}
+    <div class="field">
+      <label for="{{ key }}">{{ meta.label }}</label>
+      <input
+        type="{% if meta.secret %}password{% else %}text{% endif %}"
+        id="{{ key }}"
+        name="{{ key }}"
+        value="{{ values.get(key, '') }}"
+        placeholder="{{ meta.help }}"
+      >
+      <small class="help">{{ meta.help }}</small>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="form-section">
+    <h2>4. Test Your Keys</h2>
+    <p class="muted">Click to verify each key is valid. Hedwig will send test messages to Slack/Discord.</p>
+    <button type="button" class="btn btn-primary"
+            hx-post="/setup/test"
+            hx-include="#setup-form"
+            hx-target="#test-results"
+            hx-swap="innerHTML">
+      🧪 Test All Keys
+    </button>
+    <div id="test-results"></div>
+  </section>
+
+  <section class="form-section">
+    <h2>5. Create Supabase Tables</h2>
+    <p class="muted">Automatically create all required tables in Supabase.</p>
+    <button type="button" class="btn"
+            hx-post="/setup/create-tables"
+            hx-target="#db-results"
+            hx-swap="innerHTML">
+      🗃️ Create Tables
+    </button>
+    <div id="db-results"></div>
+  </section>
+
+  <section class="form-section">
+    <h2>6. Save Configuration</h2>
+    <button type="button" class="btn btn-primary btn-large"
+            hx-post="/setup/save"
+            hx-include="#setup-form"
+            hx-swap="none"
+            onclick="showToast('✅ Saved to .env')">
+      💾 Save All
+    </button>
+  </section>
+
+  <section class="form-section">
+    <h2>7. Next Steps</h2>
+    <div class="next-steps">
+      <a href="/onboarding" class="btn btn-primary">🎙️ Start Socratic Onboarding</a>
+      <a href="/" class="btn">← Back to Dashboard</a>
+    </div>
+  </section>
+</form>
+
+<div id="toast" class="toast"></div>
+<script>
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+{% endblock %}

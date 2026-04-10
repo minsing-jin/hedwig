@@ -1,6 +1,6 @@
 [project]
 name = "hedwig"
-version = "2.0.0"
+version = "2.1.0"
 description = "Self-Evolving Personal AI Signal Radar — algorithm sovereignty for individuals"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,6 +12,10 @@ dependencies = [
     "pyyaml>=6.0",
     "pydantic>=2.0",
     "python-dotenv>=1.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]

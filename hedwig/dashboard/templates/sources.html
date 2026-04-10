@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Sources{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🔌 Source Plugins</h1>
+  <p class="subtitle">{{ sources|length }} registered plugins collecting AI signals.</p>
+</div>
+
+<div class="source-grid">
+  {% for s in sources %}
+  <div class="source-card">
+    <div class="source-name">{{ s.meta.display_name }}</div>
+    <div class="source-id">{{ s.id }}</div>
+    <div class="source-meta">
+      <span class="badge">{{ s.meta.fetch_method }}</span>
+      <span class="badge {{ s.meta.plugin_type }}">{{ s.meta.plugin_type }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

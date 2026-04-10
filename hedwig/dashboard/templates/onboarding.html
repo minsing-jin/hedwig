@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Socratic Onboarding{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🎙️ Socratic Onboarding</h1>
+  <p class="subtitle">Let Hedwig's AI interviewer crystallize your criteria through questions.</p>
+</div>
+
+<div class="chat-container">
+  <div id="messages" class="messages">
+    <div class="message system">
+      <strong>Hedwig:</strong> Click "Start" to begin the Socratic interview.
+    </div>
+  </div>
+
+  <div class="chat-controls">
+    <button id="start-btn" class="btn btn-primary">🚀 Start Interview</button>
+  </div>
+
+  <form id="chat-form" class="chat-input" style="display:none">
+    <input type="text" id="user-input" placeholder="Type your answer..." autofocus>
+    <button type="submit" class="btn btn-primary">Send</button>
+  </form>
+</div>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const startBtn = document.getElementById('start-btn');
+const form = document.getElementById('chat-form');
+const input = document.getElementById('user-input');
+
+function addMessage(text, type) {
+  const div = document.createElement('div');
+  div.className = 'message ' + type;
+  const label = type === 'user' ? 'You' : 'Hedwig';
+  div.innerHTML = '<strong>' + label + ':</strong> ' + text.replace(/\n/g, '<br>');
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+startBtn.addEventListener('click', async () => {
+  startBtn.style.display = 'none';
+  form.style.display = 'flex';
+  messagesEl.innerHTML = '';
+
+  const resp = await fetch('/onboarding/start', { method: 'POST' });
+  const data = await resp.json();
+  addMessage(data.message, 'bot');
+  input.focus();
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  addMessage(msg, 'user');
+  input.value = '';
+  input.disabled = true;
+
+  const formData = new FormData();
+  formData.append('message', msg);
+  const resp = await fetch('/onboarding/respond', { method: 'POST', body: formData });
+  const data = await resp.json();
+
+  addMessage(data.message, 'bot');
+  input.disabled = false;
+  input.focus();
+
+  if (data.complete) {
+    addMessage('✅ Interview complete! Criteria saved to criteria.yaml.', 'system');
+    form.style.display = 'none';
+  }
+});
+</script>
+
+{% endblock %}
