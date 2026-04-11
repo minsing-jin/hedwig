@@ -509,6 +509,83 @@ def _register_saas_routes(app: FastAPI):
         # TODO: look up stripe_customer_id from subscriptions table
         return JSONResponse({"ok": True, "message": "Portal route placeholder"})
 
+    # ------- Billing dashboard page -------
+
+    @app.get("/billing", response_class=HTMLResponse)
+    async def billing_page(request: Request):
+        from hedwig.saas.operator_keys import TIER_TOKEN_QUOTAS
+
+        tier = "free"
+        tokens_used = 0
+        signals_collected = 0
+        sources_active = _count_sources()
+
+        try:
+            user = await saas_auth.get_current_user(request)
+        except Exception:
+            pass
+
+        tokens_limit = TIER_TOKEN_QUOTAS[SubscriptionTier(tier)]
+        signals_limit = 50 if tier == "free" else 999_999
+
+        return TEMPLATES.TemplateResponse(
+            "billing.html",
+            {
+                "request": request,
+                "tier": tier,
+                "status": "active",
+                "tokens_used": tokens_used,
+                "tokens_limit": tokens_limit,
+                "tokens_percent": round(tokens_used / tokens_limit * 100, 1) if tokens_limit else 0,
+                "signals_collected": signals_collected,
+                "signals_limit": signals_limit,
+                "signals_percent": round(signals_collected / signals_limit * 100, 1) if signals_limit < 999_999 else 0,
+                "sources_active": sources_active,
+                "sources_limit": 5 if tier == "free" else 999,
+            },
+        )
+
+    # ------- Referral / invite system -------
+
+    @app.get("/invite", response_class=HTMLResponse)
+    async def invite_page(request: Request):
+        user = None
+        try:
+            user = await saas_auth.get_current_user(request)
+        except Exception:
+            pass
+        user_id = user.get("id", "anonymous") if user else "anonymous"
+        base_url = str(request.base_url).rstrip("/")
+        invite_link = f"{base_url}/signup?ref={user_id[:8]}"
+        return TEMPLATES.TemplateResponse(
+            "invite.html",
+            {"request": request, "invite_link": invite_link},
+        )
+
+    # ------- Multilingual landing -------
+
+    @app.get("/ko", response_class=HTMLResponse)
+    async def landing_ko(request: Request):
+        return TEMPLATES.TemplateResponse("landing_ko.html", {"request": request})
+
+    @app.get("/zh", response_class=HTMLResponse)
+    async def landing_zh(request: Request):
+        return TEMPLATES.TemplateResponse("landing_zh.html", {"request": request})
+
+    # ------- Legal pages -------
+
+    @app.get("/terms", response_class=HTMLResponse)
+    async def terms_page(request: Request):
+        return TEMPLATES.TemplateResponse("terms.html", {"request": request})
+
+    @app.get("/privacy", response_class=HTMLResponse)
+    async def privacy_page(request: Request):
+        return TEMPLATES.TemplateResponse("privacy.html", {"request": request})
+
+    @app.get("/about", response_class=HTMLResponse)
+    async def about_page(request: Request):
+        return TEMPLATES.TemplateResponse("about.html", {"request": request})
+
 
 # ---------------------------------------------------------------------------
 # Helpers

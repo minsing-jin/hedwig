@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Terms of Service{% endblock %}
+{% block content %}
+
+<div class="legal-page">
+  <h1>Terms of Service</h1>
+  <p class="muted">Last updated: 2026-04-11</p>
+
+  <h2>1. Agreement</h2>
+  <p>By using Hedwig ("the Service"), you agree to these terms.</p>
+
+  <h2>2. Service Description</h2>
+  <p>Hedwig is a self-evolving personal AI signal radar that aggregates and filters AI-related information from public sources based on user-defined criteria.</p>
+
+  <h2>3. Account & Eligibility</h2>
+  <ul>
+    <li>You must be 13 or older to use Hedwig</li>
+    <li>You are responsible for keeping your account credentials secure</li>
+    <li>One person per account (Free/Pro tiers); Team tier allows up to 10 users</li>
+  </ul>
+
+  <h2>4. Acceptable Use</h2>
+  <p>You may not:</p>
+  <ul>
+    <li>Use Hedwig for illegal activities</li>
+    <li>Attempt to reverse-engineer the algorithm</li>
+    <li>Resell signals collected through Hedwig</li>
+    <li>Abuse the API or attempt to overload the service</li>
+  </ul>
+
+  <h2>5. Subscription & Billing</h2>
+  <ul>
+    <li>Free tier: $0/mo with quota limits</li>
+    <li>Pro tier: $19/mo, billed monthly via Stripe</li>
+    <li>Team tier: $49/mo, billed monthly via Stripe</li>
+    <li>You may cancel anytime; access continues until end of paid period</li>
+    <li>No refunds for partial months</li>
+  </ul>
+
+  <h2>6. Data & Privacy</h2>
+  <p>See <a href="/privacy" class="link">Privacy Policy</a>. In summary:</p>
+  <ul>
+    <li>Your criteria, feedback, and signals are private to your account</li>
+    <li>We use Supabase Row-Level Security to enforce isolation</li>
+    <li>You can export or delete your data anytime</li>
+  </ul>
+
+  <h2>7. Algorithm Sovereignty</h2>
+  <p>Hedwig's core principle: <strong>you own your algorithm</strong>. You can:</p>
+  <ul>
+    <li>Export your criteria at any time</li>
+    <li>Self-host the open-source version (MIT licensed)</li>
+    <li>Audit the evolution log to see exactly what changed and why</li>
+  </ul>
+
+  <h2>8. Limitation of Liability</h2>
+  <p>Hedwig is provided "as is" without warranties. We are not liable for any signals you act on or miss.</p>
+
+  <h2>9. Changes</h2>
+  <p>We may update these terms. Material changes will be announced via email.</p>
+
+  <h2>Contact</h2>
+  <p>Questions? <a href="mailto:hello@hedwig.app" class="link">hello@hedwig.app</a></p>
+</div>
+
+{% endblock %}

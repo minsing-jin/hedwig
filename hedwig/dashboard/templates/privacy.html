@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Privacy Policy{% endblock %}
+{% block content %}
+
+<div class="legal-page">
+  <h1>Privacy Policy</h1>
+  <p class="muted">Last updated: 2026-04-11</p>
+
+  <h2>What We Collect</h2>
+  <ul>
+    <li><strong>Account info:</strong> email, OAuth provider ID, optional display name</li>
+    <li><strong>Criteria:</strong> the filtering preferences you create or that are inferred from your inputs</li>
+    <li><strong>Feedback:</strong> upvote/downvote signals and optional natural-language feedback</li>
+    <li><strong>SNS handles:</strong> handles you provide for auto-context inference (we fetch public profile data only)</li>
+    <li><strong>Usage metrics:</strong> LLM tokens, signals collected — for quota enforcement</li>
+  </ul>
+
+  <h2>What We DO NOT Collect</h2>
+  <ul>
+    <li>Your private DMs or messages on any platform</li>
+    <li>Your location</li>
+    <li>Your browsing history outside Hedwig</li>
+    <li>Cookies for advertising</li>
+  </ul>
+
+  <h2>How We Use Your Data</h2>
+  <ul>
+    <li>To personalize your signal feed</li>
+    <li>To improve your criteria via the evolution engine (your data only — never aggregated with others)</li>
+    <li>To enforce subscription quotas</li>
+    <li>To send transactional emails (account, billing)</li>
+  </ul>
+
+  <h2>Data Isolation</h2>
+  <p>All user data is stored in Supabase with Row-Level Security (RLS) policies enforcing per-user isolation. No user can read another user's signals, criteria, or feedback.</p>
+
+  <h2>Third Parties</h2>
+  <ul>
+    <li><strong>Supabase:</strong> Database + Auth (data stored in their secure infrastructure)</li>
+    <li><strong>OpenAI:</strong> LLM scoring (your criteria sent in inference calls; OpenAI does not train on API data per their policy)</li>
+    <li><strong>Stripe:</strong> Payment processing (no payment info stored on our servers)</li>
+    <li><strong>r.jina.ai:</strong> Content normalization (URLs only, no auth)</li>
+  </ul>
+
+  <h2>Your Rights</h2>
+  <ul>
+    <li><strong>Export:</strong> Download all your data at /settings/export</li>
+    <li><strong>Delete:</strong> Delete your account and all data at /settings/delete</li>
+    <li><strong>Correct:</strong> Update your criteria, profile, settings anytime</li>
+    <li><strong>GDPR/CCPA:</strong> EU and California residents have additional rights — contact us</li>
+  </ul>
+
+  <h2>Cookies</h2>
+  <p>We use only essential cookies: session token (httponly) for authentication. No tracking, no advertising.</p>
+
+  <h2>Contact</h2>
+  <p>Privacy questions: <a href="mailto:privacy@hedwig.app" class="link">privacy@hedwig.app</a></p>
+</div>
+
+{% endblock %}

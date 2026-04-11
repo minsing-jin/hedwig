@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Invite Friends{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🎁 Invite Friends</h1>
+  <p class="subtitle">Each friend who signs up gives you both +500K tokens/day for 30 days.</p>
+</div>
+
+<div class="card" style="max-width: 600px; margin: 0 auto;">
+  <h2>Your invite link</h2>
+  <div class="invite-box">
+    <input type="text" id="invite-link" value="{{ invite_link }}" readonly>
+    <button class="btn btn-primary" onclick="copyInviteLink()">📋 Copy</button>
+  </div>
+
+  <div class="share-buttons" style="margin-top:1.5rem">
+    <a href="https://twitter.com/intent/tweet?text=I'm using Hedwig — a self-evolving AI signal radar that I actually own. Join me:&url={{ invite_link }}"
+       target="_blank" class="btn">Share on X</a>
+    <a href="mailto:?subject=Try Hedwig&body=Check out Hedwig — algorithm sovereignty for individuals: {{ invite_link }}"
+       class="btn">Share via Email</a>
+  </div>
+
+  <div class="referral-stats" style="margin-top:2rem">
+    <h3>Your referrals</h3>
+    <div class="stat-row">
+      <span>Friends invited:</span> <strong>0</strong>
+    </div>
+    <div class="stat-row">
+      <span>Bonus tokens earned:</span> <strong>0</strong>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script>
+function copyInviteLink() {
+  const input = document.getElementById('invite-link');
+  input.select();
+  document.execCommand('copy');
+  showToast('📋 Link copied!');
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+{% endblock %}

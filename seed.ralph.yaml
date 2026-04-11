@@ -1,81 +1,98 @@
 goal: >
-  Complete Hedwig v3.0 SaaS transformation. The foundation is already built
-  (see hedwig/saas, hedwig/native, hedwig/dashboard). This Ralph loop must
-  verify each component works end-to-end, fix any broken integration points,
-  write integration tests, and ensure the full signup-to-first-run flow
-  works for a new user. Focus on gaps between code that exists and code
-  that actually runs successfully.
+  Verify Hedwig v3.0 zero-config SaaS is production-ready end-to-end.
+  All foundations are built (saas, native, dashboard, auto-context, oauth,
+  operator keys, billing, invite, multilingual, legal pages, deployment files).
+  This Ralph loop must verify each component, write missing tests, fix any
+  integration gaps, and ensure the complete user journey works:
+  Visit landing → OAuth signin → Auto onboarding → First signals → Vote →
+  Evolve → Upgrade to Pro → Invite friend.
 
 constraints:
   - Preserve all existing code in hedwig/ directory
   - Do not remove or rename existing modules
-  - All changes must pass Python import check before committing
-  - New tests go in tests/ directory
-  - Follow existing code style (Pydantic models, async where applicable)
+  - All changes must pass Python import check
+  - New tests go in tests/ directory, follow pytest conventions
+  - Follow existing code style (Pydantic, async, type hints)
   - Do not add new external dependencies without updating pyproject.toml
-  - Do not modify seed.yaml or docs/interviews/ content
+  - Do not modify seed.yaml content
   - Commit each verified fix as a separate git commit
-  - Never push to main without running tests first
+  - Tests must pass with: pytest tests/ -v
+  - Dashboard SaaS mode must serve all routes successfully
 
 acceptance_criteria:
-  - Integration test exists that imports all modules in hedwig/saas
-  - Integration test exists that imports all modules in hedwig/native
-  - Integration test exists that imports all modules in hedwig/dashboard
-  - Dashboard SaaS mode starts and serves the landing page HTTP 200
-  - Dashboard signup form renders correctly with all required fields
-  - Stripe billing module raises clear error when STRIPE_SECRET_KEY missing
-  - Supabase auth module raises clear error when credentials missing
-  - Pre-scorer returns values between 0.0 and 1.0 for test inputs
-  - Agent collector default strategy returns valid plan structure
-  - Source plugin registry contains at least 16 sources
-  - r.jina.ai normalizer handles timeout gracefully
-  - Migration SQL file exists at migrations/001_multi_tenant_schema.sql
-  - README.md mentions v3.0 SaaS features
-  - pyproject.toml version is 3.0.0 or higher
+  - Test exists for hedwig.saas.auto_context module imports
+  - Test exists that AutoContextInference fallback returns valid criteria
+  - Test exists for hedwig.saas.oauth module — verify 12 providers registered
+  - Test exists that build_oauth_url returns None when SUPABASE_URL missing
+  - Test exists for hedwig.saas.operator_keys module — quotas defined for all tiers
+  - Test exists that get_operator_openai_key raises clear error when missing
+  - Dashboard SaaS mode serves /billing route HTTP 200
+  - Dashboard SaaS mode serves /invite route HTTP 200
+  - Dashboard SaaS mode serves /ko (Korean landing) HTTP 200
+  - Dashboard SaaS mode serves /zh (Chinese landing) HTTP 200
+  - Dashboard SaaS mode serves /terms HTTP 200
+  - Dashboard SaaS mode serves /privacy HTTP 200
+  - Dashboard SaaS mode serves /about HTTP 200
+  - Procfile exists for Railway deployment
+  - Dockerfile exists with valid syntax
+  - railway.toml exists with healthcheck path
+  - nixpacks.toml exists for Railway nixpacks builder
+  - .dockerignore exists excluding .venv and tests
+  - docs/HOSTING.md exists with deployment instructions
+  - Signup template contains 12 OAuth provider buttons
+  - Auto-onboarding template contains at least 10 SNS handle inputs
+  - Billing template references all three tiers (free, pro, team)
+  - All previous v3.0 ACs still pass (no regressions)
 
 ontology_schema:
-  name: HedwigV3Verification
-  description: Domain model for verifying Hedwig v3.0 SaaS foundation
+  name: HedwigV3FullVerification
+  description: Domain model for verifying complete Hedwig v3.0 SaaS readiness
   fields:
-    - name: module
-      type: object
-      description: "A Python module with import status and test coverage"
-    - name: integration_test
-      type: object
-      description: "A pytest file verifying cross-module interaction"
     - name: route
       type: object
-      description: "A FastAPI HTTP route with method, path, and expected status"
-    - name: migration
+      description: HTTP route with method, path, expected status, and template
+    - name: oauth_provider
       type: object
-      description: "A SQL migration file with version and target tables"
+      description: OAuth provider registration with id, label, color
+    - name: deployment_artifact
+      type: object
+      description: Deployment file (Dockerfile, Procfile, railway.toml) with valid syntax
+    - name: legal_page
+      type: object
+      description: Required legal page (terms, privacy, about) with required sections
+    - name: integration_test
+      type: object
+      description: Pytest file verifying cross-module behavior
 
 evaluation_principles:
-  - name: no_regression
-    description: "No existing functionality breaks"
-    weight: 0.40
-  - name: integration_completeness
-    description: "All SaaS + native + dashboard modules work together"
+  - name: zero_regression
+    description: All previously-passing tests still pass
     weight: 0.30
-  - name: error_handling
-    description: "Graceful degradation when optional keys missing"
+  - name: full_route_coverage
+    description: Every dashboard route returns expected status
+    weight: 0.25
+  - name: deployment_readiness
+    description: Hedwig can be deployed to Railway/Docker without manual edits
     weight: 0.20
+  - name: oauth_completeness
+    description: All 12 OAuth providers register correctly
+    weight: 0.15
   - name: documentation_accuracy
-    description: "README and docs match actual capabilities"
+    description: README and HOSTING docs match actual capabilities
     weight: 0.10
 
 exit_conditions:
   - name: all_tests_pass
-    description: "All integration tests pass"
-    criteria: "pytest tests/ exits with code 0"
-  - name: imports_clean
-    description: "All modules import without errors"
-    criteria: "python -c 'import hedwig.saas; import hedwig.native; import hedwig.dashboard.app' succeeds"
-  - name: dashboard_runs
-    description: "Dashboard starts successfully in both modes"
-    criteria: "Both standard and SaaS modes bind to port and serve HTTP"
+    description: pytest tests/ exits with code 0
+    criteria: All test files green
+  - name: all_routes_serve
+    description: SaaS mode serves all 16+ routes
+    criteria: HTTP 200 or expected redirect for every route
+  - name: deployment_ready
+    description: Procfile, Dockerfile, railway.toml, nixpacks.toml all valid
+    criteria: docker build succeeds, railway.toml parses
 
 metadata:
-  version: "1.0.0"
-  project_name: "hedwig-ralph-v3"
-  purpose: "Verify Hedwig v3.0 end-to-end and fill remaining gaps"
+  version: "2.0.0"
+  project_name: "hedwig-ralph-v3-full"
+  purpose: "End-to-end verification of Hedwig v3.0 zero-config SaaS"

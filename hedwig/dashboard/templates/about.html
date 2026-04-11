@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — About{% endblock %}
+{% block content %}
+
+<div class="legal-page">
+  <h1>🦉 About Hedwig</h1>
+
+  <h2>Why Hedwig Exists</h2>
+  <p>The information ecosystem is broken. YouTube optimizes for watch time. X optimizes for engagement. Both extract attention to sell ads. Neither cares whether the signals reach you actually matter to <em>you</em>.</p>
+  <p>Hedwig is the answer to a simple question: <strong>what if the algorithm that decides what reaches you belonged to you?</strong></p>
+
+  <h2>The Five Moats</h2>
+  <ol>
+    <li><strong>Socratic Onboarding</strong> — An LLM interviewer figures out what you care about through conversation, not forms.</li>
+    <li><strong>Self-Evolving Algorithm</strong> — Inspired by <a href="https://github.com/karpathy/autoresearch" class="link">Karpathy's autoresearch</a>, Hedwig experiments with its own filtering criteria, measures upvote ratios, keeps improvements, discards regressions.</li>
+    <li><strong>Boolean Feedback</strong> — Just 👍 or 👎. The system handles all the pattern interpretation.</li>
+    <li><strong>Long-Horizon Memory</strong> — Weekly preference snapshots track your taste over months, not just today.</li>
+    <li><strong>Algorithm Sovereignty</strong> — You own the fitness function. You can audit it. You can modify it. You can self-host the entire stack (MIT licensed).</li>
+  </ol>
+
+  <h2>What Hedwig Is NOT</h2>
+  <ul>
+    <li>Not another social network</li>
+    <li>Not an aggregator that ranks by popularity</li>
+    <li>Not a SaaS that hoards your data</li>
+    <li>Not a black box you can't inspect</li>
+  </ul>
+
+  <h2>Open Source</h2>
+  <p>Hedwig is MIT licensed. The full source is on <a href="https://github.com/minsing-jin/hedwig" class="link">GitHub</a>. You can:</p>
+  <ul>
+    <li>Self-host on your Mac (the original use case)</li>
+    <li>Contribute new source plugins</li>
+    <li>Audit the evolution algorithm</li>
+    <li>Fork it</li>
+  </ul>
+  <p>The hosted SaaS at hedwig.app is for users who want zero-config convenience. Self-hosting is for users who want maximum control.</p>
+
+  <h2>Built With</h2>
+  <ul>
+    <li>Python + FastAPI + Pydantic</li>
+    <li>Supabase (Postgres + Auth + RLS)</li>
+    <li>OpenAI (LLM scoring + Socratic onboarding)</li>
+    <li>r.jina.ai (URL normalization)</li>
+    <li>Stripe (billing)</li>
+    <li>htmx (minimal frontend JS)</li>
+  </ul>
+
+  <h2>Inspirations</h2>
+  <ul>
+    <li><a href="https://github.com/karpathy/autoresearch" class="link">Karpathy's autoresearch</a> — self-improvement loop pattern</li>
+    <li><a href="https://github.com/jina-ai/reader" class="link">jina-ai/reader</a> — URL-to-Markdown</li>
+    <li><a href="https://github.com/mvanhorn/last30days-skill" class="link">last30days-skill</a> — multi-signal scoring</li>
+    <li>Ouroboros philosophy — Socratic clarity through questioning</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p><a href="mailto:hello@hedwig.app" class="link">hello@hedwig.app</a></p>
+  <p><a href="https://twitter.com/hedwigapp" class="link">@hedwigapp</a></p>
+</div>
+
+{% endblock %}
