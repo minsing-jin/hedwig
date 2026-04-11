@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Auto Setup{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🦉 Tell Hedwig who you are</h1>
+  <p class="subtitle">Drop your SNS handles and a quick bio. We'll figure out the rest.</p>
+</div>
+
+<div class="auto-onboard-container">
+  <form id="auto-form" class="form">
+
+    <section class="form-section">
+      <h2>1. Quick bio (optional)</h2>
+      <p class="muted">Tell us anything about yourself. Free-form. The more context, the better.</p>
+      <div class="field">
+        <textarea name="bio" rows="4" placeholder="e.g. AI agent builder in Seoul. Building Hedwig. Love ML papers and dev tools. Korean."></textarea>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <h2>2. Your SNS handles</h2>
+      <p class="muted">Drop any handles you have. We'll fetch your public profiles and infer your interests.</p>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>X (Twitter)</label>
+          <input type="text" name="sns_x" placeholder="@yourhandle">
+        </div>
+        <div class="field">
+          <label>GitHub</label>
+          <input type="text" name="sns_github" placeholder="username">
+        </div>
+        <div class="field">
+          <label>LinkedIn</label>
+          <input type="text" name="sns_linkedin" placeholder="username">
+        </div>
+        <div class="field">
+          <label>Instagram</label>
+          <input type="text" name="sns_instagram" placeholder="@username">
+        </div>
+        <div class="field">
+          <label>Threads</label>
+          <input type="text" name="sns_threads" placeholder="@username">
+        </div>
+        <div class="field">
+          <label>Bluesky</label>
+          <input type="text" name="sns_bluesky" placeholder="you.bsky.social">
+        </div>
+        <div class="field">
+          <label>YouTube</label>
+          <input type="text" name="sns_youtube" placeholder="@channelname">
+        </div>
+        <div class="field">
+          <label>TikTok</label>
+          <input type="text" name="sns_tiktok" placeholder="@username">
+        </div>
+        <div class="field">
+          <label>Medium</label>
+          <input type="text" name="sns_medium" placeholder="@username">
+        </div>
+        <div class="field">
+          <label>Substack</label>
+          <input type="text" name="sns_substack" placeholder="subdomain (without .substack.com)">
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <h2>3. Anything else? (optional)</h2>
+      <p class="muted">Personal blog, portfolio, paper, repo — any URLs we should look at.</p>
+      <div class="field">
+        <textarea name="extra_links" rows="3" placeholder="https://yourblog.com&#10;https://github.com/you/cool-repo"></textarea>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <button type="submit" class="btn btn-primary btn-large" id="submit-btn">
+        🚀 Auto-generate my criteria
+      </button>
+      <p class="muted" style="margin-top:1rem">
+        Or <a href="/onboarding" class="link">use Socratic interview</a> for full control.
+      </p>
+    </section>
+
+  </form>
+
+  <div id="result" class="form-section" style="display:none">
+    <h2>✨ Inferred Profile</h2>
+    <div id="result-content"></div>
+    <div class="button-row" style="margin-top:2rem">
+      <a href="/" class="btn btn-primary">→ Start using Hedwig</a>
+      <a href="/criteria" class="btn">View / Edit Criteria</a>
+    </div>
+  </div>
+
+  <div id="loading" class="form-section" style="display:none">
+    <h2>🔍 Analyzing your profile...</h2>
+    <p class="muted">Fetching your SNS data via r.jina.ai → LLM inference → criteria generation. Takes ~30 seconds.</p>
+  </div>
+</div>
+
+<script>
+document.getElementById('auto-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  document.getElementById('auto-form').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+
+  const formData = new FormData(e.target);
+  const resp = await fetch('/onboarding/auto/infer', { method: 'POST', body: formData });
+  const data = await resp.json();
+
+  document.getElementById('loading').style.display = 'none';
+  const resultEl = document.getElementById('result');
+  const contentEl = document.getElementById('result-content');
+
+  if (data.error) {
+    contentEl.innerHTML = '<div class="alert">❌ ' + data.error + '</div>';
+  } else {
+    let html = '';
+    html += '<div class="inferred-card">';
+    html += '<div class="inferred-row"><strong>Inferred role:</strong> ' + (data.inferred_role || '—') + '</div>';
+    html += '<div class="inferred-row"><strong>Confidence:</strong> ' + Math.round((data.confidence || 0) * 100) + '%</div>';
+    if (data.reasoning) {
+      html += '<div class="inferred-row"><strong>Why:</strong> ' + data.reasoning + '</div>';
+    }
+    if (data.criteria && data.criteria.signal_preferences) {
+      const care = data.criteria.signal_preferences.care_about || [];
+      html += '<div class="inferred-row"><strong>Will track:</strong><ul>';
+      care.slice(0, 5).forEach(item => html += '<li>' + item + '</li>');
+      html += '</ul></div>';
+    }
+    if (data.criteria && data.criteria.signal_preferences) {
+      const ignore = data.criteria.signal_preferences.ignore || [];
+      html += '<div class="inferred-row"><strong>Will filter out:</strong><ul>';
+      ignore.slice(0, 5).forEach(item => html += '<li>' + item + '</li>');
+      html += '</ul></div>';
+    }
+    html += '</div>';
+    contentEl.innerHTML = html;
+  }
+
+  resultEl.style.display = 'block';
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Signing you in...</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card" style="text-align:center">
+      <h1>🦉 Signing you in...</h1>
+      <p class="muted">Just a moment.</p>
+      <div id="error" class="alert" style="display:none"></div>
+    </div>
+  </div>
+
+  <script>
+  // Supabase OAuth returns tokens in URL fragment (#access_token=...)
+  (async () => {
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+
+    if (!accessToken) {
+      document.getElementById('error').textContent = '❌ No access token in callback URL';
+      document.getElementById('error').style.display = 'block';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('access_token', accessToken);
+
+    const resp = await fetch('/auth/oauth/save-token', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json();
+
+    if (resp.ok) {
+      window.location.href = data.next || '/';
+    } else {
+      document.getElementById('error').textContent = '❌ ' + (data.error || 'Failed to save token');
+      document.getElementById('error').style.display = 'block';
+    }
+  })();
+  </script>
+</body>
+</html>

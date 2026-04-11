@@ -5,7 +5,22 @@
 <div class="auth-container">
   <div class="auth-card">
     <h1>🦉 Start Your Hedwig</h1>
-    <p class="muted">Get your own self-evolving AI signal radar. Free to start.</p>
+    <p class="muted">Get your own self-evolving AI signal radar in 30 seconds.</p>
+
+    {% if oauth_providers %}
+    <div class="oauth-buttons">
+      {% for provider in oauth_providers %}
+      <a href="/auth/oauth/{{ provider.id }}" class="oauth-btn" style="--oauth-color: {{ provider.color }}">
+        <span class="oauth-icon">{{ provider.icon }}</span>
+        <span class="oauth-label">Continue with {{ provider.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+
+    <div class="divider">
+      <span>or use email</span>
+    </div>
+    {% endif %}
 
     <form id="signup-form" class="form">
       <div class="field">
@@ -21,7 +36,7 @@
 
     <div class="auth-footer">
       <p>Already have an account? <a href="/login" class="link">Sign in</a></p>
-      <p class="muted">By signing up, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>.</p>
+      <p class="muted">No credit card. No setup. Free tier available.</p>
     </div>
 
     <div id="error" class="alert" style="display:none"></div>
@@ -39,7 +54,7 @@ document.getElementById('signup-form').addEventListener('submit', async (e) => {
   const data = await resp.json();
 
   if (resp.ok) {
-    window.location.href = '/onboarding';
+    window.location.href = '/onboarding/auto';
   } else {
     errorEl.textContent = '❌ ' + (data.detail || data.error || 'Signup failed');
     errorEl.style.display = 'block';

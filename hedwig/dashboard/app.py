@@ -297,9 +297,11 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
 
 def _register_saas_routes(app: FastAPI):
-    """Register multi-tenant SaaS routes (landing, auth, billing)."""
+    """Register multi-tenant SaaS routes (landing, auth, billing, OAuth, auto-context)."""
     from hedwig.saas import auth as saas_auth
     from hedwig.saas import billing as saas_billing
+    from hedwig.saas import oauth as saas_oauth
+    from hedwig.saas.auto_context import AutoContextInference
     from hedwig.saas.models import SubscriptionTier
 
     # ------- Landing -------
@@ -312,11 +314,105 @@ def _register_saas_routes(app: FastAPI):
 
     @app.get("/signup", response_class=HTMLResponse)
     async def signup_page(request: Request):
-        return TEMPLATES.TemplateResponse("signup.html", {"request": request})
+        providers = saas_oauth.list_providers()
+        return TEMPLATES.TemplateResponse(
+            "signup.html",
+            {"request": request, "oauth_providers": providers},
+        )
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request):
-        return TEMPLATES.TemplateResponse("login.html", {"request": request})
+        providers = saas_oauth.list_providers()
+        return TEMPLATES.TemplateResponse(
+            "login.html",
+            {"request": request, "oauth_providers": providers},
+        )
+
+    # ------- OAuth flow -------
+
+    @app.get("/auth/callback")
+    async def oauth_callback(request: Request):
+        """Handle OAuth callback from Supabase. Token comes in URL fragment."""
+        return TEMPLATES.TemplateResponse("oauth_callback.html", {"request": request})
+
+    @app.get("/auth/oauth/{provider}")
+    async def oauth_redirect(provider: str, request: Request):
+        """Redirect user to Supabase OAuth flow for the chosen provider."""
+        base_url = str(request.base_url).rstrip("/")
+        redirect_to = f"{base_url}/auth/callback"
+        oauth_url = saas_oauth.build_oauth_url(provider, redirect_to)
+        if not oauth_url:
+            return JSONResponse({"error": f"Provider {provider} not supported"}, status_code=400)
+        return RedirectResponse(url=oauth_url, status_code=303)
+
+    @app.post("/auth/oauth/save-token")
+    async def oauth_save_token(request: Request):
+        """Save OAuth access token from frontend (after URL fragment parsing)."""
+        form = await request.form()
+        token = form.get("access_token", "")
+        if not token:
+            return JSONResponse({"error": "No token"}, status_code=400)
+        response = JSONResponse({"ok": True, "next": "/onboarding/auto"})
+        response.set_cookie(
+            "hedwig_access_token",
+            token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+        )
+        return response
+
+    # ------- Auto-context onboarding -------
+
+    @app.get("/onboarding/auto", response_class=HTMLResponse)
+    async def auto_onboarding_page(request: Request):
+        return TEMPLATES.TemplateResponse(
+            "onboarding_auto.html",
+            {"request": request, "providers": saas_oauth.list_providers()},
+        )
+
+    @app.post("/onboarding/auto/infer")
+    async def auto_inference(request: Request):
+        """Run auto-context inference from SNS handles + bio."""
+        from hedwig.saas.operator_keys import get_operator_openai_key
+
+        form = await request.form()
+        bio = form.get("bio", "")
+
+        # Collect all SNS handles from form
+        sns_handles = {}
+        for key in form.keys():
+            if key.startswith("sns_"):
+                platform = key[4:]
+                value = form[key].strip()
+                if value:
+                    sns_handles[platform] = value
+
+        extra_links_raw = form.get("extra_links", "")
+        extra_links = [l.strip() for l in extra_links_raw.split("\n") if l.strip()]
+
+        # Use operator's OpenAI key
+        try:
+            from openai import AsyncOpenAI
+            llm = AsyncOpenAI(api_key=get_operator_openai_key())
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+        engine = AutoContextInference(llm_client=llm)
+        result = await engine.infer(
+            bio=bio,
+            sns_handles=sns_handles,
+            extra_links=extra_links,
+        )
+
+        # Save criteria for the user
+        from hedwig.config import CRITERIA_PATH
+        import yaml
+        if result.get("criteria"):
+            with open(CRITERIA_PATH, "w") as f:
+                yaml.dump(result["criteria"], f, default_flow_style=False, allow_unicode=True)
+
+        return JSONResponse(result)
 
     # ------- Auth API -------
 
