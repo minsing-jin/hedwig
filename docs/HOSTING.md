@@ -3,6 +3,26 @@
 How to deploy Hedwig as a real SaaS that users can access at hedwig.app
 without any local setup.
 
+## Deployment Files Already In Repo
+
+The repository already includes the deployment files used by hosted setups:
+
+- `Procfile` starts the web process with `python -m hedwig --dashboard --saas --port $PORT`
+- `railway.toml` configures Railway start-up and the `/landing` healthcheck
+- `nixpacks.toml` configures Railway's Nixpacks build/install/start phases
+- `Dockerfile` builds a container image for self-hosting or non-Railway platforms
+
+## Required Environment Variables
+
+Set these in Railway, Docker, or your process manager before going live:
+
+- `OPERATOR_OPENAI_KEY` for the shared SaaS LLM key
+- `SUPABASE_URL` and `SUPABASE_KEY` for database and auth access
+- `STRIPE_SECRET_KEY` for Stripe API access
+- `STRIPE_WEBHOOK_SECRET` for webhook verification
+- `STRIPE_PRICE_PRO` for the Pro subscription price
+- `STRIPE_PRICE_TEAM` for the Team subscription price
+
 ## Architecture
 
 ```
@@ -129,8 +149,10 @@ railway variables set STRIPE_WEBHOOK_SECRET=whsec_...
 railway variables set STRIPE_PRICE_PRO=price_...
 railway variables set STRIPE_PRICE_TEAM=price_...
 
-# Add start command to package
+# Deployment config already checked in
 # Procfile: web: python -m hedwig --dashboard --saas --port $PORT
+# railway.toml: startCommand + healthcheckPath=/landing
+# nixpacks.toml: install/start phases for Railway's Nixpacks builder
 
 # Deploy
 railway up
