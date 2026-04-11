@@ -270,6 +270,10 @@ class AutoContextInference:
                     "current_projects": [],
                     "interests": ["AI agents", "LLM tooling"],
                 },
+                "source_priorities": {
+                    "high": ["x", "github", "hackernews"],
+                    "low": ["instagram", "tiktok"],
+                },
             },
             "first_questions": [
                 "What's your main project right now?",
