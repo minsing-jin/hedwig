@@ -82,6 +82,43 @@ class TestAutoContextFallback:
         assert isinstance(priorities["low"], list)
         assert len(priorities["high"]) >= 1
 
+    def test_fallback_returns_valid_criteria_shape(self):
+        """Fallback criteria should stay structurally valid for onboarding."""
+        criteria = self._run_fallback()["criteria"]
+
+        assert set(criteria) == {
+            "identity",
+            "signal_preferences",
+            "urgency_rules",
+            "context",
+            "source_priorities",
+        }
+        assert set(criteria["identity"]) == {"role", "focus"}
+        assert set(criteria["signal_preferences"]) == {"care_about", "ignore"}
+        assert set(criteria["urgency_rules"]) == {"alert", "digest", "skip"}
+        assert set(criteria["context"]) == {"current_projects", "interests"}
+        assert set(criteria["source_priorities"]) == {"high", "low"}
+
+        assert isinstance(criteria["identity"]["role"], str)
+        assert all(isinstance(item, str) for item in criteria["identity"]["focus"])
+        assert all(
+            isinstance(item, str)
+            for key in ("care_about", "ignore")
+            for item in criteria["signal_preferences"][key]
+        )
+        assert all(
+            isinstance(item, str)
+            for key in ("alert", "digest", "skip")
+            for item in criteria["urgency_rules"][key]
+        )
+        assert isinstance(criteria["context"]["current_projects"], list)
+        assert all(isinstance(item, str) for item in criteria["context"]["interests"])
+        assert all(
+            isinstance(item, str)
+            for key in ("high", "low")
+            for item in criteria["source_priorities"][key]
+        )
+
     # ── Values are non-empty strings ────────────────────────────────
 
     def test_inferred_role_is_nonempty_string(self):
