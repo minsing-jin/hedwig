@@ -10,7 +10,7 @@
     {% if oauth_providers %}
     <div class="oauth-buttons">
       {% for provider in oauth_providers %}
-      <a href="/auth/oauth/{{ provider.id }}" class="oauth-btn" style="--oauth-color: {{ provider.color }}">
+      <a href="/auth/oauth/{{ provider.id }}" class="oauth-btn" data-provider="{{ provider.id }}" aria-label="Continue with {{ provider.label }}" style="--oauth-color: {{ provider.color }}">
         <span class="oauth-icon">{{ provider.icon }}</span>
         <span class="oauth-label">Continue with {{ provider.label }}</span>
       </a>
