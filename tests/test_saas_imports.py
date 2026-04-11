@@ -38,6 +38,12 @@ def test_import_saas_module(module_name: str):
     assert mod is not None
 
 
+def test_auto_context_module_imports():
+    """hedwig.saas.auto_context has an explicit import smoke test."""
+    mod = importlib.import_module("hedwig.saas.auto_context")
+    assert mod is not None
+
+
 # ---------------------------------------------------------------------------
 # 2. Key symbols are accessible after import
 # ---------------------------------------------------------------------------

@@ -298,6 +298,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
 def _register_saas_routes(app: FastAPI):
     """Register multi-tenant SaaS routes (landing, auth, billing, OAuth, auto-context)."""
+    if not getattr(app.state, "saas_mode", False):
+        raise RuntimeError("_register_saas_routes requires saas_mode=True")
+
     from hedwig.saas import auth as saas_auth
     from hedwig.saas import billing as saas_billing
     from hedwig.saas import oauth as saas_oauth
