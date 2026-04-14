@@ -223,6 +223,19 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             },
         )
 
+    @app.get("/signals/search")
+    async def signals_search(request: Request, q: str):
+        if saas_mode:
+            from hedwig.saas.auth import require_auth
+
+            await require_auth(request)
+
+        signals = [
+            _serialize_signal_export(signal)
+            for signal in _search_signals(query=q.strip(), limit=100)
+        ]
+        return JSONResponse(signals)
+
     @app.post("/feedback/{signal_id}/{vote}")
     async def submit_feedback(signal_id: str, vote: str):
         if vote not in ("up", "down"):
@@ -625,6 +638,14 @@ def _load_latest_signals(limit: int = 100) -> list[dict]:
     try:
         from hedwig.storage.supabase import get_latest_signals
         return get_latest_signals(limit=limit)
+    except Exception:
+        return []
+
+
+def _search_signals(query: str, limit: int = 100) -> list[dict]:
+    try:
+        from hedwig.storage.supabase import search_signals
+        return search_signals(query=query, limit=limit)
     except Exception:
         return []
 

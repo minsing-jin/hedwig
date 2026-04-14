@@ -111,6 +111,60 @@ def get_latest_signals(limit: int = 100) -> list[dict]:
         return []
 
 
+def _escape_ilike_pattern(value: str) -> str:
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace("%", r"\%")
+        .replace("_", r"\_")
+    )
+
+
+def _search_signal_field(client, field: str, pattern: str, limit: int) -> list[dict]:
+    result = (
+        client.table("signals")
+        .select(SIGNAL_EXPORT_SELECT)
+        .ilike(field, pattern)
+        .order("collected_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+def _signal_search_key(signal: dict) -> tuple[object, ...]:
+    return (
+        signal.get("id"),
+        signal.get("url"),
+        signal.get("platform"),
+        signal.get("title"),
+        signal.get("collected_at"),
+    )
+
+
+def search_signals(query: str, limit: int = 100) -> list[dict]:
+    search_term = query.strip()
+    if not search_term or limit <= 0:
+        return []
+
+    client = _get_client()
+    try:
+        pattern = f"%{_escape_ilike_pattern(search_term)}%"
+        matches_by_key: dict[tuple[object, ...], dict] = {}
+        for field in ("title", "content"):
+            for signal in _search_signal_field(client, field=field, pattern=pattern, limit=limit):
+                matches_by_key[_signal_search_key(signal)] = signal
+
+        return sorted(
+            matches_by_key.values(),
+            key=lambda signal: signal.get("collected_at") or "",
+            reverse=True,
+        )[:limit]
+    except Exception as e:
+        logger.error(f"Failed to search signals: {e}")
+        return []
+
+
 def is_duplicate(platform: str, external_id: str) -> bool:
     client = _get_client()
     try:
