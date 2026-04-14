@@ -148,9 +148,20 @@ async def get_current_user(request: Request) -> Optional[dict]:
     return user
 
 
+def require_user_id(user: dict | None) -> str:
+    """Extract a non-empty authenticated user id or raise 401."""
+    user_id = ""
+    if isinstance(user, dict):
+        user_id = str(user.get("id") or "").strip()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authenticated user missing id")
+    return user_id
+
+
 async def require_auth(request: Request) -> dict:
     """FastAPI dependency: require authenticated user or raise 401."""
     user = await get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
+    require_user_id(user)
     return user

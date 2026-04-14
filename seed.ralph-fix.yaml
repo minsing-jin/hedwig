@@ -1,0 +1,49 @@
+goal: >
+  Fix the rejected ACs from the previous Codex orchestrator run.
+  The independent review Codex found real bugs — security issues,
+  logic inconsistencies, and incomplete implementations. Fix each
+  based on the specific reviewer feedback below.
+
+constraints:
+  - Preserve all existing code and tests
+  - "Tests must pass with pytest tests/ -v"
+  - Follow existing code style
+  - Work directly on main branch (Claude Code authorized)
+  - Include the specific fixes the reviewer requested
+
+acceptance_criteria:
+  - "Fix AC 3 (Email SMTP): (1) Sanitize email header values — post titles with newlines or special chars must not break SMTP headers, use email.utils.formataddr and replace control chars. (2) Add a regression test for malformed titles with newlines and unicode. (3) Align hedwig/dashboard/env_manager.py delivery readiness check with hedwig/config.py check_required_keys daily mode — both must treat SMTP as a valid standalone delivery channel."
+  - "Fix AC 4 (/dashboard/stats): (1) Scope the stats endpoint to the authenticated user in SaaS mode — query signals and feedback filtered by user_id, not global. (2) In single-user mode keep existing behavior. (3) Implement the actual get_dashboard_activity_stats function in hedwig/storage/supabase.py that returns real counts from DB instead of zeros. (4) Add a test that verifies the endpoint returns the expected JSON keys: total_signals, upvote_ratio, evolution_cycles, top_5_sources, days_active."
+  - "Fix AC 7 (/settings page): (1) Make /settings usable in SaaS mode — currently returns 503 for authenticated users. (2) In SaaS mode load and save source preferences from user_sources DB table via Supabase. (3) In single-user mode save to local config file. (4) Ensure the settings page template renders all 17 source plugins with toggle switches. (5) Add a test that /settings returns 200 in both SaaS and single-user modes."
+
+ontology_schema:
+  name: HedwigBugFix
+  description: Fix rejected ACs based on reviewer feedback
+  fields:
+    - name: security_fix
+      type: object
+      description: A fix for a security issue found during code review
+    - name: logic_fix
+      type: object
+      description: A fix for a logic inconsistency found during code review
+
+evaluation_principles:
+  - name: addresses_review_feedback
+    description: Each fix directly addresses the specific issues the reviewer raised
+    weight: 0.40
+  - name: test_coverage
+    description: Regression tests exist for the fixed issues
+    weight: 0.30
+  - name: zero_regression
+    description: All existing tests still pass
+    weight: 0.30
+
+exit_conditions:
+  - name: fixes_complete
+    description: Both rejected ACs now pass review
+    criteria: Tests pass and reviewer feedback is addressed
+
+metadata:
+  version: "1.0.0"
+  project_name: "hedwig-ralph-fix"
+  purpose: "Fix reviewer-rejected ACs with specific feedback"

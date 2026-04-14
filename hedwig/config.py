@@ -36,6 +36,13 @@ DISCORD_WEBHOOK_ALERTS = os.getenv("DISCORD_WEBHOOK_ALERTS", "")
 DISCORD_WEBHOOK_DAILY = os.getenv("DISCORD_WEBHOOK_DAILY", "")
 DISCORD_WEBHOOK_WEEKLY = os.getenv("DISCORD_WEBHOOK_WEEKLY", "")
 
+# SMTP
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = os.getenv("SMTP_PORT", "587")
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "")
+
 # Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
@@ -49,17 +56,30 @@ EXA_API_KEY = os.getenv("EXA_API_KEY", "")
 SCRAPECREATORS_API_KEY = os.getenv("SCRAPECREATORS_API_KEY", "")
 
 
+def smtp_alerts_configured() -> bool:
+    """SMTP is usable for alert delivery when host and sender are configured."""
+    return bool(SMTP_HOST and SMTP_FROM)
+
+
+def _alert_delivery_configured() -> bool:
+    return bool(SLACK_WEBHOOK_ALERTS or DISCORD_WEBHOOK_ALERTS or smtp_alerts_configured())
+
+
+def _daily_delivery_configured() -> bool:
+    return bool(SLACK_WEBHOOK_DAILY or DISCORD_WEBHOOK_DAILY or smtp_alerts_configured())
+
+
 def check_required_keys(mode: str = "full") -> list[str]:
     """Check which required keys are missing. Returns list of missing key names."""
     missing = []
-    if mode in ("full", "score", "evolve"):
+    if mode in ("full", "score", "evolve", "daily"):
         if not OPENAI_API_KEY:
             missing.append("OPENAI_API_KEY")
-    if mode == "full":
-        if not SLACK_WEBHOOK_ALERTS and not DISCORD_WEBHOOK_ALERTS:
-            missing.append("SLACK_WEBHOOK_ALERTS or DISCORD_WEBHOOK_ALERTS")
-        if not SLACK_WEBHOOK_DAILY and not DISCORD_WEBHOOK_DAILY:
-            missing.append("SLACK_WEBHOOK_DAILY or DISCORD_WEBHOOK_DAILY")
+    if mode in ("full", "daily"):
+        if not _alert_delivery_configured():
+            missing.append("SLACK_WEBHOOK_ALERTS or DISCORD_WEBHOOK_ALERTS or SMTP_HOST/SMTP_FROM")
+        if not _daily_delivery_configured():
+            missing.append("SLACK_WEBHOOK_DAILY or DISCORD_WEBHOOK_DAILY or SMTP_HOST/SMTP_FROM")
         if not SUPABASE_URL:
             missing.append("SUPABASE_URL")
         if not SUPABASE_KEY:

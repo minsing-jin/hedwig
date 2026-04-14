@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from supabase import create_client
@@ -31,43 +32,137 @@ SIGNAL_EXPORT_FIELDS = (
     "collected_at",
 )
 SIGNAL_EXPORT_SELECT = ",".join(SIGNAL_EXPORT_FIELDS)
+SINGLE_USER_SIGNAL_OWNER = ""
+SIGNAL_UPSERT_CONFLICT_COLUMNS = "user_id,platform,external_id"
 
 
 def _get_client():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+def _normalize_user_id(user_id: str | None) -> str | None:
+    if user_id is None:
+        return None
+
+    normalized = str(user_id).strip()
+    if not normalized:
+        raise ValueError("user_id must be non-empty when provided")
+    return normalized
+
+
+def _normalize_signal_url(url: object) -> str:
+    return str(url or "").strip()
+
+
+def _normalize_signal_owner(user_id: str | None) -> str:
+    normalized_user_id = _normalize_user_id(user_id)
+    if normalized_user_id is None:
+        return SINGLE_USER_SIGNAL_OWNER
+    return normalized_user_id
+
+
 # ---------------------------------------------------------------------------
 # Signals
 # ---------------------------------------------------------------------------
 
-def save_signals(signals: list[ScoredSignal]) -> int:
+def _lookup_existing_signal_urls(client, urls: list[str], signal_owner: str) -> list[dict]:
+    if not urls:
+        return []
+
+    query = (
+        client.table("signals")
+        .select("url,platform,external_id")
+        .eq("user_id", signal_owner)
+    )
+    result = query.in_("url", urls).execute()
+    return result.data or []
+
+
+def _build_signal_row(signal: ScoredSignal, signal_owner: str) -> dict:
+    row = {
+        "user_id": signal_owner,
+        "platform": signal.raw.platform.value,
+        "external_id": signal.raw.external_id,
+        "title": signal.raw.title,
+        "url": signal.raw.url,
+        "content": signal.raw.content[:5000],
+        "author": signal.raw.author,
+        "platform_score": signal.raw.score,
+        "comments_count": signal.raw.comments_count,
+        "published_at": signal.raw.published_at.isoformat(),
+        "relevance_score": signal.relevance_score,
+        "urgency": signal.urgency.value,
+        "why_relevant": signal.why_relevant,
+        "devils_advocate": signal.devils_advocate,
+        "opportunity_note": signal.opportunity_note,
+        "exploration_tags": signal.exploration_tags,
+        "extra": signal.raw.extra,
+        "collected_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    return row
+
+
+def save_signals(signals: list[ScoredSignal], user_id: str | None = None) -> int:
     if not signals:
         return 0
-    client = _get_client()
-    rows = []
-    for s in signals:
-        rows.append({
-            "platform": s.raw.platform.value,
-            "external_id": s.raw.external_id,
-            "title": s.raw.title,
-            "url": s.raw.url,
-            "content": s.raw.content[:5000],
-            "author": s.raw.author,
-            "platform_score": s.raw.score,
-            "comments_count": s.raw.comments_count,
-            "published_at": s.raw.published_at.isoformat(),
-            "relevance_score": s.relevance_score,
-            "urgency": s.urgency.value,
-            "why_relevant": s.why_relevant,
-            "devils_advocate": s.devils_advocate,
-            "opportunity_note": s.opportunity_note,
-            "exploration_tags": s.exploration_tags,
-            "extra": s.raw.extra,
-            "collected_at": datetime.now(tz=timezone.utc).isoformat(),
-        })
+
     try:
-        result = client.table("signals").upsert(rows, on_conflict="platform,external_id").execute()
+        signal_owner = _normalize_signal_owner(user_id)
+    except ValueError as e:
+        logger.error(f"Failed to save signals: {e}")
+        return 0
+
+    client = _get_client()
+
+    try:
+        urls = []
+        seen_lookup_urls: set[str] = set()
+        for signal in signals:
+            url = _normalize_signal_url(signal.raw.url)
+            if url and url not in seen_lookup_urls:
+                seen_lookup_urls.add(url)
+                urls.append(url)
+
+        existing_by_url: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        for row in _lookup_existing_signal_urls(client, urls=urls, signal_owner=signal_owner):
+            existing_url = _normalize_signal_url(row.get("url"))
+            if not existing_url:
+                continue
+            existing_by_url[existing_url].append(
+                (
+                    str(row.get("platform") or ""),
+                    str(row.get("external_id") or ""),
+                )
+            )
+    except Exception as e:
+        logger.error(f"Failed to save signals: {e}")
+        return 0
+
+    rows = []
+    seen_batch_urls: set[str] = set()
+    for signal in signals:
+        signal_url = _normalize_signal_url(signal.raw.url)
+        signal_identity = (signal.raw.platform.value, signal.raw.external_id)
+
+        if signal_url:
+            existing_rows = existing_by_url.get(signal_url, [])
+            if existing_rows and signal_identity not in existing_rows:
+                continue
+            if signal_url in seen_batch_urls:
+                continue
+            seen_batch_urls.add(signal_url)
+
+        rows.append(_build_signal_row(signal, signal_owner=signal_owner))
+
+    if not rows:
+        return 0
+
+    try:
+        result = (
+            client.table("signals")
+            .upsert(rows, on_conflict=SIGNAL_UPSERT_CONFLICT_COLUMNS)
+            .execute()
+        )
         return len(result.data) if result.data else 0
     except Exception as e:
         logger.error(f"Failed to save signals: {e}")
@@ -185,33 +280,57 @@ def is_duplicate(platform: str, external_id: str) -> bool:
 # Feedback (v2: boolean + natural language)
 # ---------------------------------------------------------------------------
 
-def save_feedback(feedback: Feedback) -> bool:
-    client = _get_client()
+def save_feedback(feedback: Feedback, user_id: str | None = None) -> bool:
     try:
-        client.table("feedback").insert({
-            "signal_id": feedback.signal_id,
-            "vote": feedback.vote.value,
-            "natural_language": feedback.natural_language,
-            "source_channel": feedback.source_channel,
-            "captured_at": feedback.captured_at.isoformat(),
-        }).execute()
+        user_id = _normalize_user_id(user_id)
+    except ValueError as e:
+        logger.error(f"Failed to save feedback: {e}")
+        return False
+
+    client = _get_client()
+    row = {
+        "signal_id": feedback.signal_id,
+        "vote": feedback.vote.value,
+        "natural_language": feedback.natural_language,
+        "source_channel": feedback.source_channel,
+        "captured_at": feedback.captured_at.isoformat(),
+    }
+    if user_id is not None:
+        row["user_id"] = user_id
+    try:
+        client.table("feedback").insert(row).execute()
         return True
     except Exception as e:
         logger.error(f"Failed to save feedback: {e}")
         return False
 
 
-async def save_feedback_batch(feedbacks: list[Feedback]) -> int:
+async def save_feedback_batch(
+    feedbacks: list[Feedback],
+    user_id: str | None = None,
+) -> int:
     if not feedbacks:
         return 0
+
+    try:
+        user_id = _normalize_user_id(user_id)
+    except ValueError as e:
+        logger.error(f"Failed to save feedback batch: {e}")
+        return 0
+
     client = _get_client()
-    rows = [{
-        "signal_id": f.signal_id,
-        "vote": f.vote.value,
-        "natural_language": f.natural_language,
-        "source_channel": f.source_channel,
-        "captured_at": f.captured_at.isoformat(),
-    } for f in feedbacks]
+    rows = []
+    for feedback in feedbacks:
+        row = {
+            "signal_id": feedback.signal_id,
+            "vote": feedback.vote.value,
+            "natural_language": feedback.natural_language,
+            "source_channel": feedback.source_channel,
+            "captured_at": feedback.captured_at.isoformat(),
+        }
+        if user_id is not None:
+            row["user_id"] = user_id
+        rows.append(row)
     try:
         result = client.table("feedback").insert(rows).execute()
         return len(result.data) if result.data else 0
@@ -234,6 +353,172 @@ def get_feedback_since(days: int = 1) -> list[dict]:
     except Exception as e:
         logger.error(f"Failed to get feedback: {e}")
         return []
+
+
+def _coerce_utc_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).date()
+
+
+def _build_dashboard_query(client, table_name: str, fields: str, user_id: str | None):
+    normalized_user_id = _normalize_user_id(user_id)
+    query = client.table(table_name).select(fields)
+    if normalized_user_id is not None:
+        query = query.eq("user_id", normalized_user_id)
+    return query
+
+
+def get_dashboard_activity_stats(user_id: str | None = None) -> dict:
+    """Aggregate dashboard activity metrics from Supabase rows.
+
+    When ``user_id`` is provided, scope signals and feedback to that tenant.
+    """
+    client = _get_client()
+    try:
+        signal_rows = (
+            _build_dashboard_query(
+                client,
+                table_name="signals",
+                fields="platform,collected_at",
+                user_id=user_id,
+            )
+            .execute()
+            .data
+            or []
+        )
+        feedback_rows = (
+            _build_dashboard_query(
+                client,
+                table_name="feedback",
+                fields="vote",
+                user_id=user_id,
+            )
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        logger.error(f"Failed to get dashboard activity stats: {e}")
+        return {
+            "total_signals": 0,
+            "upvote_ratio": 0.0,
+            "top_5_sources": [],
+            "days_active": 0,
+        }
+
+    total_signals = len(signal_rows)
+    total_feedback = len(feedback_rows)
+    upvotes = sum(1 for row in feedback_rows if row.get("vote") == VoteType.UP.value)
+    upvote_ratio = (upvotes / total_feedback) if total_feedback else 0.0
+
+    source_counts = Counter()
+    active_days: set[date] = set()
+    for row in signal_rows:
+        platform = str(row.get("platform") or "").strip()
+        if platform:
+            source_counts[platform] += 1
+
+        collected_day = _coerce_utc_date(row.get("collected_at"))
+        if collected_day is not None:
+            active_days.add(collected_day)
+
+    top_5_sources = [
+        {"source": source, "count": count}
+        for source, count in sorted(
+            source_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:5]
+    ]
+
+    return {
+        "total_signals": total_signals,
+        "upvote_ratio": upvote_ratio,
+        "top_5_sources": top_5_sources,
+        "days_active": len(active_days),
+    }
+
+
+# ---------------------------------------------------------------------------
+# User source settings
+# ---------------------------------------------------------------------------
+
+def load_user_source_settings(
+    user_id: str,
+    registry: dict[str, object],
+) -> dict[str, bool]:
+    """Load tenant-owned source enablement flags from Supabase."""
+    try:
+        normalized_user_id = _normalize_user_id(user_id)
+    except ValueError as e:
+        logger.error(f"Failed to load user source settings: {e}")
+        return {plugin_id: True for plugin_id in registry}
+
+    enabled = {plugin_id: True for plugin_id in registry}
+    client = _get_client()
+
+    try:
+        rows = (
+            client.table("user_sources")
+            .select("plugin_id,enabled")
+            .eq("user_id", normalized_user_id)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        logger.error(f"Failed to load user source settings: {e}")
+        return enabled
+
+    for row in rows:
+        plugin_id = str(row.get("plugin_id") or "").strip()
+        if plugin_id in enabled:
+            enabled[plugin_id] = bool(row.get("enabled"))
+
+    return enabled
+
+
+def save_user_source_settings(user_id: str, enabled: dict[str, bool]) -> bool:
+    """Persist tenant-owned source enablement flags to Supabase."""
+    try:
+        normalized_user_id = _normalize_user_id(user_id)
+    except ValueError as e:
+        logger.error(f"Failed to save user source settings: {e}")
+        return False
+
+    client = _get_client()
+    rows = [
+        {
+            "user_id": normalized_user_id,
+            "plugin_id": plugin_id,
+            "enabled": bool(enabled[plugin_id]),
+            "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+        for plugin_id in sorted(enabled)
+    ]
+
+    try:
+        client.table("user_sources").upsert(
+            rows,
+            on_conflict="user_id,plugin_id",
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save user source settings: {e}")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +597,7 @@ SCHEMA_SQL = """
 -- Signals (extended with exploration_tags)
 CREATE TABLE IF NOT EXISTS signals (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '',
     platform TEXT NOT NULL,
     external_id TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -329,12 +615,13 @@ CREATE TABLE IF NOT EXISTS signals (
     exploration_tags JSONB DEFAULT '[]',
     extra JSONB DEFAULT '{}',
     collected_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(platform, external_id)
+    UNIQUE(user_id, platform, external_id)
 );
 
 -- Feedback (v2: boolean vote + natural language)
 CREATE TABLE IF NOT EXISTS feedback (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT,
     signal_id TEXT NOT NULL,
     vote TEXT NOT NULL CHECK (vote IN ('up', 'down')),
     natural_language TEXT,
@@ -380,12 +667,57 @@ CREATE TABLE IF NOT EXISTS user_memory (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS user_sources (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    plugin_id TEXT NOT NULL,
+    enabled BOOLEAN DEFAULT TRUE,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, plugin_id)
+);
+
+ALTER TABLE signals
+    ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+ALTER TABLE feedback
+    ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+UPDATE signals
+SET user_id = ''
+WHERE user_id IS NULL;
+
+ALTER TABLE signals
+    ALTER COLUMN user_id SET DEFAULT '';
+
+ALTER TABLE signals
+    ALTER COLUMN user_id SET NOT NULL;
+
+ALTER TABLE signals
+    DROP CONSTRAINT IF EXISTS signals_platform_external_id_key;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'signals_user_id_platform_external_id_key'
+    ) THEN
+        ALTER TABLE signals
+            ADD CONSTRAINT signals_user_id_platform_external_id_key
+            UNIQUE (user_id, platform, external_id);
+    END IF;
+END $$;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_signals_collected ON signals(collected_at DESC);
 CREATE INDEX IF NOT EXISTS idx_signals_relevance ON signals(relevance_score DESC);
 CREATE INDEX IF NOT EXISTS idx_signals_platform ON signals(platform);
+CREATE INDEX IF NOT EXISTS idx_signals_user_id ON signals(user_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_captured ON feedback(captured_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_signal ON feedback(signal_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON user_sources(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sources_plugin_id ON user_sources(plugin_id);
 CREATE INDEX IF NOT EXISTS idx_evolution_timestamp ON evolution_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_criteria_version ON criteria_versions(version DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_week ON user_memory(snapshot_week);

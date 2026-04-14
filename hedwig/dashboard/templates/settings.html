@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Hedwig Settings{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>Source Settings</h1>
+  <p class="subtitle">
+    Choose which source plugins Hedwig should run. {{ settings_destination }}
+  </p>
+</div>
+
+{% if saved %}
+<div class="card" style="margin-bottom: 1.5rem; border-color: var(--success);">
+  <strong>Saved.</strong> {{ saved_message }}
+</div>
+{% endif %}
+
+<form action="/settings/save" method="post">
+  <div class="source-grid">
+    {% for s in sources %}
+    <label class="source-card" for="source-{{ s.id }}">
+      <div class="source-name">{{ s.meta.display_name }}</div>
+      <div class="source-id">{{ s.id }}</div>
+      <div class="source-meta">
+        <span class="badge">{{ s.meta.fetch_method }}</span>
+        <span class="badge {{ s.meta.plugin_type }}">{{ s.meta.plugin_type }}</span>
+      </div>
+      <div style="margin-top: 1rem;">
+        <input type="checkbox" name="enabled_sources" value="{{ s.id }}" id="source-{{ s.id }}"{% if s.enabled %} checked{% endif %}>
+        <span style="margin-left: 0.5rem;">Enabled</span>
+      </div>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="button-row" style="margin-top: 1.5rem;">
+    <button class="btn btn-primary" type="submit">Save settings</button>
+  </div>
+</form>
+
+{% endblock %}

@@ -43,47 +43,54 @@ RESULTS_DIR.mkdir(exist_ok=True)
 
 
 def run_codex_exec(prompt: str, timeout: int = 1800, model: str | None = None) -> tuple[int, str, str]:
-    """Run codex exec with given prompt. Returns (exit_code, stdout, stderr)."""
+    """Run codex exec with given prompt. Returns (exit_code, stdout, stderr).
+
+    Uses Popen + communicate to ensure the child process is killed on timeout.
+    """
     cmd = ["codex", "exec"]
     if model:
         cmd += ["-m", model]
     cmd += ["--skip-git-repo-check", prompt]
 
     logger.info(f"Running codex exec (timeout={timeout}s)")
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(REPO),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(REPO),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        return result.returncode, result.stdout, result.stderr
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return proc.returncode, stdout, stderr
     except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        logger.warning(f"Codex exec killed after {timeout}s timeout (PID {proc.pid})")
         return 124, "", f"Codex exec timed out after {timeout}s"
 
 
 def run_codex_review(prompt: str, timeout: int = 600) -> tuple[int, str, str]:
     """Run codex review on uncommitted changes. Fresh instance.
 
-    This is a NEW codex process — it has no memory of the implementation phase.
-    Uses 'codex exec' with explicit review instructions to avoid the
-    --uncommitted+PROMPT conflict in 'codex review'.
+    Uses Popen + communicate to ensure cleanup on timeout.
     """
-    # Use codex exec with review-style instructions instead of `codex review`
-    # because `codex review --uncommitted` doesn't accept a custom prompt
     cmd = ["codex", "exec", "--skip-git-repo-check", prompt]
     logger.info(f"Running codex review (fresh instance via exec, timeout={timeout}s)")
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(REPO),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(REPO),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        return result.returncode, result.stdout, result.stderr
+        stdout, stderr = proc.communicate(timeout=timeout)
+        return proc.returncode, stdout, stderr
     except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        logger.warning(f"Codex review killed after {timeout}s timeout (PID {proc.pid})")
         return 124, "", f"Codex review timed out after {timeout}s"
 
 

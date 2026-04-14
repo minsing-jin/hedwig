@@ -39,7 +39,7 @@
 
   <section class="form-section">
     <h2>2. Delivery Channels</h2>
-    <p class="muted">At least one delivery channel (Slack or Discord) is required.</p>
+    <p class="muted">At least one delivery channel (Slack, Discord, or SMTP email) is required.</p>
 
     <h3>Slack</h3>
     {% for key, meta in delivery_keys.items() %}
@@ -60,6 +60,22 @@
     <h3>Discord</h3>
     {% for key, meta in delivery_keys.items() %}
     {% if meta.group == "discord" %}
+    <div class="field">
+      <label for="{{ key }}">{{ meta.label }}</label>
+      <input
+        type="{% if meta.secret %}password{% else %}text{% endif %}"
+        id="{{ key }}"
+        name="{{ key }}"
+        value="{{ values.get(key, '') }}"
+        placeholder="{{ meta.help }}"
+      >
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <h3>SMTP Email</h3>
+    {% for key, meta in delivery_keys.items() %}
+    {% if meta.group == "smtp" %}
     <div class="field">
       <label for="{{ key }}">{{ meta.label }}</label>
       <input
@@ -95,7 +111,7 @@
 
   <section class="form-section">
     <h2>4. Test Your Keys</h2>
-    <p class="muted">Click to verify each key is valid. Hedwig will send test messages to Slack/Discord.</p>
+    <p class="muted">Click to verify each key is valid. Hedwig will send test messages to Slack/Discord and checks SMTP connectivity.</p>
     <button type="button" class="btn btn-primary"
             hx-post="/setup/test"
             hx-include="#setup-form"

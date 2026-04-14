@@ -87,8 +87,9 @@ class AgentCollector:
         """Use LLM to generate collection strategy based on criteria."""
         criteria = self._load_criteria()
 
-        from hedwig.sources import get_registered_sources
-        available = list(get_registered_sources().keys())
+        from hedwig.sources import settings as source_settings
+
+        available = list(source_settings.filter_registered_sources().keys())
 
         if not self._llm:
             return self._default_strategy(available, source_reliability)
@@ -119,9 +120,9 @@ class AgentCollector:
 
     async def collect_with_strategy(self, strategy: dict) -> list[RawPost]:
         """Execute collection based on agent-generated strategy."""
-        from hedwig.sources import get_registered_sources, create_source
+        from hedwig.sources import settings as source_settings
 
-        registry = get_registered_sources()
+        registry = source_settings.filter_registered_sources()
         all_posts: list[RawPost] = []
 
         source_configs = strategy.get("source_configs", {})

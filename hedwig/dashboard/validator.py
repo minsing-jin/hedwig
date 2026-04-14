@@ -3,6 +3,9 @@ API key validator — test keys against real endpoints.
 """
 from __future__ import annotations
 
+import asyncio
+import smtplib
+
 import httpx
 
 
@@ -77,6 +80,40 @@ async def test_discord_webhook(url: str) -> tuple[bool, str]:
         return False, f"Connection error: {e}"
 
 
+def _smtp_port(value: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 587
+
+
+def _test_smtp_sync(host: str, port: int, username: str, password: str) -> tuple[bool, str]:
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as client:
+            client.ehlo()
+            if username and password:
+                if not client.has_extn("starttls"):
+                    return False, "Authenticated SMTP requires STARTTLS support"
+                client.starttls()
+                client.ehlo()
+                client.login(username, password)
+        return True, "OK (SMTP server reachable)"
+    except Exception as e:
+        return False, f"Connection error: {e}"
+
+
+async def test_smtp(host: str, port: str, username: str, password: str) -> tuple[bool, str]:
+    if not host:
+        return False, "SMTP host required"
+    return await asyncio.to_thread(
+        _test_smtp_sync,
+        host,
+        _smtp_port(port),
+        username,
+        password,
+    )
+
+
 async def test_all(values: dict[str, str]) -> dict[str, tuple[bool, str]]:
     """Test all provided keys. Returns dict of key_name → (ok, message)."""
     results: dict[str, tuple[bool, str]] = {}
@@ -96,5 +133,13 @@ async def test_all(values: dict[str, str]) -> dict[str, tuple[bool, str]]:
     for key in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_DAILY", "DISCORD_WEBHOOK_WEEKLY"):
         if values.get(key):
             results[key] = await test_discord_webhook(values[key])
+
+    if values.get("SMTP_HOST"):
+        results["SMTP"] = await test_smtp(
+            values["SMTP_HOST"],
+            values.get("SMTP_PORT", ""),
+            values.get("SMTP_USER", ""),
+            values.get("SMTP_PASS", ""),
+        )
 
     return results

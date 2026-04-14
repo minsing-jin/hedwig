@@ -30,12 +30,6 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-SAAS_DASHBOARD_STATS_UNAVAILABLE_DETAIL = (
-    "Dashboard stats are unavailable in SaaS mode until tenant-aware storage exists"
-)
-SAAS_SOURCE_SETTINGS_UNAVAILABLE_DETAIL = (
-    "Source settings are unavailable in SaaS mode until tenant-aware configuration exists"
-)
 
 
 def create_app(saas_mode: bool = False) -> FastAPI:
@@ -246,13 +240,10 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.get("/dashboard/stats")
     async def dashboard_stats(request: Request):
         if saas_mode:
-            from hedwig.saas.auth import require_auth
+            from hedwig.saas.auth import require_auth, require_user_id
 
-            await require_auth(request)
-            raise HTTPException(
-                status_code=503,
-                detail=SAAS_DASHBOARD_STATS_UNAVAILABLE_DETAIL,
-            )
+            user = await require_auth(request)
+            return JSONResponse(_load_dashboard_stats(user_id=require_user_id(user)))
 
         return JSONResponse(_load_dashboard_stats())
 
@@ -263,7 +254,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         )
 
     @app.post("/feedback/{signal_id}/{vote}")
-    async def submit_feedback(signal_id: str, vote: str):
+    async def submit_feedback(request: Request, signal_id: str, vote: str):
         if vote not in ("up", "down"):
             return JSONResponse({"error": "Invalid vote"}, status_code=400)
 
@@ -271,12 +262,19 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         from hedwig.models import VoteType
         from hedwig.storage.supabase import save_feedback
 
+        user_id: str | None = None
+        if saas_mode:
+            from hedwig.saas.auth import require_auth, require_user_id
+
+            user = await require_auth(request)
+            user_id = require_user_id(user)
+
         collector = FeedbackCollector()
         fb = collector.from_direct(
             signal_id=signal_id,
             vote=VoteType.UP if vote == "up" else VoteType.DOWN,
         )
-        save_feedback(fb)
+        save_feedback(fb, user_id=user_id)
 
         return JSONResponse({"ok": True, "vote": vote})
 
@@ -327,19 +325,31 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.get("/settings", response_class=HTMLResponse)
     async def settings_view(request: Request):
         if saas_mode:
-            from hedwig.saas.auth import require_auth
+            from hedwig.saas.auth import require_auth, require_user_id
+            from hedwig.storage.supabase import load_user_source_settings
 
-            await require_auth(request)
-            raise HTTPException(
-                status_code=503,
-                detail=SAAS_SOURCE_SETTINGS_UNAVAILABLE_DETAIL,
-            )
+            user = await require_auth(request)
+            user_id = require_user_id(user)
+        else:
+            user_id = None
 
         from hedwig.sources import get_registered_sources
         from hedwig.sources import settings as source_settings
 
         registry = get_registered_sources()
-        enabled = source_settings.load_source_settings(registry=registry)
+        if saas_mode:
+            enabled = load_user_source_settings(user_id=user_id, registry=registry)
+            settings_destination = "Saved to your SaaS account via Supabase."
+            saved_message = "Source plugin settings were saved to your SaaS account."
+        else:
+            enabled = source_settings.load_source_settings(registry=registry)
+            settings_destination = (
+                f"Saved locally to {source_settings.SOURCE_SETTINGS_PATH}."
+            )
+            saved_message = (
+                "Source plugin settings were written to the local config file."
+            )
+
         sources = [
             {
                 "id": pid,
@@ -353,22 +363,14 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             {
                 "request": request,
                 "sources": sources,
-                "config_path": str(source_settings.SOURCE_SETTINGS_PATH),
+                "settings_destination": settings_destination,
                 "saved": request.query_params.get("saved") == "1",
+                "saved_message": saved_message,
             },
         )
 
     @app.post("/settings/save")
     async def settings_save(request: Request):
-        if saas_mode:
-            from hedwig.saas.auth import require_auth
-
-            await require_auth(request)
-            raise HTTPException(
-                status_code=503,
-                detail=SAAS_SOURCE_SETTINGS_UNAVAILABLE_DETAIL,
-            )
-
         from hedwig.sources import get_registered_sources
         from hedwig.sources import settings as source_settings
 
@@ -379,7 +381,21 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             plugin_id: plugin_id in selected
             for plugin_id in registry
         }
-        source_settings.save_source_settings(enabled)
+
+        if saas_mode:
+            from hedwig.saas.auth import require_auth, require_user_id
+            from hedwig.storage.supabase import save_user_source_settings
+
+            user = await require_auth(request)
+            user_id = require_user_id(user)
+            if not save_user_source_settings(user_id=user_id, enabled=enabled):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Failed to save source settings",
+                )
+        else:
+            source_settings.save_source_settings(enabled)
+
         return RedirectResponse(url="/settings?saved=1", status_code=303)
 
     # -----------------------------------------------------------------------
@@ -734,11 +750,13 @@ def _search_signals(query: str, limit: int = 100) -> list[dict]:
         return []
 
 
-def _load_dashboard_activity_stats() -> dict:
+def _load_dashboard_activity_stats(user_id: str | None = None) -> dict:
     try:
         from hedwig.storage.supabase import get_dashboard_activity_stats
 
-        return get_dashboard_activity_stats()
+        if user_id is None:
+            return get_dashboard_activity_stats()
+        return get_dashboard_activity_stats(user_id=user_id)
     except Exception:
         return {
             "total_signals": 0,
@@ -792,8 +810,11 @@ def _count_evolution_cycles() -> int:
     return len(_load_evolution_logs())
 
 
-def _load_dashboard_stats() -> dict:
-    stats = _load_dashboard_activity_stats()
+def _load_dashboard_stats(user_id: str | None = None) -> dict:
+    if user_id is None:
+        stats = _load_dashboard_activity_stats()
+    else:
+        stats = _load_dashboard_activity_stats(user_id=user_id)
     return {
         "total_signals": int(stats.get("total_signals", 0) or 0),
         "upvote_ratio": float(stats.get("upvote_ratio", 0.0) or 0.0),

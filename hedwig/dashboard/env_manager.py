@@ -69,6 +69,41 @@ class EnvManager:
             "secret": True,
             "group": "discord",
         },
+        "SMTP_HOST": {
+            "label": "SMTP Host",
+            "help": "SMTP server hostname (for example smtp.gmail.com)",
+            "required": False,
+            "secret": False,
+            "group": "smtp",
+        },
+        "SMTP_PORT": {
+            "label": "SMTP Port",
+            "help": "SMTP port. Hedwig defaults to 587 when left blank",
+            "required": False,
+            "secret": False,
+            "group": "smtp",
+        },
+        "SMTP_USER": {
+            "label": "SMTP Username",
+            "help": "SMTP username for authenticated delivery",
+            "required": False,
+            "secret": False,
+            "group": "smtp",
+        },
+        "SMTP_PASS": {
+            "label": "SMTP Password",
+            "help": "SMTP password or app password",
+            "required": False,
+            "secret": True,
+            "group": "smtp",
+        },
+        "SMTP_FROM": {
+            "label": "SMTP From Address",
+            "help": "Sender email address for Hedwig alerts",
+            "required": False,
+            "secret": False,
+            "group": "smtp",
+        },
     }
 
     # Optional - expand source coverage
@@ -128,6 +163,12 @@ class EnvManager:
                 lines.append(f"{key}={existing.get(key, '')}")
         lines.append("")
 
+        lines.append("# Delivery — SMTP")
+        for key, meta in self.DELIVERY_KEYS.items():
+            if meta.get("group") == "smtp":
+                lines.append(f"{key}={existing.get(key, '')}")
+        lines.append("")
+
         lines.append("# Optional")
         for key in self.OPTIONAL_KEYS:
             lines.append(f"{key}={existing.get(key, '')}")
@@ -139,18 +180,35 @@ class EnvManager:
         values = self.load()
 
         required_ok = all(values.get(k) for k in self.REQUIRED_KEYS)
-        slack_ok = bool(values.get("SLACK_WEBHOOK_ALERTS") and values.get("SLACK_WEBHOOK_DAILY"))
-        discord_ok = bool(
-            values.get("DISCORD_WEBHOOK_ALERTS")
-            and values.get("DISCORD_WEBHOOK_DAILY")
+        slack_configured = bool(
+            values.get("SLACK_WEBHOOK_ALERTS") or values.get("SLACK_WEBHOOK_DAILY")
         )
-        delivery_ok = slack_ok or discord_ok
+        discord_configured = bool(
+            values.get("DISCORD_WEBHOOK_ALERTS")
+            or values.get("DISCORD_WEBHOOK_DAILY")
+            or values.get("DISCORD_WEBHOOK_WEEKLY")
+        )
+        smtp_configured = bool(values.get("SMTP_HOST") and values.get("SMTP_FROM"))
+        alert_delivery_ok = bool(
+            values.get("SLACK_WEBHOOK_ALERTS")
+            or values.get("DISCORD_WEBHOOK_ALERTS")
+            or smtp_configured
+        )
+        daily_delivery_ok = bool(
+            values.get("SLACK_WEBHOOK_DAILY")
+            or values.get("DISCORD_WEBHOOK_DAILY")
+            or smtp_configured
+        )
+        delivery_ok = alert_delivery_ok and daily_delivery_ok
 
         return {
             "required_ok": required_ok,
             "delivery_ok": delivery_ok,
-            "slack_configured": slack_ok,
-            "discord_configured": discord_ok,
+            "alert_delivery_ok": alert_delivery_ok,
+            "daily_delivery_ok": daily_delivery_ok,
+            "slack_configured": slack_configured,
+            "discord_configured": discord_configured,
+            "smtp_configured": smtp_configured,
             "ready": required_ok and delivery_ok,
             "keys": values,
         }

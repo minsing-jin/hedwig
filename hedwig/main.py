@@ -237,6 +237,10 @@ async def run_daily(collect_only: bool = False):
     if llm and not collect_only:
         posts, strategy = await agent_collect(llm_client=llm)
         focus_keywords = strategy.get("focus_keywords", [])
+        if not posts:
+            logger.warning("Agent collection returned no posts. Falling back to baseline collection.")
+            posts = await collect_all()
+            focus_keywords = _extract_keywords_from_criteria()
     else:
         posts = await collect_all()
         focus_keywords = _extract_keywords_from_criteria()
@@ -253,7 +257,7 @@ async def run_daily(collect_only: bool = False):
         return
 
     # 3. Check keys for LLM scoring
-    mode = "score" if collect_only else "full"
+    mode = "score" if collect_only else "daily"
     missing = check_required_keys(mode)
     if missing:
         logger.error(f"Missing env vars: {', '.join(missing)}")
@@ -276,12 +280,20 @@ async def run_daily(collect_only: bool = False):
             print_signal(s, "DIGEST")
         return
 
-    # 6. Deliver to Slack + Discord
+    # 6. Deliver to Slack + Discord + SMTP email
+    from hedwig.config import smtp_alerts_configured
     from hedwig.delivery.slack import send_alert as slack_alert, send_daily_briefing as slack_daily
     from hedwig.delivery.discord import send_alert as discord_alert, send_daily_briefing as discord_daily
+    from hedwig.delivery.email import (
+        send_alert as email_alert,
+        send_daily_briefing as email_daily,
+    )
+    smtp_enabled = smtp_alerts_configured()
     for signal in alerts[:10]:
         await slack_alert(signal)
         await discord_alert(signal)
+        if smtp_enabled:
+            await email_alert(signal)
 
     # 7. Daily briefing
     from hedwig.engine.briefing import generate_daily_briefing
@@ -291,6 +303,8 @@ async def run_daily(collect_only: bool = False):
         briefing_text = await generate_daily_briefing(briefing_signals)
         await slack_daily(briefing_text)
         await discord_daily(briefing_text)
+        if smtp_enabled:
+            await email_daily(briefing_text)
         logger.info("Daily briefing sent")
 
     # 8. Save signals
@@ -363,10 +377,14 @@ async def run_weekly():
     logger.info(f"Generating weekly briefing from {len(signals)} signals...")
     briefing_text = await generate_weekly_briefing(signals)
 
+    from hedwig.config import smtp_alerts_configured
     from hedwig.delivery.slack import send_weekly_briefing as slack_weekly
     from hedwig.delivery.discord import send_weekly_briefing as discord_weekly
+    from hedwig.delivery.email import send_weekly_briefing as email_weekly
     await slack_weekly(briefing_text)
     await discord_weekly(briefing_text)
+    if smtp_alerts_configured():
+        await email_weekly(briefing_text)
     logger.info("Weekly briefing sent")
 
     # Weekly evolution
