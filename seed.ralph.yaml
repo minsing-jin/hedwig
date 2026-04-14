@@ -1,98 +1,67 @@
 goal: >
-  Verify Hedwig v3.0 zero-config SaaS is production-ready end-to-end.
-  All foundations are built (saas, native, dashboard, auto-context, oauth,
-  operator keys, billing, invite, multilingual, legal pages, deployment files).
-  This Ralph loop must verify each component, write missing tests, fix any
-  integration gaps, and ensure the complete user journey works:
-  Visit landing → OAuth signin → Auto onboarding → First signals → Vote →
-  Evolve → Upgrade to Pro → Invite friend.
+  Build new features for Hedwig v3.0 SaaS. The foundation is complete
+  (17 sources including GitHub Trending, evolution engine, dashboard,
+  SaaS auth, billing). This iteration adds real user-facing features
+  that make Hedwig immediately useful. Codex implements each feature;
+  a fresh Codex instance reviews independently.
 
 constraints:
-  - Preserve all existing code in hedwig/ directory
-  - Do not remove or rename existing modules
-  - All changes must pass Python import check
-  - New tests go in tests/ directory, follow pytest conventions
+  - Preserve all existing code — do not break the 277+ passing tests
+  - "Tests must pass with pytest tests/ -v"
   - Follow existing code style (Pydantic, async, type hints)
-  - Do not add new external dependencies without updating pyproject.toml
-  - Do not modify seed.yaml content
-  - Commit each verified fix as a separate git commit
-  - Tests must pass with: pytest tests/ -v
-  - Dashboard SaaS mode must serve all routes successfully
+  - Each AC produces a working feature with at least 1 test
+  - Do not modify seed.yaml or docs/interviews/ content
+  - Work directly on main branch (Claude Code authorized)
 
 acceptance_criteria:
-  - Test exists for hedwig.saas.auto_context module imports
-  - Test exists that AutoContextInference fallback returns valid criteria
-  - Test exists for hedwig.saas.oauth module — verify 12 providers registered
-  - Test exists that build_oauth_url returns None when SUPABASE_URL missing
-  - Test exists for hedwig.saas.operator_keys module — quotas defined for all tiers
-  - Test exists that get_operator_openai_key raises clear error when missing
-  - Dashboard SaaS mode serves /billing route HTTP 200
-  - Dashboard SaaS mode serves /invite route HTTP 200
-  - Dashboard SaaS mode serves /ko (Korean landing) HTTP 200
-  - Dashboard SaaS mode serves /zh (Chinese landing) HTTP 200
-  - Dashboard SaaS mode serves /terms HTTP 200
-  - Dashboard SaaS mode serves /privacy HTTP 200
-  - Dashboard SaaS mode serves /about HTTP 200
-  - Procfile exists for Railway deployment
-  - Dockerfile exists with valid syntax
-  - railway.toml exists with healthcheck path
-  - nixpacks.toml exists for Railway nixpacks builder
-  - .dockerignore exists excluding .venv and tests
-  - docs/HOSTING.md exists with deployment instructions
-  - Signup template contains 12 OAuth provider buttons
-  - Auto-onboarding template contains at least 10 SNS handle inputs
-  - Billing template references all three tiers (free, pro, team)
-  - All previous v3.0 ACs still pass (no regressions)
+  - Build a /signals/export endpoint that returns the last 100 signals as a JSON download file with Content-Disposition header
+  - Build a /signals/search endpoint that accepts a query parameter q and returns matching signals by searching title+content fields
+  - Build email notification support — when an alert-level signal arrives send email via SMTP (configurable via SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM env vars)
+  - Build a /dashboard/stats endpoint returning JSON with total_signals, upvote_ratio, evolution_cycles, top_5_sources, and days_active
+  - Build a test for github_trending source plugin that verifies it registers with correct metadata and _is_ai_related returns True for AI repos and False for non-AI repos
+  - Build YouTube transcript enrichment — after collecting YouTube posts use yt-dlp subprocess to fetch video transcript and append to post.content for better LLM scoring
+  - Add a /settings page in dashboard where users can toggle source plugins on or off and save to a local config file
+  - Add a /health endpoint returning JSON with last_daily_run, last_weekly_run, evolution_cycle_count, source_count, and uptime_seconds
+  - Build cross-platform signal deduplication — before saving check if same URL exists across sources and skip duplicates
+  - All 277+ existing tests still pass with zero regressions after all features added
 
 ontology_schema:
-  name: HedwigV3FullVerification
-  description: Domain model for verifying complete Hedwig v3.0 SaaS readiness
+  name: HedwigFeatureIteration
+  description: New feature implementation for Hedwig v3.0
   fields:
-    - name: route
+    - name: endpoint
       type: object
-      description: HTTP route with method, path, expected status, and template
-    - name: oauth_provider
+      description: A new FastAPI route with method and path and response schema
+    - name: source_enhancement
       type: object
-      description: OAuth provider registration with id, label, color
-    - name: deployment_artifact
+      description: An improvement to an existing source plugin
+    - name: system_feature
       type: object
-      description: Deployment file (Dockerfile, Procfile, railway.toml) with valid syntax
-    - name: legal_page
-      type: object
-      description: Required legal page (terms, privacy, about) with required sections
-    - name: integration_test
-      type: object
-      description: Pytest file verifying cross-module behavior
+      description: A backend feature like dedup or notifications or health checks
 
 evaluation_principles:
-  - name: zero_regression
-    description: All previously-passing tests still pass
-    weight: 0.30
-  - name: full_route_coverage
-    description: Every dashboard route returns expected status
+  - name: feature_completeness
+    description: Each feature works end-to-end not just a stub
+    weight: 0.35
+  - name: test_coverage
+    description: Each feature has at least one test
     weight: 0.25
-  - name: deployment_readiness
-    description: Hedwig can be deployed to Railway/Docker without manual edits
-    weight: 0.20
-  - name: oauth_completeness
-    description: All 12 OAuth providers register correctly
+  - name: zero_regression
+    description: All 277+ existing tests still pass
+    weight: 0.25
+  - name: code_quality
+    description: Clean code and proper error handling following project patterns
     weight: 0.15
-  - name: documentation_accuracy
-    description: README and HOSTING docs match actual capabilities
-    weight: 0.10
 
 exit_conditions:
-  - name: all_tests_pass
-    description: pytest tests/ exits with code 0
-    criteria: All test files green
-  - name: all_routes_serve
-    description: SaaS mode serves all 16+ routes
-    criteria: HTTP 200 or expected redirect for every route
-  - name: deployment_ready
-    description: Procfile, Dockerfile, railway.toml, nixpacks.toml all valid
-    criteria: docker build succeeds, railway.toml parses
+  - name: all_features_work
+    description: All 10 ACs implemented and tested
+    criteria: pytest tests/ exits with 0 and all new endpoints return expected responses
+  - name: no_regression
+    description: Existing 277+ tests still pass
+    criteria: pytest tests/ shows at least 277 passed
 
 metadata:
-  version: "2.0.0"
-  project_name: "hedwig-ralph-v3-full"
-  purpose: "End-to-end verification of Hedwig v3.0 zero-config SaaS"
+  version: "3.0.0"
+  project_name: "hedwig-feature-iteration"
+  purpose: "Build real user-facing features via Codex orchestrator"

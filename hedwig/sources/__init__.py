@@ -5,6 +5,7 @@ from hedwig.sources import (  # noqa: F401
     arxiv,
     bluesky,
     geeknews,
+    github_trending,
     hackernews,
     instagram,
     linkedin,
