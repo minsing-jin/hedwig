@@ -17,7 +17,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+SAAS_DASHBOARD_STATS_UNAVAILABLE_DETAIL = (
+    "Dashboard stats are unavailable in SaaS mode until tenant-aware storage exists"
+)
+SAAS_SOURCE_SETTINGS_UNAVAILABLE_DETAIL = (
+    "Source settings are unavailable in SaaS mode until tenant-aware configuration exists"
+)
 
 
 def create_app(saas_mode: bool = False) -> FastAPI:
@@ -44,6 +50,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
     env_manager = EnvManager(env_path=Path.cwd() / ".env")
     app.state.saas_mode = saas_mode
+    app.state.started_at = _utcnow()
 
     # -----------------------------------------------------------------------
     # Home / Status
@@ -236,6 +243,25 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         ]
         return JSONResponse(signals)
 
+    @app.get("/dashboard/stats")
+    async def dashboard_stats(request: Request):
+        if saas_mode:
+            from hedwig.saas.auth import require_auth
+
+            await require_auth(request)
+            raise HTTPException(
+                status_code=503,
+                detail=SAAS_DASHBOARD_STATS_UNAVAILABLE_DETAIL,
+            )
+
+        return JSONResponse(_load_dashboard_stats())
+
+    @app.get("/health")
+    async def health(request: Request):
+        return JSONResponse(
+            _load_health_status(started_at=getattr(request.app.state, "started_at", None))
+        )
+
     @app.post("/feedback/{signal_id}/{vote}")
     async def submit_feedback(signal_id: str, vote: str):
         if vote not in ("up", "down"):
@@ -297,6 +323,64 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         return TEMPLATES.TemplateResponse(
             "sources.html", {"request": request, "sources": sources}
         )
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_view(request: Request):
+        if saas_mode:
+            from hedwig.saas.auth import require_auth
+
+            await require_auth(request)
+            raise HTTPException(
+                status_code=503,
+                detail=SAAS_SOURCE_SETTINGS_UNAVAILABLE_DETAIL,
+            )
+
+        from hedwig.sources import get_registered_sources
+        from hedwig.sources import settings as source_settings
+
+        registry = get_registered_sources()
+        enabled = source_settings.load_source_settings(registry=registry)
+        sources = [
+            {
+                "id": pid,
+                "meta": cls.metadata(),
+                "enabled": enabled.get(pid, True),
+            }
+            for pid, cls in sorted(registry.items())
+        ]
+        return TEMPLATES.TemplateResponse(
+            "settings.html",
+            {
+                "request": request,
+                "sources": sources,
+                "config_path": str(source_settings.SOURCE_SETTINGS_PATH),
+                "saved": request.query_params.get("saved") == "1",
+            },
+        )
+
+    @app.post("/settings/save")
+    async def settings_save(request: Request):
+        if saas_mode:
+            from hedwig.saas.auth import require_auth
+
+            await require_auth(request)
+            raise HTTPException(
+                status_code=503,
+                detail=SAAS_SOURCE_SETTINGS_UNAVAILABLE_DETAIL,
+            )
+
+        from hedwig.sources import get_registered_sources
+        from hedwig.sources import settings as source_settings
+
+        form = await request.form()
+        selected = set(form.getlist("enabled_sources"))
+        registry = get_registered_sources()
+        enabled = {
+            plugin_id: plugin_id in selected
+            for plugin_id in registry
+        }
+        source_settings.save_source_settings(enabled)
+        return RedirectResponse(url="/settings?saved=1", status_code=303)
 
     # -----------------------------------------------------------------------
     # Criteria editor
@@ -650,6 +734,75 @@ def _search_signals(query: str, limit: int = 100) -> list[dict]:
         return []
 
 
+def _load_dashboard_activity_stats() -> dict:
+    try:
+        from hedwig.storage.supabase import get_dashboard_activity_stats
+
+        return get_dashboard_activity_stats()
+    except Exception:
+        return {
+            "total_signals": 0,
+            "upvote_ratio": 0.0,
+            "top_5_sources": [],
+            "days_active": 0,
+        }
+
+
+def _utcnow() -> datetime:
+    return datetime.now(tz=timezone.utc)
+
+
+def _coerce_timestamp(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _load_evolution_logs() -> list[dict]:
+    from hedwig.config import EVOLUTION_LOG_PATH
+
+    if not EVOLUTION_LOG_PATH.exists():
+        return []
+
+    logs = []
+    for line in EVOLUTION_LOG_PATH.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            logs.append(payload)
+    return logs
+
+
+def _count_evolution_cycles() -> int:
+    return len(_load_evolution_logs())
+
+
+def _load_dashboard_stats() -> dict:
+    stats = _load_dashboard_activity_stats()
+    return {
+        "total_signals": int(stats.get("total_signals", 0) or 0),
+        "upvote_ratio": float(stats.get("upvote_ratio", 0.0) or 0.0),
+        "evolution_cycles": _count_evolution_cycles(),
+        "top_5_sources": list(stats.get("top_5_sources", []) or []),
+        "days_active": int(stats.get("days_active", 0) or 0),
+    }
+
+
 def _serialize_signal_export(signal: dict) -> dict:
     try:
         from hedwig.storage.supabase import SIGNAL_EXPORT_FIELDS
@@ -671,18 +824,7 @@ def _serialize_signal_export(signal: dict) -> dict:
 
 
 def _load_recent_evolution(limit: int = 5) -> list[dict]:
-    from hedwig.config import EVOLUTION_LOG_PATH
-    if not EVOLUTION_LOG_PATH.exists():
-        return []
-    logs = []
-    for line in EVOLUTION_LOG_PATH.read_text().strip().split("\n"):
-        if not line.strip():
-            continue
-        try:
-            logs.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return list(reversed(logs))[:limit]
+    return list(reversed(_load_evolution_logs()))[:limit]
 
 
 def _load_criteria() -> dict:
@@ -699,6 +841,35 @@ def _count_sources() -> int:
         return len(get_registered_sources())
     except Exception:
         return 0
+
+
+def _latest_run_timestamp(logs: list[dict], cycle_type: str) -> str | None:
+    latest: datetime | None = None
+    for log in logs:
+        if str(log.get("cycle_type", "")).lower() != cycle_type:
+            continue
+        timestamp = _coerce_timestamp(log.get("timestamp"))
+        if timestamp is None:
+            continue
+        if latest is None or timestamp > latest:
+            latest = timestamp
+    return latest.isoformat() if latest else None
+
+
+def _load_health_status(started_at: datetime | None = None) -> dict:
+    logs = _load_evolution_logs()
+    started = _coerce_timestamp(started_at)
+    uptime_seconds = 0
+    if started is not None:
+        uptime_seconds = max(int((_utcnow() - started).total_seconds()), 0)
+
+    return {
+        "last_daily_run": _latest_run_timestamp(logs, "daily"),
+        "last_weekly_run": _latest_run_timestamp(logs, "weekly"),
+        "evolution_cycle_count": len(logs),
+        "source_count": _count_sources(),
+        "uptime_seconds": uptime_seconds,
+    }
 
 
 def run(host: str = "127.0.0.1", port: int = 8765, saas: bool = False):
