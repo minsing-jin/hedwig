@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import html
+import re
+import subprocess
+import tempfile
 from calendar import timegm
 from datetime import datetime, timezone
-from typing import ClassVar, Optional
+from pathlib import Path
 
 import feedparser
 import httpx
@@ -21,6 +26,11 @@ AI_YOUTUBE_CHANNELS = [
     ("UCwBmNDEDLnVn2fRYHnaBaOg", "The AI Advantage"),
     ("UCM548bIwKK-m5FkKKJcBQhg", "Wes Roth"),
 ]
+
+TRANSCRIPT_MAX_CONCURRENCY = 8
+TRANSCRIPT_TIMEOUT_SECONDS = 5.0
+MAX_CONTENT_LENGTH = 5000
+TRANSCRIPT_LABEL = "Transcript:"
 
 
 @register_source
@@ -69,4 +79,103 @@ class YouTubeSource(Source):
                         ))
                 except Exception:
                     continue
-        return posts[:limit]
+        selected_posts = posts[:limit]
+        await self._enrich_posts_with_transcripts(selected_posts)
+        return selected_posts
+
+    async def _enrich_posts_with_transcripts(self, posts: list[RawPost]) -> None:
+        if not posts:
+            return
+
+        semaphore = asyncio.Semaphore(min(TRANSCRIPT_MAX_CONCURRENCY, len(posts)))
+
+        async def enrich(post: RawPost) -> None:
+            async with semaphore:
+                transcript = await self._fetch_video_transcript(post.url)
+                if transcript:
+                    post.content = self._append_transcript(post.content, transcript)
+
+        await asyncio.gather(*(enrich(post) for post in posts))
+
+    async def _fetch_video_transcript(
+        self,
+        url: str,
+        timeout: float = TRANSCRIPT_TIMEOUT_SECONDS,
+    ) -> str:
+        if not url:
+            return ""
+        return await asyncio.to_thread(self._download_video_transcript, url, timeout)
+
+    def _download_video_transcript(self, url: str, timeout: float) -> str:
+        try:
+            with tempfile.TemporaryDirectory(prefix="hedwig-ytdlp-") as temp_dir:
+                output_template = str(Path(temp_dir) / "%(id)s")
+                result = subprocess.run(
+                    [
+                        "yt-dlp",
+                        "--skip-download",
+                        "--write-subs",
+                        "--write-auto-subs",
+                        "--sub-langs",
+                        "en.*,en",
+                        "--sub-format",
+                        "vtt",
+                        "--output",
+                        output_template,
+                        url,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    return ""
+
+                for transcript_path in sorted(Path(temp_dir).glob("*.vtt")):
+                    transcript_text = transcript_path.read_text(
+                        encoding="utf-8",
+                        errors="ignore",
+                    )
+                    transcript = self._parse_vtt_transcript(transcript_text)
+                    if transcript:
+                        return transcript
+        except (FileNotFoundError, subprocess.SubprocessError, OSError):
+            return ""
+
+        return ""
+
+    def _parse_vtt_transcript(self, transcript: str) -> str:
+        parts: list[str] = []
+        previous = ""
+
+        for raw_line in transcript.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line in {"WEBVTT", TRANSCRIPT_LABEL}:
+                continue
+            if line.startswith(("Kind:", "Language:", "NOTE", "STYLE", "REGION")):
+                continue
+            if "-->" in line or line.isdigit():
+                continue
+
+            line = re.sub(r"<[^>]+>", "", line)
+            line = html.unescape(line).strip()
+            if not line or line == previous:
+                continue
+
+            parts.append(line)
+            previous = line
+
+        return " ".join(parts)
+
+    def _append_transcript(self, content: str, transcript: str) -> str:
+        if not transcript:
+            return content[:MAX_CONTENT_LENGTH]
+
+        if content:
+            combined = f"{content}\n\n{TRANSCRIPT_LABEL}\n{transcript}"
+        else:
+            combined = f"{TRANSCRIPT_LABEL}\n{transcript}"
+        return combined[:MAX_CONTENT_LENGTH]
