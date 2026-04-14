@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -202,6 +202,25 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         signals = _load_recent_signals(limit=50)
         return TEMPLATES.TemplateResponse(
             "signals.html", {"request": request, "signals": signals}
+        )
+
+    @app.get("/signals/export")
+    async def signals_export(request: Request):
+        if saas_mode:
+            from hedwig.saas.auth import require_auth
+
+            await require_auth(request)
+
+        signals = [
+            _serialize_signal_export(signal)
+            for signal in _load_latest_signals(limit=100)
+        ]
+        return Response(
+            content=json.dumps(signals, default=str),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": 'attachment; filename="signals-export.json"',
+            },
         )
 
     @app.post("/feedback/{signal_id}/{vote}")
@@ -600,6 +619,34 @@ def _load_recent_signals(limit: int = 20) -> list[dict]:
         return get_recent_signals(days=3)[:limit]
     except Exception:
         return []
+
+
+def _load_latest_signals(limit: int = 100) -> list[dict]:
+    try:
+        from hedwig.storage.supabase import get_latest_signals
+        return get_latest_signals(limit=limit)
+    except Exception:
+        return []
+
+
+def _serialize_signal_export(signal: dict) -> dict:
+    try:
+        from hedwig.storage.supabase import SIGNAL_EXPORT_FIELDS
+    except Exception:
+        SIGNAL_EXPORT_FIELDS = (
+            "id",
+            "platform",
+            "title",
+            "url",
+            "content",
+            "author",
+            "relevance_score",
+            "urgency",
+            "published_at",
+            "collected_at",
+        )
+
+    return {field: signal.get(field) for field in SIGNAL_EXPORT_FIELDS}
 
 
 def _load_recent_evolution(limit: int = 5) -> list[dict]:

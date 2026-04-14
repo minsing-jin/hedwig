@@ -18,6 +18,20 @@ from hedwig.models import (
 
 logger = logging.getLogger(__name__)
 
+SIGNAL_EXPORT_FIELDS = (
+    "id",
+    "platform",
+    "title",
+    "url",
+    "content",
+    "author",
+    "relevance_score",
+    "urgency",
+    "published_at",
+    "collected_at",
+)
+SIGNAL_EXPORT_SELECT = ",".join(SIGNAL_EXPORT_FIELDS)
+
 
 def _get_client():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -75,6 +89,25 @@ def get_recent_signals(days: int = 7) -> list[dict]:
         return result.data or []
     except Exception as e:
         logger.error(f"Failed to get recent signals: {e}")
+        return []
+
+
+def get_latest_signals(limit: int = 100) -> list[dict]:
+    if limit <= 0:
+        return []
+
+    client = _get_client()
+    try:
+        result = (
+            client.table("signals")
+            .select(SIGNAL_EXPORT_SELECT)
+            .order("collected_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to get latest signals: {e}")
         return []
 
 
