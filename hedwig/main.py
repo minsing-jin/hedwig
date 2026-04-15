@@ -308,7 +308,7 @@ async def run_daily(collect_only: bool = False):
         logger.info("Daily briefing sent")
 
     # 8. Save signals
-    from hedwig.storage.supabase import save_signals
+    from hedwig.storage import save_signals
     relevant = [s for s in scored if s.relevance_score >= 0.3]
     saved = save_signals(relevant)
     logger.info(f"Saved {saved} signals to Supabase")
@@ -346,7 +346,7 @@ async def run_weekly():
         logger.error(f"Missing env vars: {', '.join(missing)}")
         return
 
-    from hedwig.storage.supabase import get_recent_signals
+    from hedwig.storage import get_recent_signals
     recent = get_recent_signals(days=7)
     if not recent:
         logger.warning("No signals from the past week.")
@@ -404,7 +404,7 @@ async def run_evolution_daily():
         from hedwig.config import CRITERIA_PATH, EVOLUTION_LOG_PATH, OPENAI_API_KEY
         from hedwig.evolution import EvolutionEngine
         from hedwig.models import Feedback, VoteType
-        from hedwig.storage.supabase import get_feedback_since
+        from hedwig.storage import get_feedback_since
 
         llm = None
         if OPENAI_API_KEY:
@@ -443,7 +443,7 @@ async def run_evolution_weekly(total_signals: int = 0):
         from hedwig.evolution import EvolutionEngine
         from hedwig.memory import MemoryStore
         from hedwig.models import Feedback, VoteType
-        from hedwig.storage.supabase import get_feedback_since
+        from hedwig.storage import get_feedback_since
 
         llm = None
         if OPENAI_API_KEY:

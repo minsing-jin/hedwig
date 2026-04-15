@@ -179,7 +179,13 @@ class EnvManager:
         """Return current configuration status."""
         values = self.load()
 
-        required_ok = all(values.get(k) for k in self.REQUIRED_KEYS)
+        # SQLite local mode only requires OPENAI_API_KEY.
+        # Supabase mode requires URL+KEY as well.
+        storage_mode = values.get("HEDWIG_STORAGE", "").strip().lower()
+        if storage_mode in ("sqlite", "local"):
+            required_ok = bool(values.get("OPENAI_API_KEY"))
+        else:
+            required_ok = all(values.get(k) for k in self.REQUIRED_KEYS)
         slack_configured = bool(
             values.get("SLACK_WEBHOOK_ALERTS") or values.get("SLACK_WEBHOOK_DAILY")
         )
@@ -199,7 +205,11 @@ class EnvManager:
             or values.get("DISCORD_WEBHOOK_DAILY")
             or smtp_configured
         )
-        delivery_ok = alert_delivery_ok and daily_delivery_ok
+        # In SQLite local mode, delivery is optional — dashboard is the delivery
+        if storage_mode in ("sqlite", "local"):
+            delivery_ok = True
+        else:
+            delivery_ok = alert_delivery_ok and daily_delivery_ok
 
         return {
             "required_ok": required_ok,

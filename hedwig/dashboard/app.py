@@ -260,7 +260,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
         from hedwig.feedback import FeedbackCollector
         from hedwig.models import VoteType
-        from hedwig.storage.supabase import save_feedback
+        from hedwig.storage import save_feedback
 
         user_id: str | None = None
         if saas_mode:
@@ -326,7 +326,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def settings_view(request: Request):
         if saas_mode:
             from hedwig.saas.auth import require_auth, require_user_id
-            from hedwig.storage.supabase import load_user_source_settings
+            from hedwig.storage import load_user_source_settings
 
             user = await require_auth(request)
             user_id = require_user_id(user)
@@ -384,7 +384,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
         if saas_mode:
             from hedwig.saas.auth import require_auth, require_user_id
-            from hedwig.storage.supabase import save_user_source_settings
+            from hedwig.storage import save_user_source_settings
 
             user = await require_auth(request)
             user_id = require_user_id(user)
@@ -728,7 +728,7 @@ def _register_saas_routes(app: FastAPI):
 
 def _load_recent_signals(limit: int = 20) -> list[dict]:
     try:
-        from hedwig.storage.supabase import get_recent_signals
+        from hedwig.storage import get_recent_signals
         return get_recent_signals(days=3)[:limit]
     except Exception:
         return []
@@ -736,7 +736,7 @@ def _load_recent_signals(limit: int = 20) -> list[dict]:
 
 def _load_latest_signals(limit: int = 100) -> list[dict]:
     try:
-        from hedwig.storage.supabase import get_latest_signals
+        from hedwig.storage import get_latest_signals
         return get_latest_signals(limit=limit)
     except Exception:
         return []
@@ -744,7 +744,7 @@ def _load_latest_signals(limit: int = 100) -> list[dict]:
 
 def _search_signals(query: str, limit: int = 100) -> list[dict]:
     try:
-        from hedwig.storage.supabase import search_signals
+        from hedwig.storage import search_signals
         return search_signals(query=query, limit=limit)
     except Exception:
         return []
@@ -752,7 +752,7 @@ def _search_signals(query: str, limit: int = 100) -> list[dict]:
 
 def _load_dashboard_activity_stats(user_id: str | None = None) -> dict:
     try:
-        from hedwig.storage.supabase import get_dashboard_activity_stats
+        from hedwig.storage import get_dashboard_activity_stats
 
         if user_id is None:
             return get_dashboard_activity_stats()
@@ -826,7 +826,7 @@ def _load_dashboard_stats(user_id: str | None = None) -> dict:
 
 def _serialize_signal_export(signal: dict) -> dict:
     try:
-        from hedwig.storage.supabase import SIGNAL_EXPORT_FIELDS
+        from hedwig.storage import SIGNAL_EXPORT_FIELDS
     except Exception:
         SIGNAL_EXPORT_FIELDS = (
             "id",
