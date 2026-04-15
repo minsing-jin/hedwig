@@ -517,8 +517,14 @@ def main():
     parser.add_argument("--saas", action="store_true", help="Enable SaaS mode (landing, auth, billing)")
     parser.add_argument("--native", action="store_true", help="Run as native desktop app")
     parser.add_argument("--tray", action="store_true", help="Run as macOS menubar tray app")
+    parser.add_argument("--quickstart", action="store_true", help="Zero-config local mode (SQLite, only OpenAI key needed)")
     parser.add_argument("--port", type=int, default=8765, help="Dashboard port (default: 8765)")
     args = parser.parse_args()
+
+    if args.quickstart:
+        from hedwig.quickstart import run_quickstart
+        run_quickstart()
+        return
 
     if args.native:
         from hedwig.native import run_native
