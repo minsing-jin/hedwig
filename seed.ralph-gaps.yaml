@@ -1,0 +1,58 @@
+goal: >
+  Fill all implementation gaps between previous Ouroboros seeds/interviews and
+  the current Hedwig codebase. Each AC addresses a specific gap identified in
+  the audit (ontology fields unused, exit conditions unmeasured, webhook
+  parsed but not persisted, reliability scores static, etc.).
+
+constraints:
+  - Preserve all existing code and 321 passing tests
+  - "Tests must pass with pytest tests/ -v"
+  - Follow existing code style (Pydantic, async, type hints)
+  - Each AC produces working code with at least one test
+  - Do not modify seed.yaml or docs/interviews content
+  - Work directly on main branch (Claude Code authorized)
+  - Storage dispatcher routes to sqlite when no Supabase; don't break that
+
+acceptance_criteria:
+  - "Fill gap — Stripe webhook persistence: handle_webhook in hedwig/saas/billing.py currently parses events but does not persist. Update Supabase subscriptions table on checkout.session.completed (set tier, stripe_customer_id, stripe_subscription_id, status=active), customer.subscription.updated (status, current_period_end, cancel_at_period_end), customer.subscription.deleted (status=canceled). Add DB writer helper save_subscription_update in hedwig/storage/supabase.py plus equivalent no-op or sqlite stub in local.py. Write a unit test that feeds a fake checkout.session.completed event and asserts the DB writer is called with correct kwargs."
+  - "Fill gap — exit_condition instrumentation: seed v3.0 exit conditions reference 3 consecutive daily runs, 7 daily evolution cycles, 2 weekly cycles, upvote ratio week over week. Extend hedwig/storage/local.py and supabase.py with get_run_stats() returning dict of consecutive_daily_runs, total_daily_cycles, total_weekly_cycles, last_daily_at, last_weekly_at. Track last run timestamp in a run_history table created via new SQLite table + Supabase migration snippet appended to SCHEMA_SQL. Expose these through /health endpoint. Test: inserting 3 daily runs on consecutive days returns consecutive_daily_runs >= 3."
+  - "Fill gap — source reliability auto-evolution: hedwig/models.py SourcePlugin has reliability_score (0.0-1.0) but no code updates it. Add compute_source_reliability function in hedwig/evolution/engine.py that takes recent upvotes/downvotes grouped by platform and returns per-platform score in 0-1. Call it during weekly evolution, persist via a new helper save_source_reliability(scores) in storage layer. Test: given 10 upvotes + 0 downvotes for a platform, score should be close to 1.0; given 0 upvotes + 10 downvotes, score close to 0.0."
+  - "Fill gap — exploration_tags populated: ScoredSignal.exploration_tags exists but nothing populates it. Update hedwig/engine/scorer.py so the LLM scoring prompt asks for 1-3 short exploration tags per signal (new categories, adjacent areas) and attaches them to ScoredSignal.exploration_tags. Test: given a mock LLM response with exploration_tags, the scored signal carries them; given no tags, defaults to empty list."
+  - "Fill gap — native app icon + auto-update hook: seed v3.0 native_app mentions Hedwig icon and auto-update via GitHub releases. Add an assets/hedwig-icon.svg simple owl emoji vector and wire pywebview to load it. Add hedwig/native/updater.py with check_latest_version() that queries GitHub releases API and returns current vs latest version tuple, plus is_update_available bool. Test: mock GitHub API returning v99.0.0 when current is 3.0.0 → is_update_available True."
+  - "Fill gap — generative UI skeleton (future_work in seed): create hedwig/dashboard/generative.py with a GenerativeDashboard class that takes user criteria + recent signals and returns a JSON layout spec: ordered list of cards, each with type (stat|trend|opportunity|source_highlight) and data. Add template hedwig/dashboard/templates/generative.html that renders the JSON spec into cards. Add /dashboard/generative route returning the page. Initial implementation: rule-based layout (no LLM yet), just uses aggregated stats. Test: GET /dashboard/generative returns 200 and HTML contains a card for each signal type."
+  - "All previous 321 tests still pass with zero regressions after all above features are added"
+
+ontology_schema:
+  name: HedwigGapFill
+  description: Fill implementation gaps identified in audit against all prior seeds
+  fields:
+    - name: persistence_gap
+      type: object
+      description: Webhook persistence, reliability tracking, run history — DB writes missing
+    - name: ontology_gap
+      type: object
+      description: Pydantic fields that exist in models.py but no code populates them
+    - name: future_work_stub
+      type: object
+      description: Items marked future_work in seed that deserve a minimal first pass
+
+evaluation_principles:
+  - name: closes_audit_gap
+    description: Each AC addresses a specific gap listed in the audit
+    weight: 0.40
+  - name: test_coverage
+    description: Each gap-fill has at least one test
+    weight: 0.30
+  - name: zero_regression
+    description: All 321 existing tests still pass
+    weight: 0.30
+
+exit_conditions:
+  - name: all_gaps_closed
+    description: All 6 gap ACs implemented
+    criteria: pytest tests/ passes and new tests prove each gap is closed
+
+metadata:
+  version: "1.0.0"
+  project_name: "hedwig-gap-fill"
+  purpose: "Fill all gaps between Ouroboros seeds and current implementation"
