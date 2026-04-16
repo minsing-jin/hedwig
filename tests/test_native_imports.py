@@ -27,6 +27,12 @@ def test_import_native_tray():
     assert isinstance(hedwig.native.tray, types.ModuleType)
 
 
+def test_import_native_updater():
+    """hedwig.native.updater module imports without error."""
+    import hedwig.native.updater
+    assert isinstance(hedwig.native.updater, types.ModuleType)
+
+
 # ---------------------------------------------------------------------------
 # Public API surface tests
 # ---------------------------------------------------------------------------
@@ -76,6 +82,7 @@ NATIVE_MODULES = [
     "hedwig.native",
     "hedwig.native.app",
     "hedwig.native.tray",
+    "hedwig.native.updater",
 ]
 
 
