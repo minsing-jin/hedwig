@@ -48,6 +48,7 @@ For each post, return a JSON object with:
 - "urgency": "alert" | "digest" | "skip"
 - "why_relevant": 1-2 sentences explaining WHY this matters to this user (in Korean)
 - "devils_advocate": 1 sentence counter-perspective or hype warning (in Korean)
+- "exploration_tags": array of 1-3 short tags for adjacent areas or new categories worth exploring
 
 Respond with a JSON array. One object per post, in the same order as input.
 Be STRICT: most posts should score below 0.5. Only genuinely important signals get > 0.7.
@@ -63,6 +64,25 @@ def _format_posts_for_scoring(posts: list[RawPost]) -> str:
             f"    {p.content[:300]}"
         )
     return "\n\n".join(items)
+
+
+def _parse_exploration_tags(value: object) -> list[str]:
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+
+    tags: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        tag = item.strip()
+        if not tag:
+            continue
+        tags.append(tag)
+        if len(tags) == 3:
+            break
+    return tags
 
 
 async def score_posts(posts: list[RawPost]) -> list[ScoredSignal]:
@@ -112,6 +132,9 @@ async def score_posts(posts: list[RawPost]) -> list[ScoredSignal]:
                         urgency=urgency,
                         why_relevant=result.get("why_relevant", ""),
                         devils_advocate=result.get("devils_advocate", ""),
+                        exploration_tags=_parse_exploration_tags(
+                            result.get("exploration_tags", [])
+                        ),
                     )
                 )
         except Exception as e:
