@@ -590,6 +590,91 @@ def save_user_memory(memory: UserMemory) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# SaaS subscription persistence
+# ---------------------------------------------------------------------------
+
+def _coerce_subscription_timestamp(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, (int, float)):
+        dt = datetime.fromtimestamp(value, tz=timezone.utc)
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.isdigit():
+            dt = datetime.fromtimestamp(int(text), tz=timezone.utc)
+        else:
+            try:
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except ValueError:
+                return text
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+def save_subscription_update(
+    *,
+    user_id: str | None = None,
+    tier: str | None = None,
+    stripe_customer_id: str | None = None,
+    stripe_subscription_id: str | None = None,
+    status: str | None = None,
+    current_period_end: object | None = None,
+    cancel_at_period_end: bool | None = None,
+) -> bool:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        logger.warning("Skipping subscription persistence: Supabase credentials not configured")
+        return False
+
+    try:
+        normalized_user_id = _normalize_user_id(user_id)
+    except ValueError as e:
+        logger.error(f"Failed to save subscription update: {e}")
+        return False
+
+    row: dict[str, object] = {
+        "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    if normalized_user_id is not None:
+        row["user_id"] = normalized_user_id
+    if tier is not None:
+        row["tier"] = str(tier)
+    if stripe_customer_id is not None:
+        row["stripe_customer_id"] = str(stripe_customer_id)
+    if stripe_subscription_id is not None:
+        row["stripe_subscription_id"] = str(stripe_subscription_id)
+    if status is not None:
+        row["status"] = str(status)
+    if current_period_end is not None:
+        row["current_period_end"] = _coerce_subscription_timestamp(current_period_end)
+    if cancel_at_period_end is not None:
+        row["cancel_at_period_end"] = bool(cancel_at_period_end)
+
+    if normalized_user_id is None and "stripe_subscription_id" not in row:
+        logger.error("Failed to save subscription update: missing user_id and stripe_subscription_id")
+        return False
+
+    client = _get_client()
+    try:
+        if normalized_user_id is not None:
+            client.table("subscriptions").upsert(row, on_conflict="user_id").execute()
+        else:
+            client.table("subscriptions").update(row).eq(
+                "stripe_subscription_id",
+                row["stripe_subscription_id"],
+            ).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save subscription update: {e}")
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Schema SQL — run in Supabase SQL editor
 # ---------------------------------------------------------------------------
 
@@ -676,6 +761,19 @@ CREATE TABLE IF NOT EXISTS user_sources (
     UNIQUE(user_id, plugin_id)
 );
 
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE,
+    tier TEXT NOT NULL DEFAULT 'free',
+    status TEXT NOT NULL DEFAULT 'active',
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    current_period_end TIMESTAMPTZ,
+    cancel_at_period_end BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 ALTER TABLE signals
     ADD COLUMN IF NOT EXISTS user_id TEXT;
 
@@ -718,6 +816,7 @@ CREATE INDEX IF NOT EXISTS idx_feedback_signal ON feedback(signal_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON user_sources(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sources_plugin_id ON user_sources(plugin_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_evolution_timestamp ON evolution_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_criteria_version ON criteria_versions(version DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_week ON user_memory(snapshot_week);

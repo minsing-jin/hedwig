@@ -110,33 +110,49 @@ async def create_customer_portal_session(
 
 async def handle_webhook(event: dict) -> Optional[dict]:
     """Handle a Stripe webhook event. Returns subscription update or None."""
+    from hedwig.storage import save_subscription_update
+
     event_type = event.get("type")
     data = event.get("data", {}).get("object", {})
 
     if event_type == "checkout.session.completed":
         user_id = data.get("metadata", {}).get("user_id")
         tier = data.get("metadata", {}).get("tier")
-        return {
-            "action": "activate_subscription",
+        update = {
             "user_id": user_id,
             "tier": tier,
             "stripe_customer_id": data.get("customer"),
             "stripe_subscription_id": data.get("subscription"),
+            "status": "active",
         }
+        try:
+            save_subscription_update(**update)
+        except Exception:
+            logger.exception("Failed to persist Stripe checkout completion webhook")
+        return {"action": "activate_subscription", **update}
 
     elif event_type == "customer.subscription.updated":
-        return {
-            "action": "update_subscription",
+        update = {
             "stripe_subscription_id": data.get("id"),
             "status": data.get("status"),
             "current_period_end": data.get("current_period_end"),
             "cancel_at_period_end": data.get("cancel_at_period_end", False),
         }
+        try:
+            save_subscription_update(**update)
+        except Exception:
+            logger.exception("Failed to persist Stripe subscription update webhook")
+        return {"action": "update_subscription", **update}
 
     elif event_type == "customer.subscription.deleted":
-        return {
-            "action": "cancel_subscription",
+        update = {
             "stripe_subscription_id": data.get("id"),
+            "status": "canceled",
         }
+        try:
+            save_subscription_update(**update)
+        except Exception:
+            logger.exception("Failed to persist Stripe subscription deletion webhook")
+        return {"action": "cancel_subscription", **update}
 
     return None

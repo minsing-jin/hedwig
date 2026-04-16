@@ -351,6 +351,24 @@ def save_user_memory(memory: UserMemory) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# SaaS subscription persistence
+# ---------------------------------------------------------------------------
+
+def save_subscription_update(
+    *,
+    user_id: str | None = None,
+    tier: str | None = None,
+    stripe_customer_id: str | None = None,
+    stripe_subscription_id: str | None = None,
+    status: str | None = None,
+    current_period_end: object | None = None,
+    cancel_at_period_end: bool | None = None,
+) -> bool:
+    """SQLite stub for SaaS subscription updates in local mode."""
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Dashboard stats (single-user, no user scoping)
 # ---------------------------------------------------------------------------
 

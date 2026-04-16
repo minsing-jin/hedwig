@@ -73,3 +73,44 @@ async def test_webhook_does_not_require_stripe_key():
     # Should NOT raise — webhooks are inbound events, no key needed
     result = await handle_webhook({"type": "unknown.event", "data": {}})
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_webhook_checkout_persists_subscription_update(monkeypatch):
+    """checkout.session.completed persists subscription state via storage helper."""
+    from hedwig.saas.billing import handle_webhook
+    from hedwig.storage import supabase as supabase_mod
+
+    captured: dict[str, object] = {}
+
+    def fake_save_subscription_update(**kwargs):
+        captured.update(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        supabase_mod,
+        "save_subscription_update",
+        fake_save_subscription_update,
+    )
+
+    event = {
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {"user_id": "usr_789", "tier": "pro"},
+                "customer": "cus_abc",
+                "subscription": "sub_xyz",
+            }
+        },
+    }
+
+    result = await handle_webhook(event)
+
+    assert result is not None
+    assert captured == {
+        "user_id": "usr_789",
+        "tier": "pro",
+        "stripe_customer_id": "cus_abc",
+        "stripe_subscription_id": "sub_xyz",
+        "status": "active",
+    }
