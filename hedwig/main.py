@@ -404,7 +404,7 @@ async def run_evolution_daily():
         from hedwig.config import CRITERIA_PATH, EVOLUTION_LOG_PATH, OPENAI_API_KEY
         from hedwig.evolution import EvolutionEngine
         from hedwig.models import Feedback, VoteType
-        from hedwig.storage import get_feedback_since
+        from hedwig.storage import get_feedback_since, save_evolution_log
 
         llm = None
         if OPENAI_API_KEY:
@@ -430,6 +430,8 @@ async def run_evolution_daily():
         ]
 
         log = await engine.run_daily(feedbacks)
+        if not save_evolution_log(log):
+            logger.warning("Failed to persist daily evolution log to storage backend")
         logger.info(f"Daily evolution: {log.analysis_summary[:100]}")
     except Exception as e:
         logger.warning(f"Daily evolution skipped: {e}")
@@ -443,7 +445,7 @@ async def run_evolution_weekly(total_signals: int = 0):
         from hedwig.evolution import EvolutionEngine
         from hedwig.memory import MemoryStore
         from hedwig.models import Feedback, VoteType
-        from hedwig.storage import get_feedback_since
+        from hedwig.storage import get_feedback_since, save_evolution_log
 
         llm = None
         if OPENAI_API_KEY:
@@ -476,6 +478,8 @@ async def run_evolution_weekly(total_signals: int = 0):
             total_signals=total_signals,
             user_memory=user_memory,
         )
+        if not save_evolution_log(log):
+            logger.warning("Failed to persist weekly evolution log to storage backend")
 
         if new_memory:
             memory_store.save_snapshot(new_memory)

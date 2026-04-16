@@ -374,6 +374,71 @@ def _coerce_utc_date(value: object) -> date | None:
     return parsed.astimezone(timezone.utc).date()
 
 
+def _coerce_run_timestamp(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _empty_run_stats() -> dict[str, object]:
+    return {
+        "consecutive_daily_runs": 0,
+        "total_daily_cycles": 0,
+        "total_weekly_cycles": 0,
+        "last_daily_at": None,
+        "last_weekly_at": None,
+    }
+
+
+def _summarize_run_rows(rows: list[dict]) -> dict[str, object]:
+    stats = _empty_run_stats()
+    daily_times: list[datetime] = []
+    weekly_times: list[datetime] = []
+
+    for row in rows:
+        cycle_type = str(row.get("cycle_type") or "").strip().lower()
+        run_at = _coerce_run_timestamp(row.get("run_at"))
+        if run_at is None:
+            continue
+        if cycle_type == "daily":
+            daily_times.append(run_at)
+        elif cycle_type == "weekly":
+            weekly_times.append(run_at)
+
+    if daily_times:
+        stats["total_daily_cycles"] = len(daily_times)
+        stats["last_daily_at"] = max(daily_times).isoformat()
+
+        streak = 0
+        expected_day = None
+        for run_day in sorted({run_at.date() for run_at in daily_times}, reverse=True):
+            if expected_day is None or run_day == expected_day:
+                streak += 1
+                expected_day = run_day - timedelta(days=1)
+                continue
+            break
+        stats["consecutive_daily_runs"] = streak
+
+    if weekly_times:
+        stats["total_weekly_cycles"] = len(weekly_times)
+        stats["last_weekly_at"] = max(weekly_times).isoformat()
+
+    return stats
+
+
 def _build_dashboard_query(client, table_name: str, fields: str, user_id: str | None):
     normalized_user_id = _normalize_user_id(user_id)
     query = client.table(table_name).select(fields)
@@ -528,6 +593,8 @@ def save_user_source_settings(user_id: str, enabled: dict[str, bool]) -> bool:
 def save_evolution_log(log: EvolutionLog) -> bool:
     client = _get_client()
     try:
+        run_at = _coerce_run_timestamp(log.timestamp)
+        run_at_text = run_at.isoformat() if run_at is not None else datetime.now(tz=timezone.utc).isoformat()
         client.table("evolution_logs").insert({
             "cycle_type": log.cycle_type.value,
             "cycle_number": log.cycle_number,
@@ -538,12 +605,58 @@ def save_evolution_log(log: EvolutionLog) -> bool:
             "fitness_after": log.fitness_after,
             "kept": log.kept,
             "analysis_summary": log.analysis_summary,
-            "timestamp": log.timestamp.isoformat(),
+            "timestamp": run_at_text,
+        }).execute()
+        client.table("run_history").insert({
+            "cycle_type": log.cycle_type.value,
+            "run_at": run_at_text,
         }).execute()
         return True
     except Exception as e:
         logger.error(f"Failed to save evolution log: {e}")
         return False
+
+
+def get_run_stats() -> dict[str, object]:
+    client = _get_client()
+    rows: list[dict] = []
+
+    try:
+        rows = (
+            client.table("run_history")
+            .select("cycle_type,run_at")
+            .order("run_at", desc=True)
+            .limit(5000)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        logger.warning(f"Failed to read run_history stats: {e}")
+
+    if not rows:
+        try:
+            legacy_rows = (
+                client.table("evolution_logs")
+                .select("cycle_type,timestamp")
+                .order("timestamp", desc=True)
+                .limit(5000)
+                .execute()
+                .data
+                or []
+            )
+            rows = [
+                {
+                    "cycle_type": row.get("cycle_type"),
+                    "run_at": row.get("timestamp"),
+                }
+                for row in legacy_rows
+            ]
+        except Exception as e:
+            logger.error(f"Failed to get run stats: {e}")
+            return _empty_run_stats()
+
+    return _summarize_run_rows(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -774,6 +887,12 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS run_history (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    cycle_type TEXT NOT NULL CHECK (cycle_type IN ('daily', 'weekly')),
+    run_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 ALTER TABLE signals
     ADD COLUMN IF NOT EXISTS user_id TEXT;
 
@@ -817,6 +936,8 @@ CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sources_user_id ON user_sources(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sources_plugin_id ON user_sources(plugin_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_run_history_run_at ON run_history(run_at DESC);
+CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type);
 CREATE INDEX IF NOT EXISTS idx_evolution_timestamp ON evolution_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_criteria_version ON criteria_versions(version DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_week ON user_memory(snapshot_week);

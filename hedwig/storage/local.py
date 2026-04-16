@@ -89,6 +89,12 @@ def init_db():
             timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS run_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_type TEXT NOT NULL CHECK (cycle_type IN ('daily', 'weekly')),
+            run_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS criteria_versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             version INTEGER NOT NULL UNIQUE,
@@ -113,11 +119,78 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_signals_collected ON signals(collected_at DESC);
         CREATE INDEX IF NOT EXISTS idx_signals_relevance ON signals(relevance_score DESC);
         CREATE INDEX IF NOT EXISTS idx_feedback_captured ON feedback(captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_run_history_run_at ON run_history(run_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type);
         """)
 
 
 def _now() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _coerce_timestamp(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _empty_run_stats() -> dict[str, object]:
+    return {
+        "consecutive_daily_runs": 0,
+        "total_daily_cycles": 0,
+        "total_weekly_cycles": 0,
+        "last_daily_at": None,
+        "last_weekly_at": None,
+    }
+
+
+def _summarize_run_rows(rows: list[dict]) -> dict[str, object]:
+    stats = _empty_run_stats()
+    daily_times: list[datetime] = []
+    weekly_times: list[datetime] = []
+
+    for row in rows:
+        cycle_type = str(row.get("cycle_type") or "").strip().lower()
+        run_at = _coerce_timestamp(row.get("run_at"))
+        if run_at is None:
+            continue
+        if cycle_type == "daily":
+            daily_times.append(run_at)
+        elif cycle_type == "weekly":
+            weekly_times.append(run_at)
+
+    if daily_times:
+        stats["total_daily_cycles"] = len(daily_times)
+        stats["last_daily_at"] = max(daily_times).isoformat()
+
+        streak = 0
+        expected_day = None
+        for run_day in sorted({run_at.date() for run_at in daily_times}, reverse=True):
+            if expected_day is None or run_day == expected_day:
+                streak += 1
+                expected_day = run_day - timedelta(days=1)
+                continue
+            break
+        stats["consecutive_daily_runs"] = streak
+
+    if weekly_times:
+        stats["total_weekly_cycles"] = len(weekly_times)
+        stats["last_weekly_at"] = max(weekly_times).isoformat()
+
+    return stats
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +345,8 @@ def get_feedback_since(days: int = 1) -> list[dict]:
 def save_evolution_log(log: EvolutionLog) -> bool:
     init_db()
     try:
+        timestamp = _coerce_timestamp(log.timestamp)
+        run_at = timestamp.isoformat() if timestamp is not None else _now()
         with _conn() as conn:
             conn.execute("""
                 INSERT INTO evolution_logs (
@@ -288,12 +363,36 @@ def save_evolution_log(log: EvolutionLog) -> bool:
                 log.fitness_after,
                 1 if log.kept else 0,
                 log.analysis_summary,
-                log.timestamp.isoformat(),
+                run_at,
+            ))
+            conn.execute("""
+                INSERT INTO run_history (cycle_type, run_at)
+                VALUES (?,?)
+            """, (
+                log.cycle_type.value,
+                run_at,
             ))
         return True
     except Exception as e:
         logger.error(f"save_evolution_log: {e}")
         return False
+
+
+def get_run_stats() -> dict[str, object]:
+    init_db()
+    with _conn() as conn:
+        rows = conn.execute("""
+            SELECT cycle_type, run_at
+            FROM run_history
+            ORDER BY run_at DESC
+        """).fetchall()
+        if not rows:
+            rows = conn.execute("""
+                SELECT cycle_type, timestamp AS run_at
+                FROM evolution_logs
+                ORDER BY timestamp DESC
+            """).fetchall()
+    return _summarize_run_rows([dict(row) for row in rows])
 
 
 # ---------------------------------------------------------------------------

@@ -28,9 +28,14 @@ async def test_health_returns_public_json_snapshot(monkeypatch, saas_app):
     from httpx import ASGITransport, AsyncClient
 
     expected = {
+        "consecutive_daily_runs": 3,
+        "total_daily_cycles": 5,
+        "total_weekly_cycles": 2,
+        "last_daily_at": "2026-04-13T09:15:00+00:00",
+        "last_weekly_at": "2026-04-12T07:30:00+00:00",
         "last_daily_run": "2026-04-13T09:15:00+00:00",
         "last_weekly_run": "2026-04-12T07:30:00+00:00",
-        "evolution_cycle_count": 5,
+        "evolution_cycle_count": 7,
         "source_count": 17,
         "uptime_seconds": 123,
     }
@@ -49,22 +54,22 @@ async def test_health_returns_public_json_snapshot(monkeypatch, saas_app):
     assert resp.json() == expected
 
 
-def test_load_health_status_reads_last_daily_and_weekly_runs(monkeypatch, tmp_path):
-    """Health helper derives run timestamps from valid evolution log rows."""
-    from hedwig import config as config_mod
+def test_load_health_status_reads_run_stats_from_storage(monkeypatch):
+    """Health helper exposes run-history stats from the storage backend."""
     from hedwig.dashboard import app as dashboard_app
 
-    evolution_log_path = tmp_path / "evolution_log.jsonl"
-    evolution_log_path.write_text(
-        'not-json\n'
-        '{"cycle_type":"daily","cycle_number":0,"timestamp":"2026-04-10T06:00:00+00:00"}\n'
-        '{"cycle_type":"weekly","cycle_number":1,"timestamp":"2026-04-12T07:30:00+00:00"}\n'
-        '{"cycle_type":"daily","cycle_number":2,"timestamp":"2026-04-13T09:15:00+00:00"}\n',
-        encoding="utf-8",
-    )
-
-    monkeypatch.setattr(config_mod, "EVOLUTION_LOG_PATH", evolution_log_path)
     monkeypatch.setattr(dashboard_app, "_count_sources", lambda: 17)
+    monkeypatch.setattr(
+        dashboard_app,
+        "_load_run_stats",
+        lambda: {
+            "consecutive_daily_runs": 3,
+            "total_daily_cycles": 5,
+            "total_weekly_cycles": 2,
+            "last_daily_at": "2026-04-13T09:15:00+00:00",
+            "last_weekly_at": "2026-04-12T07:30:00+00:00",
+        },
+    )
     monkeypatch.setattr(
         dashboard_app,
         "_utcnow",
@@ -76,9 +81,14 @@ def test_load_health_status_reads_last_daily_and_weekly_runs(monkeypatch, tmp_pa
     )
 
     assert result == {
+        "consecutive_daily_runs": 3,
+        "total_daily_cycles": 5,
+        "total_weekly_cycles": 2,
+        "last_daily_at": "2026-04-13T09:15:00+00:00",
+        "last_weekly_at": "2026-04-12T07:30:00+00:00",
         "last_daily_run": "2026-04-13T09:15:00+00:00",
         "last_weekly_run": "2026-04-12T07:30:00+00:00",
-        "evolution_cycle_count": 3,
+        "evolution_cycle_count": 7,
         "source_count": 17,
         "uptime_seconds": 3662,
     }

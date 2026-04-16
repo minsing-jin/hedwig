@@ -14,7 +14,7 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -877,17 +877,97 @@ def _latest_run_timestamp(logs: list[dict], cycle_type: str) -> str | None:
     return latest.isoformat() if latest else None
 
 
-def _load_health_status(started_at: datetime | None = None) -> dict:
+def _empty_run_stats() -> dict[str, object]:
+    return {
+        "consecutive_daily_runs": 0,
+        "total_daily_cycles": 0,
+        "total_weekly_cycles": 0,
+        "last_daily_at": None,
+        "last_weekly_at": None,
+    }
+
+
+def _summarize_run_rows(rows: list[dict]) -> dict[str, object]:
+    stats = _empty_run_stats()
+    daily_times: list[datetime] = []
+    weekly_times: list[datetime] = []
+
+    for row in rows:
+        cycle_type = str(row.get("cycle_type") or "").strip().lower()
+        run_at = _coerce_timestamp(row.get("run_at"))
+        if run_at is None:
+            continue
+        if cycle_type == "daily":
+            daily_times.append(run_at)
+        elif cycle_type == "weekly":
+            weekly_times.append(run_at)
+
+    if daily_times:
+        stats["total_daily_cycles"] = len(daily_times)
+        stats["last_daily_at"] = max(daily_times).isoformat()
+
+        streak = 0
+        expected_day = None
+        for run_day in sorted({run_at.date() for run_at in daily_times}, reverse=True):
+            if expected_day is None or run_day == expected_day:
+                streak += 1
+                expected_day = run_day - timedelta(days=1)
+                continue
+            break
+        stats["consecutive_daily_runs"] = streak
+
+    if weekly_times:
+        stats["total_weekly_cycles"] = len(weekly_times)
+        stats["last_weekly_at"] = max(weekly_times).isoformat()
+
+    return stats
+
+
+def _legacy_run_stats() -> dict[str, object]:
     logs = _load_evolution_logs()
+    return _summarize_run_rows(
+        [
+            {
+                "cycle_type": log.get("cycle_type"),
+                "run_at": log.get("timestamp"),
+            }
+            for log in logs
+        ]
+    )
+
+
+def _load_run_stats() -> dict[str, object]:
+    stats = _legacy_run_stats()
+    try:
+        from hedwig.storage import get_run_stats
+
+        storage_stats = get_run_stats() or {}
+    except Exception:
+        return stats
+
+    merged = dict(stats)
+    for key in ("consecutive_daily_runs", "total_daily_cycles", "total_weekly_cycles"):
+        merged[key] = int(storage_stats.get(key, merged[key]) or 0)
+    for key in ("last_daily_at", "last_weekly_at"):
+        if storage_stats.get(key):
+            merged[key] = storage_stats[key]
+    return merged
+
+
+def _load_health_status(started_at: datetime | None = None) -> dict:
+    run_stats = _load_run_stats()
     started = _coerce_timestamp(started_at)
     uptime_seconds = 0
     if started is not None:
         uptime_seconds = max(int((_utcnow() - started).total_seconds()), 0)
 
     return {
-        "last_daily_run": _latest_run_timestamp(logs, "daily"),
-        "last_weekly_run": _latest_run_timestamp(logs, "weekly"),
-        "evolution_cycle_count": len(logs),
+        **run_stats,
+        "last_daily_run": run_stats["last_daily_at"],
+        "last_weekly_run": run_stats["last_weekly_at"],
+        "evolution_cycle_count": (
+            int(run_stats["total_daily_cycles"]) + int(run_stats["total_weekly_cycles"])
+        ),
         "source_count": _count_sources(),
         "uptime_seconds": uptime_seconds,
     }
