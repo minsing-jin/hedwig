@@ -26,7 +26,7 @@ def run_tray():
         raise SystemExit(1)
 
     # Start backend server in a thread
-    from hedwig.native.app import _run_server
+    from hedwig.native.app import _run_server, _start_update_check, get_native_icon_path
 
     DASHBOARD_URL = "http://127.0.0.1:8765"
     server_thread = threading.Thread(
@@ -35,10 +35,24 @@ def run_tray():
         daemon=True,
     )
     server_thread.start()
+    icon_path = get_native_icon_path()
+
+    def notify_update(current_version: str, latest_version: str) -> None:
+        rumps.notification(
+            "Hedwig Update Available",
+            f"v{latest_version} released",
+            f"Current version: v{current_version}",
+        )
 
     class HedwigTrayApp(rumps.App):
         def __init__(self):
-            super().__init__("🦉", title="🦉", quit_button=None)
+            super().__init__(
+                "Hedwig",
+                title="🦉",
+                icon=str(icon_path) if icon_path is not None else None,
+                quit_button=None,
+            )
+            _start_update_check(notify_update=notify_update)
             self.menu = [
                 "Open Dashboard",
                 "Run Daily Pipeline",

@@ -187,6 +187,57 @@ def get_recent_signals(days: int = 7) -> list[dict]:
         return []
 
 
+def get_signal_platforms(signal_ids: list[str]) -> dict[str, str]:
+    normalized_ids = sorted({str(signal_id).strip() for signal_id in signal_ids if str(signal_id).strip()})
+    if not normalized_ids:
+        return {}
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return {}
+
+    try:
+        client = _get_client()
+    except Exception as e:
+        logger.error(f"Failed to create Supabase client for signal platform lookup: {e}")
+        return {}
+
+    rows: list[dict] = []
+    try:
+        id_rows = (
+            client.table("signals")
+            .select("id,external_id,platform")
+            .in_("id", normalized_ids)
+            .execute()
+            .data
+            or []
+        )
+        external_rows = (
+            client.table("signals")
+            .select("id,external_id,platform")
+            .in_("external_id", normalized_ids)
+            .execute()
+            .data
+            or []
+        )
+        rows = [*id_rows, *external_rows]
+    except Exception as e:
+        logger.error(f"Failed to resolve signal platforms: {e}")
+        return {}
+
+    mapping: dict[str, str] = {}
+    for row in rows:
+        platform = str(row.get("platform") or "").strip()
+        if not platform:
+            continue
+        signal_id = str(row.get("id") or "").strip()
+        external_id = str(row.get("external_id") or "").strip()
+        if signal_id:
+            mapping[signal_id] = platform
+        if external_id:
+            mapping[external_id] = platform
+    return mapping
+
+
 def get_latest_signals(limit: int = 100) -> list[dict]:
     if limit <= 0:
         return []
@@ -703,6 +754,75 @@ def save_user_memory(memory: UserMemory) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Source reliability
+# ---------------------------------------------------------------------------
+
+def save_source_reliability(scores: dict[str, float]) -> bool:
+    if not scores:
+        return True
+
+    client = _get_client()
+    rows = []
+    updated_at = datetime.now(tz=timezone.utc).isoformat()
+    for platform, score in scores.items():
+        platform_name = str(platform or "").strip()
+        if not platform_name:
+            continue
+        rows.append(
+            {
+                "platform": platform_name,
+                "reliability_score": max(0.0, min(1.0, float(score))),
+                "updated_at": updated_at,
+            }
+        )
+
+    if not rows:
+        return True
+
+    try:
+        client.table("source_reliability").upsert(
+            rows,
+            on_conflict="platform",
+        ).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save source reliability: {e}")
+        return False
+
+
+def get_source_reliability() -> dict[str, float]:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return {}
+
+    try:
+        client = _get_client()
+    except Exception as e:
+        logger.error(f"Failed to create Supabase client for source reliability lookup: {e}")
+        return {}
+
+    try:
+        rows = (
+            client.table("source_reliability")
+            .select("platform,reliability_score")
+            .order("updated_at", desc=True)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as e:
+        logger.error(f"Failed to get source reliability: {e}")
+        return {}
+
+    scores: dict[str, float] = {}
+    for row in rows:
+        platform = str(row.get("platform") or "").strip()
+        if not platform:
+            continue
+        scores[platform] = max(0.0, min(1.0, float(row.get("reliability_score") or 0.0)))
+    return scores
+
+
+# ---------------------------------------------------------------------------
 # SaaS subscription persistence
 # ---------------------------------------------------------------------------
 
@@ -865,6 +985,12 @@ CREATE TABLE IF NOT EXISTS user_memory (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS source_reliability (
+    platform TEXT PRIMARY KEY,
+    reliability_score FLOAT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS user_sources (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -941,4 +1067,5 @@ CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type)
 CREATE INDEX IF NOT EXISTS idx_evolution_timestamp ON evolution_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_criteria_version ON criteria_versions(version DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_week ON user_memory(snapshot_week);
+CREATE INDEX IF NOT EXISTS idx_source_reliability_updated_at ON source_reliability(updated_at DESC);
 """

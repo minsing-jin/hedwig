@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Hedwig — Generative Dashboard{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>Generative Dashboard</h1>
+  <p class="subtitle">Rule-based layout scaffold built from recent signals and current criteria.</p>
+</div>
+
+<div class="generative-grid">
+  {% for card in layout_spec.cards %}
+  <article class="card generative-card {{ card.type }}" data-card-type="{{ card.type }}">
+    {% if card.type == "stat" %}
+    <div class="card-kicker">Stat</div>
+    <h2>{{ card.data.title }}</h2>
+    <div class="generative-metric">{{ card.data.total_signals }}</div>
+    <p class="muted">Tracked signals: {{ card.data.signals_considered }} · Upvote ratio: {{ "%.0f"|format((card.data.upvote_ratio or 0) * 100) }}%</p>
+    <p class="muted">Focus: {{ card.data.focus_summary }}</p>
+    {% elif card.type == "trend" %}
+    <div class="card-kicker">Trend</div>
+    <h2>{{ card.data.source }}</h2>
+    <p>{{ card.data.summary }}</p>
+    <p class="muted">{{ card.data.count }} signals · {{ card.data.share_percent }}% of recent activity</p>
+    {% if card.data.examples %}
+    <ul class="generative-list">
+      {% for title in card.data.examples %}
+      <li>{{ title }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% elif card.type == "opportunity" %}
+    <div class="card-kicker">Opportunity</div>
+    <h2>
+      {% if card.data.url %}
+      <a href="{{ card.data.url }}" target="_blank">{{ card.data.title }}</a>
+      {% else %}
+      {{ card.data.title }}
+      {% endif %}
+    </h2>
+    <p>{{ card.data.note }}</p>
+    <p class="muted">{{ card.data.source }} · relevance {{ "%.2f"|format(card.data.relevance_score or 0) }}</p>
+    {% elif card.type == "source_highlight" %}
+    <div class="card-kicker">Source Highlight</div>
+    <h2>{{ card.data.source }}</h2>
+    <p>{{ card.data.signal_count }} signals in the recent window · {{ card.data.share_percent }}% share</p>
+    {% if card.data.sample_titles %}
+    <ul class="generative-list">
+      {% for title in card.data.sample_titles %}
+      <li>{{ title }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No source examples yet.</p>
+    {% endif %}
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+
+<script id="generative-layout-spec" type="application/json">{{ layout_spec | tojson }}</script>
+
+{% endblock %}

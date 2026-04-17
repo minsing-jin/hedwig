@@ -30,6 +30,33 @@ from hedwig.models import (
 
 logger = logging.getLogger(__name__)
 
+
+def compute_source_reliability(
+    platform_feedback_counts: dict[str, dict[str, int | float]],
+) -> dict[str, float]:
+    """Convert recent per-platform up/down vote counts into 0.0-1.0 reliability scores."""
+    scores: dict[str, float] = {}
+
+    for platform, counts in platform_feedback_counts.items():
+        platform_name = str(platform or "").strip()
+        if not platform_name:
+            continue
+
+        upvotes = int(
+            counts.get("upvotes", counts.get(VoteType.UP.value, 0)) or 0
+        )
+        downvotes = int(
+            counts.get("downvotes", counts.get(VoteType.DOWN.value, 0)) or 0
+        )
+        total_votes = upvotes + downvotes
+        if total_votes <= 0:
+            continue
+
+        score = upvotes / total_votes
+        scores[platform_name] = max(0.0, min(1.0, score))
+
+    return scores
+
 DAILY_EVOLUTION_PROMPT = """\
 You are Hedwig's Evolution Engine running the DAILY evolution cycle.
 
@@ -207,11 +234,23 @@ class EvolutionEngine:
         total_signals: int,
         user_memory: Optional[UserMemory] = None,
         source_scores: Optional[dict[str, float]] = None,
+        platform_feedback_counts: Optional[dict[str, dict[str, int | float]]] = None,
     ) -> tuple[EvolutionLog, Optional[UserMemory]]:
         """Run weekly deep evolution — all dimensions."""
         current_criteria = self._load_criteria()
         version_before = current_criteria.get("_version", 0)
         fitness = self._compute_fitness(week_feedbacks)
+        computed_source_scores = compute_source_reliability(platform_feedback_counts or {})
+        if computed_source_scores:
+            source_scores = computed_source_scores
+
+            try:
+                import hedwig.storage as storage
+
+                if not storage.save_source_reliability(source_scores):
+                    logger.warning("Failed to persist source reliability scores to storage backend")
+            except Exception as e:
+                logger.warning(f"Failed to persist source reliability scores: {e}")
 
         # Compute fitness trend from recent logs
         recent_logs = self._load_recent_logs(7)

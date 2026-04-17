@@ -116,11 +116,18 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS source_reliability (
+            platform TEXT PRIMARY KEY,
+            reliability_score REAL NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_collected ON signals(collected_at DESC);
         CREATE INDEX IF NOT EXISTS idx_signals_relevance ON signals(relevance_score DESC);
         CREATE INDEX IF NOT EXISTS idx_feedback_captured ON feedback(captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_run_history_run_at ON run_history(run_at DESC);
         CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type);
+        CREATE INDEX IF NOT EXISTS idx_source_reliability_updated_at ON source_reliability(updated_at DESC);
         """)
 
 
@@ -248,6 +255,38 @@ def get_recent_signals(days: int = 7) -> list[dict]:
             LIMIT 200
         """, (cutoff,)).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_signal_platforms(signal_ids: list[str]) -> dict[str, str]:
+    """Resolve signal ids or external ids to their source platform."""
+    normalized_ids = sorted({str(signal_id).strip() for signal_id in signal_ids if str(signal_id).strip()})
+    if not normalized_ids:
+        return {}
+
+    init_db()
+    placeholders = ",".join("?" for _ in normalized_ids)
+    query = f"""
+        SELECT id, external_id, platform
+        FROM signals
+        WHERE CAST(id AS TEXT) IN ({placeholders})
+           OR external_id IN ({placeholders})
+    """
+
+    with _conn() as conn:
+        rows = conn.execute(query, normalized_ids + normalized_ids).fetchall()
+
+    mapping: dict[str, str] = {}
+    for row in rows:
+        platform = str(row["platform"] or "").strip()
+        if not platform:
+            continue
+        signal_id = str(row["id"] or "").strip()
+        external_id = str(row["external_id"] or "").strip()
+        if signal_id:
+            mapping[signal_id] = platform
+        if external_id:
+            mapping[external_id] = platform
+    return mapping
 
 
 def get_latest_signals(limit: int = 100) -> list[dict]:
@@ -447,6 +486,61 @@ def save_user_memory(memory: UserMemory) -> bool:
     except Exception as e:
         logger.error(f"save_user_memory: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Source reliability
+# ---------------------------------------------------------------------------
+
+def save_source_reliability(scores: dict[str, float]) -> bool:
+    init_db()
+    if not scores:
+        return True
+
+    try:
+        updated_at = _now()
+        with _conn() as conn:
+            for platform, score in scores.items():
+                platform_name = str(platform or "").strip()
+                if not platform_name:
+                    continue
+                conn.execute("""
+                    INSERT INTO source_reliability (platform, reliability_score, updated_at)
+                    VALUES (?,?,?)
+                    ON CONFLICT(platform) DO UPDATE SET
+                        reliability_score = excluded.reliability_score,
+                        updated_at = excluded.updated_at
+                """, (
+                    platform_name,
+                    max(0.0, min(1.0, float(score))),
+                    updated_at,
+                ))
+        return True
+    except Exception as e:
+        logger.error(f"save_source_reliability: {e}")
+        return False
+
+
+def get_source_reliability() -> dict[str, float]:
+    init_db()
+    try:
+        with _conn() as conn:
+            rows = conn.execute("""
+                SELECT platform, reliability_score
+                FROM source_reliability
+                ORDER BY updated_at DESC
+            """).fetchall()
+    except Exception as e:
+        logger.error(f"get_source_reliability: {e}")
+        return {}
+
+    scores: dict[str, float] = {}
+    for row in rows:
+        platform = str(row["platform"] or "").strip()
+        if not platform:
+            continue
+        scores[platform] = max(0.0, min(1.0, float(row["reliability_score"])))
+    return scores
 
 
 # ---------------------------------------------------------------------------

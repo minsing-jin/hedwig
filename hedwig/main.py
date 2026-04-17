@@ -70,6 +70,7 @@ async def agent_collect(llm_client=None) -> tuple[list, dict]:
     from hedwig.config import CRITERIA_PATH, USER_MEMORY_PATH
     from hedwig.engine.agent_collector import AgentCollector
     from hedwig.memory import MemoryStore
+    from hedwig.storage import get_source_reliability
 
     logger.info("Agent generating collection strategy...")
 
@@ -83,9 +84,11 @@ async def agent_collect(llm_client=None) -> tuple[list, dict]:
             f"Rejected: {latest_memory.rejected_topics}\n"
             f"Trajectory: {latest_memory.taste_trajectory}"
         )
+    source_reliability = get_source_reliability()
 
     collector = AgentCollector(llm_client=llm_client, criteria_path=CRITERIA_PATH)
     strategy = await collector.generate_strategy(
+        source_reliability=source_reliability,
         user_memory_summary=memory_summary,
     )
 
@@ -445,7 +448,7 @@ async def run_evolution_weekly(total_signals: int = 0):
         from hedwig.evolution import EvolutionEngine
         from hedwig.memory import MemoryStore
         from hedwig.models import Feedback, VoteType
-        from hedwig.storage import get_feedback_since, save_evolution_log
+        from hedwig.storage import get_feedback_since, get_signal_platforms, save_evolution_log
 
         llm = None
         if OPENAI_API_KEY:
@@ -461,6 +464,29 @@ async def run_evolution_weekly(total_signals: int = 0):
 
         # Load week's feedback
         raw_feedback = get_feedback_since(days=7)
+        signal_ids = [
+            str(row.get("signal_id") or "").strip()
+            for row in raw_feedback
+            if str(row.get("signal_id") or "").strip()
+        ]
+        signal_platform_by_id = get_signal_platforms(signal_ids)
+        platform_feedback_counts: dict[str, dict[str, int]] = {}
+        for row in raw_feedback:
+            signal_id = str(row.get("signal_id") or "").strip()
+            platform = signal_platform_by_id.get(signal_id)
+            if not platform:
+                continue
+
+            vote = str(row.get("vote") or "").strip().lower()
+            counts = platform_feedback_counts.setdefault(
+                platform,
+                {"upvotes": 0, "downvotes": 0},
+            )
+            if vote == VoteType.UP.value:
+                counts["upvotes"] += 1
+            elif vote == VoteType.DOWN.value:
+                counts["downvotes"] += 1
+
         feedbacks = [
             Feedback(
                 signal_id=f.get("signal_id", ""),
@@ -477,6 +503,7 @@ async def run_evolution_weekly(total_signals: int = 0):
             week_feedbacks=feedbacks,
             total_signals=total_signals,
             user_memory=user_memory,
+            platform_feedback_counts=platform_feedback_counts,
         )
         if not save_evolution_log(log):
             logger.warning("Failed to persist weekly evolution log to storage backend")

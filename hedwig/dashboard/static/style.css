@@ -623,6 +623,55 @@ body {
   border-color: var(--primary);
 }
 
+/* Generative dashboard */
+.generative-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.generative-card {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.generative-card h2 {
+  font-size: 1.25rem;
+}
+
+.generative-card a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.generative-card a:hover {
+  color: var(--primary);
+}
+
+.card-kicker {
+  color: var(--primary);
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.generative-metric {
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.generative-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-left: 1.1rem;
+  color: var(--text-dim);
+}
+
 /* Criteria editor */
 .criteria-editor {
   width: 100%;
@@ -760,6 +809,7 @@ body {
 @media (max-width: 768px) {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }
+  .generative-grid { grid-template-columns: 1fr; }
   .nav { flex-direction: column; gap: 1rem; }
   .auth-card { padding: 1.5rem; }
 }

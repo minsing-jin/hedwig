@@ -24,11 +24,14 @@ from fastapi.templating import Jinja2Templates
 
 from hedwig.dashboard.db_setup import create_tables, get_schema_sql
 from hedwig.dashboard.env_manager import EnvManager
+from hedwig.dashboard.generative import GenerativeDashboard
 from hedwig.dashboard.validator import test_all
 
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parents[1]
+ASSETS_DIR = REPO_ROOT / "assets"
 TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
@@ -41,6 +44,8 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     """
     app = FastAPI(title="Hedwig Dashboard", version="3.0.0")
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+    if ASSETS_DIR.exists():
+        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
     env_manager = EnvManager(env_path=Path.cwd() / ".env")
     app.state.saas_mode = saas_mode
@@ -246,6 +251,21 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             return JSONResponse(_load_dashboard_stats(user_id=require_user_id(user)))
 
         return JSONResponse(_load_dashboard_stats())
+
+    @app.get("/dashboard/generative", response_class=HTMLResponse)
+    async def dashboard_generative(request: Request):
+        layout_spec = GenerativeDashboard().build_layout(
+            user_criteria=_load_criteria(),
+            recent_signals=_load_recent_signals(limit=30),
+            dashboard_stats=_load_dashboard_stats(),
+        )
+        return TEMPLATES.TemplateResponse(
+            "generative.html",
+            {
+                "request": request,
+                "layout_spec": layout_spec,
+            },
+        )
 
     @app.get("/health")
     async def health(request: Request):

@@ -13,14 +13,21 @@ Run with:
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
+
+import httpx
+
+from hedwig.native.updater import check_latest_version
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8766  # different from dashboard default to avoid conflicts
 DEFAULT_HOST = "127.0.0.1"
+NATIVE_ICON_PATH = Path(__file__).resolve().parents[2] / "assets" / "hedwig-icon.svg"
 
 
 def _run_server(host: str, port: int):
@@ -29,6 +36,57 @@ def _run_server(host: str, port: int):
     from hedwig.dashboard.app import create_app
 
     uvicorn.run(create_app(), host=host, port=port, log_level="warning")
+
+
+def get_native_icon_path() -> Path | None:
+    """Return the bundled native icon path when the asset exists."""
+    if NATIVE_ICON_PATH.exists():
+        return NATIVE_ICON_PATH
+    return None
+
+
+def _apply_macos_app_icon(icon_path: Path) -> None:
+    """Apply the native app icon through AppKit on macOS."""
+    if sys.platform != "darwin":
+        return
+
+    try:
+        import AppKit
+    except ImportError:
+        logger.info("PyObjC not installed; macOS app bundles should set the icon during packaging")
+        return
+
+    image = AppKit.NSImage.alloc().initWithContentsOfFile_(str(icon_path))
+    if image is None:
+        logger.warning("Unable to load native icon asset from %s", icon_path)
+        return
+
+    AppKit.NSApplication.sharedApplication().setApplicationIconImage_(image)
+
+
+def _notify_update_available(current_version: str, latest_version: str) -> None:
+    message = (
+        f"Update available: Hedwig v{latest_version} is available "
+        f"(current v{current_version})"
+    )
+    logger.info(message)
+    print(f"🦉 {message}")
+
+
+def _start_update_check(
+    notify_update: Callable[[str, str], None] | None = None,
+) -> threading.Thread:
+    """Check GitHub releases in the background during native startup."""
+
+    def _worker() -> None:
+        current_version, latest_version, is_update_available = check_latest_version()
+        if is_update_available:
+            notifier = notify_update or _notify_update_available
+            notifier(current_version, latest_version)
+
+    update_thread = threading.Thread(target=_worker, daemon=True, name="hedwig-update-check")
+    update_thread.start()
+    return update_thread
 
 
 def run_native(
@@ -57,7 +115,6 @@ def run_native(
     server_thread.start()
 
     # Wait for server to be ready
-    import httpx
     url = f"http://{host}:{port}"
     for _ in range(50):  # 5 seconds max
         try:
@@ -68,9 +125,12 @@ def run_native(
             time.sleep(0.1)
 
     print(f"🦉 Opening Hedwig native window...")
+    icon_path = get_native_icon_path()
+    if icon_path is not None:
+        _apply_macos_app_icon(icon_path)
 
     # Create native window
-    window = webview.create_window(
+    webview.create_window(
         title="Hedwig — AI Signal Radar",
         url=url,
         width=width,
@@ -80,6 +140,7 @@ def run_native(
         background_color="#0d0f14",
     )
 
+    _start_update_check()
     webview.start(debug=False)
 
 
