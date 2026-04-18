@@ -51,13 +51,10 @@ def test_auto_context_module_imports():
 def test_models_exports():
     """hedwig.saas.models exports the expected Pydantic models and enums."""
     from hedwig.saas.models import (
-        Subscription,
         SubscriptionStatus,
         SubscriptionTier,
         TIER_LIMITS,
         TIER_PRICES,
-        Usage,
-        UserProfile,
     )
 
     # Enums have expected members

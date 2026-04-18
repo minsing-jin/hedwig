@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from hedwig.models import Platform, RawPost
 from hedwig.engine.pre_scorer import (

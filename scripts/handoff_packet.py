@@ -7,7 +7,6 @@ and execute against.
 """
 from __future__ import annotations
 
-import json
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path

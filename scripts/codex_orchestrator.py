@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import subprocess
 import sys
 import time
@@ -314,7 +313,7 @@ def main():
     summary_path = RESULTS_DIR / f"summary_{datetime.now(tz=timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
     summary_path.write_text(json.dumps(summary, indent=2))
 
-    logger.info(f"\n=== Orchestrator Complete ===")
+    logger.info("\n=== Orchestrator Complete ===")
     logger.info(f"Passed: {summary['passed']}/{summary['total']}")
     logger.info(f"Failed: {summary['failed']}/{summary['total']}")
     logger.info(f"Summary: {summary_path}")

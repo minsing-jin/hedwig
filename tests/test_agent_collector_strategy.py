@@ -7,7 +7,6 @@ that are compatible with collect_with_strategy().
 from __future__ import annotations
 
 import asyncio
-import pytest
 
 from hedwig.engine.agent_collector import AgentCollector
 
