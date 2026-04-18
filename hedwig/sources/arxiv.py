@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from calendar import timegm
 from datetime import datetime, timezone
-from typing import Optional
 from xml.etree import ElementTree
 
 import httpx

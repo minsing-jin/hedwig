@@ -13,7 +13,6 @@ import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 
 from hedwig.models import (
     CriteriaVersion,

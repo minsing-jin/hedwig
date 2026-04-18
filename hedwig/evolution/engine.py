@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import yaml
 
 from hedwig.models import (
-    CriteriaVersion,
     EvolutionCycleType,
     EvolutionLog,
     Feedback,
@@ -254,7 +252,7 @@ class EvolutionEngine:
 
         # Compute fitness trend from recent logs
         recent_logs = self._load_recent_logs(7)
-        fitness_values = [l.get("fitness_before", 0) for l in recent_logs if l.get("fitness_before")]
+        fitness_values = [log.get("fitness_before", 0) for log in recent_logs if log.get("fitness_before")]
         fitness_trend = f"{fitness_values}" if fitness_values else "no data"
 
         nl_feedback = [f.natural_language for f in week_feedbacks if f.natural_language]

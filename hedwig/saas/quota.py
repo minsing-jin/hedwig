@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from hedwig.saas.models import Subscription, SubscriptionTier, TIER_LIMITS, Usage
+from hedwig.saas.models import Subscription, TIER_LIMITS
 
 logger = logging.getLogger(__name__)
 

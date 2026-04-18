@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
 
 from supabase import create_client
 

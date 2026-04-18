@@ -17,9 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
 from hedwig.models import ScoredSignal, UrgencyLevel
 

@@ -15,7 +15,6 @@ from __future__ import annotations
 import math
 import re
 from datetime import datetime, timezone
-from typing import Optional
 
 from hedwig.models import RawPost
 

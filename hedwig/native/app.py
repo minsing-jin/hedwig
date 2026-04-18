@@ -124,7 +124,7 @@ def run_native(
         except Exception:
             time.sleep(0.1)
 
-    print(f"🦉 Opening Hedwig native window...")
+    print("🦉 Opening Hedwig native window...")
     icon_path = get_native_icon_path()
     if icon_path is not None:
         _apply_macos_app_icon(icon_path)

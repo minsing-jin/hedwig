@@ -8,10 +8,8 @@ Run with:
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -544,7 +542,7 @@ def _register_saas_routes(app: FastAPI):
                     sns_handles[platform] = value
 
         extra_links_raw = form.get("extra_links", "")
-        extra_links = [l.strip() for l in extra_links_raw.split("\n") if l.strip()]
+        extra_links = [link.strip() for link in extra_links_raw.split("\n") if link.strip()]
 
         # Use operator's OpenAI key
         try:
@@ -660,7 +658,7 @@ def _register_saas_routes(app: FastAPI):
 
     @app.get("/billing/portal")
     async def billing_portal(request: Request):
-        user = await saas_auth.require_auth(request)
+        await saas_auth.require_auth(request)
         # TODO: look up stripe_customer_id from subscriptions table
         return JSONResponse({"ok": True, "message": "Portal route placeholder"})
 
@@ -676,7 +674,7 @@ def _register_saas_routes(app: FastAPI):
         sources_active = _count_sources()
 
         try:
-            user = await saas_auth.get_current_user(request)
+            await saas_auth.get_current_user(request)
         except Exception:
             pass
 
