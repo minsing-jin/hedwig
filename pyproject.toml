@@ -32,3 +32,26 @@ hedwig = "hedwig.main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+no_implicit_optional = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ""
+
+[tool.coverage.run]
+source = ["hedwig"]
+omit = [
+    "hedwig/native/*",
+    "hedwig/dashboard/db_setup.py",
+]
+
+[tool.coverage.report]
+fail_under = 40
+show_missing = false
+skip_empty = true
