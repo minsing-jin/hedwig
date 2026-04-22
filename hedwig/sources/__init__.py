@@ -3,6 +3,7 @@
 # Import all builtin sources to trigger @register_source decorators
 from hedwig.sources import (  # noqa: F401
     arxiv,
+    arxiv_recsys,
     bluesky,
     geeknews,
     github_trending,
@@ -11,6 +12,7 @@ from hedwig.sources import (  # noqa: F401
     linkedin,
     newsletter,
     papers_with_code,
+    podcast,
     polymarket,
     reddit,
     semantic_scholar,

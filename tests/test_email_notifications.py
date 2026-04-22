@@ -209,6 +209,8 @@ async def test_email_alert_refuses_authenticated_smtp_without_starttls(monkeypat
 @pytest.mark.asyncio
 async def test_run_daily_sends_email_for_alert_signals(monkeypatch):
     """run_daily should fan alert-level signals into the SMTP notifier."""
+    # This legacy test mocks the single-stage scorer; opt out of v3 default ensemble.
+    monkeypatch.setenv("HEDWIG_PIPELINE", "single")
     from hedwig import config as config_mod
     from hedwig.delivery import discord as discord_mod
     from hedwig.delivery import email as email_mod
@@ -280,6 +282,8 @@ async def test_run_daily_sends_email_for_alert_signals(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_daily_sends_email_for_digest_only_briefings(monkeypatch):
     """run_daily should use SMTP for digest-only daily briefings when SMTP is standalone."""
+    # This legacy test mocks the single-stage scorer; opt out of v3 default ensemble.
+    monkeypatch.setenv("HEDWIG_PIPELINE", "single")
     from hedwig import config as config_mod
     from hedwig.delivery import discord as discord_mod
     from hedwig.delivery import email as email_mod

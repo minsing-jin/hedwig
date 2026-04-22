@@ -29,6 +29,7 @@ class Platform(str, Enum):
     PAPERS_WITH_CODE = "papers_with_code"
     WEB_SEARCH = "web_search"
     NEWSLETTER = "newsletter"
+    PODCAST = "podcast"
     CUSTOM = "custom"
 
 

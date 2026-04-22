@@ -10,7 +10,9 @@ load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CRITERIA_PATH = PROJECT_ROOT / "criteria.yaml"
+ALGORITHM_PATH = PROJECT_ROOT / "algorithm.yaml"
 EVOLUTION_LOG_PATH = PROJECT_ROOT / "evolution_log.jsonl"
+ALGORITHM_LOG_PATH = PROJECT_ROOT / "algorithm_log.jsonl"
 USER_MEMORY_PATH = PROJECT_ROOT / "user_memory.jsonl"
 
 
@@ -19,6 +21,48 @@ def load_criteria() -> dict:
         return {}
     with open(CRITERIA_PATH) as f:
         return yaml.safe_load(f) or {}
+
+
+_ALGORITHM_VERSION_SEEDED = False
+
+
+def load_algorithm_config() -> dict:
+    """Load algorithm.yaml — user-owned recommendation algorithm definition.
+
+    Peer to criteria.yaml. Defines the Hybrid Ensemble (retrieval + ranking)
+    and Meta-Evolution settings. See docs/VISION_v3.md.
+
+    Side effect: on first call with a non-empty algorithm.yaml, seed the
+    ``algorithm_versions`` table with the baseline v1 so the Evolution
+    timeline has an origin marker even before Meta-Evolution runs.
+    """
+    if not ALGORITHM_PATH.exists():
+        return {}
+    with open(ALGORITHM_PATH) as f:
+        cfg = yaml.safe_load(f) or {}
+
+    _seed_algorithm_version_once(cfg)
+    return cfg
+
+
+def _seed_algorithm_version_once(cfg: dict) -> None:
+    global _ALGORITHM_VERSION_SEEDED
+    if _ALGORITHM_VERSION_SEEDED or not cfg:
+        return
+    _ALGORITHM_VERSION_SEEDED = True
+    try:
+        from hedwig.storage import get_algorithm_history, save_algorithm_version
+        if get_algorithm_history(limit=1):
+            return
+        save_algorithm_version(
+            version=int(cfg.get("version", 1)),
+            config=cfg,
+            created_by="seed",
+            origin=str(cfg.get("origin", "initial_default")),
+        )
+    except Exception:
+        # Never let version-seeding failure block the pipeline
+        pass
 
 
 # OpenAI
@@ -70,18 +114,29 @@ def _daily_delivery_configured() -> bool:
 
 
 def check_required_keys(mode: str = "full") -> list[str]:
-    """Check which required keys are missing. Returns list of missing key names."""
+    """Check which truly-required keys are missing.
+
+    Only OPENAI_API_KEY is strictly required — it powers the LLM scorer,
+    briefer, and evolution engine, all of which are the core value.
+
+    Supabase and delivery (Slack/Discord/SMTP) are *optional*: without them,
+    the pipeline still collects, scores, stores locally (SQLite), and shows
+    results in the dashboard. Their absence is surfaced via warnings in
+    ``check_optional_keys``, not as a hard failure.
+    """
     missing = []
     if mode in ("full", "score", "evolve", "daily"):
         if not OPENAI_API_KEY:
             missing.append("OPENAI_API_KEY")
+    return missing
+
+
+def check_optional_keys(mode: str = "full") -> list[str]:
+    """Return a list of optional capability gaps for user-facing warnings."""
+    gaps: list[str] = []
     if mode in ("full", "daily"):
         if not _alert_delivery_configured():
-            missing.append("SLACK_WEBHOOK_ALERTS or DISCORD_WEBHOOK_ALERTS or SMTP_HOST/SMTP_FROM")
+            gaps.append("alert delivery (set SLACK_WEBHOOK_ALERTS / DISCORD_WEBHOOK_ALERTS / SMTP_*)")
         if not _daily_delivery_configured():
-            missing.append("SLACK_WEBHOOK_DAILY or DISCORD_WEBHOOK_DAILY or SMTP_HOST/SMTP_FROM")
-        if not SUPABASE_URL:
-            missing.append("SUPABASE_URL")
-        if not SUPABASE_KEY:
-            missing.append("SUPABASE_KEY")
-    return missing
+            gaps.append("daily-brief delivery (set SLACK_WEBHOOK_DAILY / DISCORD_WEBHOOK_DAILY / SMTP_*)")
+    return gaps

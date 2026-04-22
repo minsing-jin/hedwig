@@ -14,11 +14,16 @@ from hedwig.models import RawPost
 
 logger = logging.getLogger(__name__)
 
+import os
+
 JINA_READER = "https://r.jina.ai/"
 JINA_SEARCH = "https://s.jina.ai/"
 
 # Default timeout in seconds for Jina API calls
 DEFAULT_TIMEOUT = 10.0
+
+# Authenticated requests get 100× higher rate limits
+JINA_API_KEY = os.getenv("JINA_API_KEY", "")
 
 
 async def normalize_content(post: RawPost, timeout: float = DEFAULT_TIMEOUT) -> str:
@@ -36,21 +41,24 @@ async def normalize_content(post: RawPost, timeout: float = DEFAULT_TIMEOUT) -> 
             timeout=httpx.Timeout(timeout, connect=min(timeout, 5.0)),
             follow_redirects=True,
         ) as client:
-            resp = await client.get(
-                f"{JINA_READER}{post.url}",
-                headers={
-                    "Accept": "text/markdown",
-                    "x-respond-with": "markdown",
-                },
-            )
+            headers = {
+                "Accept": "text/markdown",
+                "x-respond-with": "markdown",
+            }
+            if JINA_API_KEY:
+                headers["Authorization"] = f"Bearer {JINA_API_KEY}"
+            resp = await client.get(f"{JINA_READER}{post.url}", headers=headers)
             if resp.status_code == 200 and len(resp.text) > 50:
                 return resp.text[:5000]
-            logger.debug(
-                "Jina returned status=%s len=%d for %s",
-                resp.status_code,
-                len(resp.text),
-                post.url,
-            )
+            if resp.status_code == 429:
+                logger.debug("Jina rate-limited for %s — using raw content", post.url)
+            else:
+                logger.debug(
+                    "Jina returned status=%s len=%d for %s",
+                    resp.status_code,
+                    len(resp.text),
+                    post.url,
+                )
     except httpx.TimeoutException:
         logger.warning(
             "Jina normalization timed out after %.1fs for %s — falling back to raw content",

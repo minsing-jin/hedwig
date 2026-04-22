@@ -66,9 +66,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         source_count = _count_sources()
 
         return TEMPLATES.TemplateResponse(
+            request,
             "home.html",
             {
-                "request": request,
                 "status": status,
                 "recent_signals": recent_signals,
                 "recent_evolution": recent_evolution,
@@ -87,9 +87,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         metadata = EnvManager.all_key_metadata()
         status = env_manager.get_status()
         return TEMPLATES.TemplateResponse(
+            request,
             "setup.html",
             {
-                "request": request,
                 "values": values,
                 "metadata": metadata,
                 "required_keys": EnvManager.REQUIRED_KEYS,
@@ -157,7 +157,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
     @app.get("/onboarding", response_class=HTMLResponse)
     async def onboarding_get(request: Request):
-        return TEMPLATES.TemplateResponse("onboarding.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "onboarding.html")
 
     @app.post("/onboarding/start")
     async def onboarding_start():
@@ -205,7 +205,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def signals_view(request: Request):
         signals = _load_recent_signals(limit=50)
         return TEMPLATES.TemplateResponse(
-            "signals.html", {"request": request, "signals": signals}
+            request, "signals.html", {"signals": signals}
         )
 
     @app.get("/signals/export")
@@ -258,9 +258,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             dashboard_stats=_load_dashboard_stats(),
         )
         return TEMPLATES.TemplateResponse(
+            request,
             "generative.html",
             {
-                "request": request,
                 "layout_spec": layout_spec,
             },
         )
@@ -270,6 +270,161 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         return JSONResponse(
             _load_health_status(started_at=getattr(request.app.state, "started_at", None))
         )
+
+    # -----------------------------------------------------------------------
+    # On-Demand Q&A (4-tier temporal lattice: on-demand layer)
+    # Semi-explicit feedback: accept/reject events feed back into evolution.
+    # -----------------------------------------------------------------------
+
+    @app.post("/ask")
+    async def ask(request: Request):
+        from hedwig.qa.router import answer
+        from hedwig.qa.feedback import record_qa_event
+
+        payload = {}
+        try:
+            payload = await request.json()
+        except Exception:
+            form = await request.form()
+            payload = dict(form)
+        question = str(payload.get("question", "")).strip()
+        if not question:
+            return JSONResponse({"error": "question required"}, status_code=400)
+
+        top_k = int(payload.get("top_k", 8) or 8)
+        result = await answer(question, top_k=top_k)
+        # Log the raw question as a low-weight 'semi' signal
+        record_qa_event("qa_ask", payload={"question": question}, weight=0.3)
+        return JSONResponse(result)
+
+    @app.post("/qa/feedback")
+    async def qa_feedback(request: Request):
+        from hedwig.qa.feedback import record_qa_event
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        kind = str(body.get("kind", "")).strip()
+        question = str(body.get("question", "")).strip()
+        if kind not in {"qa_accept", "qa_reject", "qa_more_like", "qa_less_like", "qa_live_search"}:
+            return JSONResponse({"error": f"invalid kind {kind}"}, status_code=400)
+        weight = 2.0 if kind == "qa_accept" else 1.5 if kind == "qa_reject" else 1.0
+        ok = record_qa_event(kind, payload={"question": question}, weight=weight)
+        return JSONResponse({"ok": bool(ok)})
+
+    # -----------------------------------------------------------------------
+    # Natural-language criteria editor (Triple-input explicit channel)
+    # -----------------------------------------------------------------------
+
+    @app.post("/criteria/propose")
+    async def criteria_propose(request: Request):
+        from hedwig.onboarding.nl_editor import propose_edit
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        intent = str(body.get("intent", "")).strip()
+        if not intent:
+            return JSONResponse({"ok": False, "error": "intent required"}, status_code=400)
+        result = await propose_edit(intent)
+        return JSONResponse(result)
+
+    @app.post("/criteria/apply")
+    async def criteria_apply(request: Request):
+        from hedwig.onboarding.nl_editor import confirm_edit
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        changes = body.get("changes") or []
+        intent = str(body.get("intent", "")).strip()
+        if not isinstance(changes, list):
+            return JSONResponse({"ok": False, "error": "changes must be list"}, status_code=400)
+        result = confirm_edit(changes, intent=intent)
+        status_code = 200 if result.get("ok") else 500
+        return JSONResponse(result, status_code=status_code)
+
+    # -----------------------------------------------------------------------
+    # Phase 2 — Instrumentation: Why trace, Evolution timeline, Sandbox
+    # -----------------------------------------------------------------------
+
+    @app.get("/signals/{signal_id}/trace")
+    async def signal_trace(signal_id: str):
+        from hedwig.engine.trace import trace_signal
+
+        signal = None
+        for candidate in _load_recent_signals(limit=500):
+            if str(candidate.get("id")) == str(signal_id):
+                signal = candidate
+                break
+        if not signal:
+            return JSONResponse({"error": "signal not found"}, status_code=404)
+        return JSONResponse(trace_signal(signal))
+
+    @app.get("/evolution/timeline")
+    async def evolution_timeline(request: Request):
+        from hedwig.evolution.timeline import build_timeline
+
+        days = int(request.query_params.get("days", 30))
+        limit = int(request.query_params.get("limit", 100))
+        return JSONResponse({"events": build_timeline(days=days, limit=limit)})
+
+    @app.get("/evolution", response_class=HTMLResponse)
+    async def evolution_page(request: Request):
+        return TEMPLATES.TemplateResponse(request, "evolution.html")
+
+    @app.get("/sandbox", response_class=HTMLResponse)
+    async def sandbox_page(request: Request):
+        return TEMPLATES.TemplateResponse(request, "sandbox.html")
+
+    @app.get("/meta", response_class=HTMLResponse)
+    async def meta_page(request: Request):
+        return TEMPLATES.TemplateResponse(request, "meta.html")
+
+    @app.post("/meta/cycle")
+    async def meta_cycle_endpoint(request: Request):
+        from hedwig.evolution.meta import run_meta_cycle
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+
+        n = int(body.get("n_candidates", 3))
+        force = bool(body.get("force", False))
+        strategies = body.get("strategies")
+        result = run_meta_cycle(
+            n_candidates=n,
+            strategies=strategies if isinstance(strategies, list) else None,
+            force=force,
+        )
+        return JSONResponse(_jsonable(result))
+
+    @app.post("/sandbox/simulate")
+    async def sandbox_simulate(request: Request):
+        from hedwig.config import load_algorithm_config
+        from hedwig.evolution.sandbox import make_candidate, run_sandbox
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+
+        baseline = load_algorithm_config()
+        perturbations = body.get("perturbations") or {}
+        injected = body.get("injected_events") or []
+        candidate = make_candidate(baseline, perturbations)
+        result = run_sandbox(candidate, baseline, injected_events=injected)
+        result["candidate_config"] = _jsonable(candidate)
+        return JSONResponse(result)
 
     @app.post("/feedback/{signal_id}/{vote}")
     async def submit_feedback(request: Request, signal_id: str, vote: str):
@@ -325,6 +480,38 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         )
         return JSONResponse({"ok": True, "message": "Weekly run started"})
 
+    @app.post("/run/critical")
+    async def run_critical():
+        from hedwig.engine.critical import run_critical_cycle
+
+        async def _deliver(signal):
+            from hedwig.config import (
+                SLACK_WEBHOOK_ALERTS,
+                DISCORD_WEBHOOK_ALERTS,
+                smtp_alerts_configured,
+            )
+            if SLACK_WEBHOOK_ALERTS:
+                try:
+                    from hedwig.delivery.slack import send_alert
+                    await send_alert(signal)
+                except Exception as e:
+                    logger.warning("slack alert failed: %s", e)
+            if DISCORD_WEBHOOK_ALERTS:
+                try:
+                    from hedwig.delivery.discord import send_alert
+                    await send_alert(signal)
+                except Exception as e:
+                    logger.warning("discord alert failed: %s", e)
+            if smtp_alerts_configured():
+                try:
+                    from hedwig.delivery.email import send_alert
+                    await send_alert(signal)
+                except Exception as e:
+                    logger.warning("email alert failed: %s", e)
+
+        result = await run_critical_cycle(deliver=_deliver)
+        return JSONResponse({"ok": True, **result})
+
     # -----------------------------------------------------------------------
     # Sources view
     # -----------------------------------------------------------------------
@@ -337,7 +524,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             {"id": pid, "meta": cls.metadata()} for pid, cls in sorted(registry.items())
         ]
         return TEMPLATES.TemplateResponse(
-            "sources.html", {"request": request, "sources": sources}
+            request, "sources.html", {"sources": sources}
         )
 
     @app.get("/settings", response_class=HTMLResponse)
@@ -377,9 +564,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             for pid, cls in sorted(registry.items())
         ]
         return TEMPLATES.TemplateResponse(
+            request,
             "settings.html",
             {
-                "request": request,
                 "sources": sources,
                 "settings_destination": settings_destination,
                 "saved": request.query_params.get("saved") == "1",
@@ -427,7 +614,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         if CRITERIA_PATH.exists():
             content = CRITERIA_PATH.read_text()
         return TEMPLATES.TemplateResponse(
-            "criteria.html", {"request": request, "content": content}
+            request, "criteria.html", {"content": content}
         )
 
     @app.post("/criteria/save")
@@ -461,7 +648,7 @@ def _register_saas_routes(app: FastAPI):
 
     @app.get("/landing", response_class=HTMLResponse)
     async def landing(request: Request):
-        return TEMPLATES.TemplateResponse("landing.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "landing.html")
 
     # ------- Auth pages -------
 
@@ -469,16 +656,18 @@ def _register_saas_routes(app: FastAPI):
     async def signup_page(request: Request):
         providers = saas_oauth.list_providers()
         return TEMPLATES.TemplateResponse(
+            request,
             "signup.html",
-            {"request": request, "oauth_providers": providers},
+            {"oauth_providers": providers},
         )
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request):
         providers = saas_oauth.list_providers()
         return TEMPLATES.TemplateResponse(
+            request,
             "login.html",
-            {"request": request, "oauth_providers": providers},
+            {"oauth_providers": providers},
         )
 
     # ------- OAuth flow -------
@@ -486,7 +675,7 @@ def _register_saas_routes(app: FastAPI):
     @app.get("/auth/callback")
     async def oauth_callback(request: Request):
         """Handle OAuth callback from Supabase. Token comes in URL fragment."""
-        return TEMPLATES.TemplateResponse("oauth_callback.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "oauth_callback.html")
 
     @app.get("/auth/oauth/{provider}")
     async def oauth_redirect(provider: str, request: Request):
@@ -520,8 +709,9 @@ def _register_saas_routes(app: FastAPI):
     @app.get("/onboarding/auto", response_class=HTMLResponse)
     async def auto_onboarding_page(request: Request):
         return TEMPLATES.TemplateResponse(
+            request,
             "onboarding_auto.html",
-            {"request": request, "providers": saas_oauth.list_providers()},
+            {"providers": saas_oauth.list_providers()},
         )
 
     @app.post("/onboarding/auto/infer")
@@ -682,9 +872,9 @@ def _register_saas_routes(app: FastAPI):
         signals_limit = 50 if tier == "free" else 999_999
 
         return TEMPLATES.TemplateResponse(
+            request,
             "billing.html",
             {
-                "request": request,
                 "tier": tier,
                 "status": "active",
                 "tokens_used": tokens_used,
@@ -711,33 +901,34 @@ def _register_saas_routes(app: FastAPI):
         base_url = str(request.base_url).rstrip("/")
         invite_link = f"{base_url}/signup?ref={user_id[:8]}"
         return TEMPLATES.TemplateResponse(
+            request,
             "invite.html",
-            {"request": request, "invite_link": invite_link},
+            {"invite_link": invite_link},
         )
 
     # ------- Multilingual landing -------
 
     @app.get("/ko", response_class=HTMLResponse)
     async def landing_ko(request: Request):
-        return TEMPLATES.TemplateResponse("landing_ko.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "landing_ko.html")
 
     @app.get("/zh", response_class=HTMLResponse)
     async def landing_zh(request: Request):
-        return TEMPLATES.TemplateResponse("landing_zh.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "landing_zh.html")
 
     # ------- Legal pages -------
 
     @app.get("/terms", response_class=HTMLResponse)
     async def terms_page(request: Request):
-        return TEMPLATES.TemplateResponse("terms.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "terms.html")
 
     @app.get("/privacy", response_class=HTMLResponse)
     async def privacy_page(request: Request):
-        return TEMPLATES.TemplateResponse("privacy.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "privacy.html")
 
     @app.get("/about", response_class=HTMLResponse)
     async def about_page(request: Request):
-        return TEMPLATES.TemplateResponse("about.html", {"request": request})
+        return TEMPLATES.TemplateResponse(request, "about.html")
 
 
 # ---------------------------------------------------------------------------
@@ -786,6 +977,23 @@ def _load_dashboard_activity_stats(user_id: str | None = None) -> dict:
 
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
+
+
+def _jsonable(obj):
+    """Deep-convert a Python value into something JSONResponse can serialize.
+
+    Handles datetime/date values from yaml.safe_load (the `updated_at` key in
+    algorithm.yaml resolves to a date, which JSON cannot encode directly).
+    """
+    from datetime import date, datetime as _dt
+
+    if isinstance(obj, dict):
+        return {str(k): _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, (date, _dt)):
+        return obj.isoformat()
+    return obj
 
 
 def _coerce_timestamp(value: object) -> datetime | None:

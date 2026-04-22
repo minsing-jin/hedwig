@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Mutation Sandbox — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🧪 Mutation Sandbox</h1>
+  <p class="subtitle">Tweak component weights and see predicted fitness Δ before committing.</p>
+</div>
+
+<div class="section">
+  <p class="muted">Set weights for each ranking component. Leave blank to keep baseline. Pressing "Simulate" runs the shadow scorer against your recent feedback.</p>
+  <table class="sandbox-table">
+    <thead><tr><th>Component</th><th>Current → New weight</th><th>Enable?</th></tr></thead>
+    <tbody>
+      {% for name in ['llm_judge', 'ltr', 'content_based', 'popularity_prior', 'bandit'] %}
+      <tr>
+        <td><code>{{ name }}</code></td>
+        <td>
+          <input type="number" step="0.05" min="0" max="1" id="w_{{ name }}"
+                 placeholder="(keep)" style="width: 80px;">
+        </td>
+        <td><input type="checkbox" id="en_{{ name }}" checked></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="button-row">
+    <button class="btn btn-primary" onclick="simulate()">Simulate</button>
+    <button class="btn" onclick="clearAll()">Clear</button>
+  </div>
+  <div id="sandbox-result" class="sandbox-result" style="display:none;"></div>
+</div>
+
+<script>
+function clearAll() {
+  ['llm_judge','ltr','content_based','popularity_prior','bandit'].forEach(n => {
+    document.getElementById('w_' + n).value = '';
+    document.getElementById('en_' + n).checked = true;
+  });
+  document.getElementById('sandbox-result').style.display = 'none';
+}
+
+async function simulate() {
+  const perturbations = {};
+  ['llm_judge','ltr','content_based','popularity_prior','bandit'].forEach(n => {
+    const v = document.getElementById('w_' + n).value;
+    if (v !== '') perturbations[n] = parseFloat(v);
+  });
+  const out = document.getElementById('sandbox-result');
+  out.style.display = 'block';
+  out.innerHTML = '<em>Running shadow simulation…</em>';
+  try {
+    const r = await fetch('/sandbox/simulate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({perturbations}),
+    });
+    const data = await r.json();
+    const verdict = ({
+      adopt: '<span class="ok">✅ Recommend adopting</span>',
+      reject: '<span class="error">❌ Recommend rejecting</span>',
+      inconclusive: '<span class="warn">⚠️ Inconclusive</span>',
+    })[data.recommend] || '';
+    const deltaPct = (data.delta * 100).toFixed(1);
+    out.innerHTML = `
+      <div class="verdict">${verdict} — Δ fitness ${deltaPct >= 0 ? '+' : ''}${deltaPct}%</div>
+      <div class="grid-2">
+        <div>
+          <h4>Baseline</h4>
+          <pre>${JSON.stringify(data.baseline, null, 2)}</pre>
+        </div>
+        <div>
+          <h4>Candidate</h4>
+          <pre>${JSON.stringify(data.candidate, null, 2)}</pre>
+        </div>
+      </div>
+      <details><summary>Candidate config preview</summary>
+        <pre>${JSON.stringify(data.candidate_config, null, 2)}</pre>
+      </details>`;
+  } catch (e) {
+    out.innerHTML = `<em class="error">Error: ${e}</em>`;
+  }
+}
+</script>
+
+<style>
+.sandbox-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+.sandbox-table th, .sandbox-table td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+.sandbox-result { margin-top: 14px; padding: 14px; background: #f7f7f9; border-radius: 6px; }
+.verdict { font-size: 16px; margin-bottom: 12px; }
+.ok { color: #1a7f37; }
+.error { color: #c0392b; }
+.warn { color: #b26a00; }
+pre { background: #222; color: #eee; padding: 8px; border-radius: 4px; font-size: 11px; overflow: auto; }
+</style>
+
+{% endblock %}

@@ -121,12 +121,37 @@ def init_db():
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- v3: Triple-input evolution signals (explicit/semi/implicit unified stream)
+        CREATE TABLE IF NOT EXISTS evolution_signal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel TEXT NOT NULL CHECK (channel IN ('explicit','semi','implicit')),
+            kind TEXT NOT NULL,        -- e.g. 'criteria_edit','qa_accept','qa_reject','upvote','downvote'
+            payload TEXT DEFAULT '{}', -- JSON blob with details (question, signal_id, diff, etc.)
+            weight REAL DEFAULT 1.0,   -- meta-evolution can tune how heavily each kind counts
+            captured_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- v3: Algorithm config version history (peer to criteria_versions)
+        CREATE TABLE IF NOT EXISTS algorithm_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version INTEGER NOT NULL UNIQUE,
+            config TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT DEFAULT 'system',
+            diff_from_previous TEXT,
+            fitness_score REAL,
+            origin TEXT DEFAULT 'manual'   -- manual | meta_evolution | paper_absorb
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_collected ON signals(collected_at DESC);
         CREATE INDEX IF NOT EXISTS idx_signals_relevance ON signals(relevance_score DESC);
         CREATE INDEX IF NOT EXISTS idx_feedback_captured ON feedback(captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_run_history_run_at ON run_history(run_at DESC);
         CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type);
         CREATE INDEX IF NOT EXISTS idx_source_reliability_updated_at ON source_reliability(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_evolution_signal_captured ON evolution_signal(captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_evolution_signal_channel ON evolution_signal(channel);
+        CREATE INDEX IF NOT EXISTS idx_algorithm_versions_created ON algorithm_versions(created_at DESC);
         """)
 
 
@@ -459,6 +484,19 @@ def save_criteria_version(cv: CriteriaVersion) -> bool:
         return False
 
 
+def get_criteria_versions(limit: int = 50) -> list[dict]:
+    """Return criteria version rows, newest first."""
+    init_db()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT version, created_at, created_by, diff_from_previous, fitness_score
+               FROM criteria_versions
+               ORDER BY version DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # User memory
 # ---------------------------------------------------------------------------
@@ -596,3 +634,119 @@ def get_dashboard_activity_stats(user_id: str | None = None) -> dict:
         "top_5_sources": [{"platform": r[0], "count": r[1]} for r in top],
         "days_active": days_active,
     }
+
+
+# ---------------------------------------------------------------------------
+# Evolution signals — Triple-input unified stream (v3)
+# ---------------------------------------------------------------------------
+
+def save_evolution_signal(
+    channel: str,
+    kind: str,
+    payload: dict | None = None,
+    weight: float = 1.0,
+) -> bool:
+    """Record one triple-input feedback event.
+
+    Args:
+        channel: 'explicit' | 'semi' | 'implicit'
+        kind: event kind (e.g. 'criteria_edit', 'qa_accept', 'upvote')
+        payload: free-form JSON details
+        weight: optional weighting for meta-evolution
+    """
+    if channel not in ("explicit", "semi", "implicit"):
+        logger.warning("evolution_signal: invalid channel %s", channel)
+        return False
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                """INSERT INTO evolution_signal (channel, kind, payload, weight)
+                   VALUES (?,?,?,?)""",
+                (channel, kind, json.dumps(payload or {}, ensure_ascii=False), weight),
+            )
+        return True
+    except Exception as e:
+        logger.error("save_evolution_signal: %s", e)
+        return False
+
+
+def get_evolution_signals(
+    channel: str | None = None,
+    since: datetime | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    init_db()
+    q = "SELECT * FROM evolution_signal"
+    conds = []
+    params: list = []
+    if channel:
+        conds.append("channel = ?")
+        params.append(channel)
+    if since:
+        conds.append("captured_at >= ?")
+        params.append(since.astimezone(timezone.utc).isoformat())
+    if conds:
+        q += " WHERE " + " AND ".join(conds)
+    q += " ORDER BY captured_at DESC LIMIT ?"
+    params.append(limit)
+    with _conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["payload"] = json.loads(d.get("payload") or "{}")
+        except Exception:
+            d["payload"] = {}
+        out.append(d)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Algorithm versions (v3)
+# ---------------------------------------------------------------------------
+
+def save_algorithm_version(
+    version: int,
+    config: dict,
+    created_by: str = "system",
+    origin: str = "manual",
+    diff_from_previous: str | None = None,
+    fitness_score: float | None = None,
+) -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO algorithm_versions
+                   (version, config, created_by, diff_from_previous, fitness_score, origin)
+                   VALUES (?,?,?,?,?,?)""",
+                (
+                    version,
+                    json.dumps(config, ensure_ascii=False),
+                    created_by,
+                    diff_from_previous,
+                    fitness_score,
+                    origin,
+                ),
+            )
+        return True
+    except Exception as e:
+        logger.error("save_algorithm_version: %s", e)
+        return False
+
+
+def get_algorithm_history(limit: int = 50) -> list[dict]:
+    init_db()
+    with _conn() as conn:
+        # Order by version DESC (tiebreak on id DESC) so newer adoptions beat
+        # same-timestamp seed rows that the default CURRENT_TIMESTAMP shares.
+        rows = conn.execute(
+            """SELECT version, created_at, created_by, origin, fitness_score,
+                      diff_from_previous
+               FROM algorithm_versions
+               ORDER BY version DESC, id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]

@@ -104,6 +104,30 @@
   </div>
 </div>
 
+<div class="section" id="qa-section">
+  <h2>💬 Ask Hedwig (on-demand layer)</h2>
+  <p class="muted">수집한 시그널에서 바로 답변 — 부족하면 live search 제안. 수용/거절이 진화 루프에 반영됩니다.</p>
+  <div class="qa-input-row">
+    <input id="qa-input" type="text" class="qa-input"
+           placeholder="예: 이번 주 MoE 대안 관련 흐름 요약해줘"
+           onkeydown="if(event.key==='Enter') qaAsk()" />
+    <button class="btn btn-primary" onclick="qaAsk()">Ask</button>
+  </div>
+  <div id="qa-result" class="qa-result" style="display:none;"></div>
+</div>
+
+<div class="section" id="nl-criteria-section">
+  <h2>📝 Edit Criteria (natural language)</h2>
+  <p class="muted">"MoE 피로, agent 위주로" 같은 자연어로 criteria.yaml 수정. diff 확인 후 적용.</p>
+  <div class="qa-input-row">
+    <input id="nl-input" type="text" class="qa-input"
+           placeholder="예: agent frameworks 관심 늘리고 MoE는 ignore로 옮겨줘"
+           onkeydown="if(event.key==='Enter') nlPropose()" />
+    <button class="btn btn-primary" onclick="nlPropose()">Preview diff</button>
+  </div>
+  <div id="nl-result" class="qa-result" style="display:none;"></div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -113,6 +137,110 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+async function qaAsk() {
+  const input = document.getElementById('qa-input');
+  const out = document.getElementById('qa-result');
+  const q = input.value.trim();
+  if (!q) return;
+  out.style.display = 'block';
+  out.innerHTML = '<em>답변 생성 중...</em>';
+  try {
+    const r = await fetch('/ask', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: q, top_k: 8}),
+    });
+    const data = await r.json();
+    const answer = (data.answer || '').replace(/</g, '&lt;');
+    const sourcesHTML = (data.sources || []).map((s, i) =>
+      `<li>[${i}] <a href="${s.url}" target="_blank">${(s.title || '').slice(0, 100)}</a>
+       <span class="muted">(${s.platform})</span></li>`).join('');
+    out.innerHTML = `
+      <div class="qa-answer">${answer.replace(/\n/g, '<br>')}</div>
+      ${sourcesHTML ? `<details><summary>Sources (${data.sources.length})</summary><ul>${sourcesHTML}</ul></details>` : ''}
+      <div class="qa-feedback">
+        <button class="btn" onclick="qaFeedback('qa_accept', ${JSON.stringify(q)})">👍 helpful — learn from this</button>
+        <button class="btn" onclick="qaFeedback('qa_reject', ${JSON.stringify(q)})">👎 off-topic</button>
+        ${data.fallback_suggested ? '<button class="btn" onclick="qaFeedback(\'qa_live_search\', ' + JSON.stringify(q) + ')">🔍 Use live search</button>' : ''}
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<em class="error">Error: ${e}</em>`;
+  }
+}
+
+async function qaFeedback(kind, question) {
+  try {
+    await fetch('/qa/feedback', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind, question}),
+    });
+    showToast('기록됨 — 진화 루프에 반영됩니다');
+  } catch (e) { showToast('Error: ' + e); }
+}
+
+async function nlPropose() {
+  const input = document.getElementById('nl-input');
+  const out = document.getElementById('nl-result');
+  const intent = input.value.trim();
+  if (!intent) return;
+  out.style.display = 'block';
+  out.innerHTML = '<em>제안 생성 중...</em>';
+  try {
+    const r = await fetch('/criteria/propose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({intent}),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      out.innerHTML = `<em class="error">${data.error || 'failed'}</em>`;
+      return;
+    }
+    const diff = (data.preview?.diff || '(no changes)').replace(/</g, '&lt;');
+    out.innerHTML = `
+      <div><strong>${data.summary || ''}</strong></div>
+      <div class="muted">${data.rationale || ''}</div>
+      <pre class="yaml-diff">${diff}</pre>
+      <div class="button-row">
+        <button class="btn btn-primary" onclick='nlConfirm(${JSON.stringify(data.changes).replace(/</g,"&lt;")}, ${JSON.stringify(intent)})'>Apply</button>
+        <button class="btn" onclick="document.getElementById('nl-result').style.display='none'">Discard</button>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<em class="error">Error: ${e}</em>`;
+  }
+}
+
+async function nlConfirm(changes, intent) {
+  try {
+    const r = await fetch('/criteria/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({changes, intent}),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('criteria.yaml 업데이트 완료');
+      document.getElementById('nl-result').style.display = 'none';
+      document.getElementById('nl-input').value = '';
+    } else {
+      showToast('Error: ' + (data.error || 'apply failed'));
+    }
+  } catch (e) { showToast('Error: ' + e); }
+}
 </script>
+
+<style>
+.qa-input-row { display: flex; gap: 8px; margin: 8px 0; }
+.qa-input { flex: 1; padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }
+.qa-result { margin-top: 12px; padding: 12px; background: #f7f7f9; border-radius: 6px; }
+.qa-answer { margin-bottom: 10px; line-height: 1.5; }
+.qa-feedback { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.yaml-diff { background: #222; color: #eee; padding: 10px; border-radius: 4px;
+              font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+              overflow-x: auto; white-space: pre; }
+.error { color: #c0392b; }
+</style>
 
 {% endblock %}

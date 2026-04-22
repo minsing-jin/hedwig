@@ -108,17 +108,71 @@ async def normalize_and_prescore(posts: list, criteria_keywords: list[str]) -> l
     """
     from hedwig.engine.normalizer import normalize_batch
     from hedwig.engine.pre_scorer import pre_filter
+    from hedwig.engine.absorbed.last30days import enrich_score
 
     # Normalize content (r.jina.ai for richer LLM input)
     logger.info(f"Normalizing {len(posts)} posts via r.jina.ai...")
-    posts = await normalize_batch(posts, max_concurrent=5)
+    posts = await normalize_batch(posts, max_concurrent=3)
 
-    # Pre-score: numeric filtering before expensive LLM calls
-    logger.info("Pre-scoring (engagement + authority + recency + convergence)...")
-    scored = pre_filter(posts, criteria_keywords, threshold=0.10)
-    logger.info(f"Pre-filter: {len(posts)} → {len(scored)} posts (above threshold)")
+    # Pre-score: numeric filtering before expensive LLM calls.
+    # Threshold + top_n come from algorithm.yaml so the user (and meta-evolution)
+    # can tune them without a code change.
+    from hedwig.config import load_algorithm_config as _load_algo
+    retrieval_cfg = _load_algo().get("retrieval", {}) or {}
+    threshold = float(retrieval_cfg.get("threshold", 0.10))
+    top_n = int(retrieval_cfg.get("top_n", 200))
+    logger.info(
+        "Pre-scoring (threshold=%.2f top_n=%d)...", threshold, top_n,
+    )
+    scored = pre_filter(posts, criteria_keywords, threshold=threshold)
 
-    return [post for post, score in scored]
+    # L2-absorbed enrichment (last30days-style persistence + saturation)
+    try:
+        from hedwig.storage import get_recent_signals
+        recent_rows = get_recent_signals(days=14) or []
+        historical_posts = _rows_to_posts(recent_rows)
+    except Exception:
+        historical_posts = []
+
+    enriched: list = []
+    for post, base_score in scored:
+        new_score = enrich_score(
+            post,
+            base_score=base_score,
+            same_cycle_posts=[p for p, _ in scored],
+            historical_posts=historical_posts,
+        )
+        enriched.append((post, new_score))
+    enriched.sort(key=lambda x: x[1], reverse=True)
+    enriched = enriched[:top_n]
+
+    logger.info(
+        "Pre-filter + enrich: %d → %d posts (threshold=%.2f, cap=%d)",
+        len(posts), len(enriched), threshold, top_n,
+    )
+    return [post for post, score in enriched]
+
+
+def _rows_to_posts(rows: list[dict]) -> list:
+    """Convert historical signal rows back into RawPost objects for enrichment."""
+    from hedwig.models import Platform, RawPost
+    out = []
+    for row in rows:
+        try:
+            out.append(
+                RawPost(
+                    platform=Platform(row.get("platform", "other")),
+                    external_id=str(row.get("external_id") or row.get("id") or ""),
+                    title=row.get("title") or "",
+                    url=row.get("url") or "",
+                    content=row.get("content") or "",
+                    author=row.get("author") or "",
+                    score=row.get("platform_score") or 0,
+                )
+            )
+        except Exception:
+            continue
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -263,11 +317,28 @@ async def run_daily(collect_only: bool = False):
     if missing:
         logger.error(f"Missing env vars: {', '.join(missing)}")
         return
+    from hedwig.config import check_optional_keys
+    for gap in check_optional_keys(mode):
+        logger.warning(f"Skipping optional capability — {gap}")
 
-    # 4. LLM Score (only pre-filtered posts — saves API cost)
-    from hedwig.engine.scorer import score_posts
-    logger.info(f"LLM scoring {len(posts)} pre-filtered posts...")
-    scored = await score_posts(posts)
+    # 4. Scoring — ensemble (default) or legacy single-stage LLM
+    import os
+    pipeline_mode = os.getenv("HEDWIG_PIPELINE", "ensemble").lower()
+    if pipeline_mode == "ensemble":
+        # normalize_and_prescore already ran retrieval (pre_filter + history enrichment).
+        # rank_and_build_signals runs only the Stage B ranking so we don't duplicate work.
+        from hedwig.engine.ensemble.combine import rank_and_build_signals
+        logger.info(f"Ensemble ranking {len(posts)} retrieved candidates...")
+        scored, ensemble_stats = await rank_and_build_signals(posts, focus_keywords)
+        logger.info(
+            "Ensemble stats: %s components=%s",
+            {k: ensemble_stats[k] for k in ("retrieval_kept", "ranking_kept", "top_k")},
+            ensemble_stats["components_used"],
+        )
+    else:
+        from hedwig.engine.scorer import score_posts
+        logger.info(f"LLM scoring {len(posts)} pre-filtered posts (legacy single-stage)...")
+        scored = await score_posts(posts)
 
     # 5. Filter into channels
     alerts, digest = filter_signals(scored)
@@ -281,8 +352,14 @@ async def run_daily(collect_only: bool = False):
             print_signal(s, "DIGEST")
         return
 
-    # 6. Deliver to Slack + Discord + SMTP email
-    from hedwig.config import smtp_alerts_configured
+    # 6. Deliver to Slack + Discord + SMTP email (only configured channels)
+    from hedwig.config import (
+        SLACK_WEBHOOK_ALERTS,
+        SLACK_WEBHOOK_DAILY,
+        DISCORD_WEBHOOK_ALERTS,
+        DISCORD_WEBHOOK_DAILY,
+        smtp_alerts_configured,
+    )
     from hedwig.delivery.slack import send_alert as slack_alert, send_daily_briefing as slack_daily
     from hedwig.delivery.discord import send_alert as discord_alert, send_daily_briefing as discord_daily
     from hedwig.delivery.email import (
@@ -291,8 +368,10 @@ async def run_daily(collect_only: bool = False):
     )
     smtp_enabled = smtp_alerts_configured()
     for signal in alerts[:10]:
-        await slack_alert(signal)
-        await discord_alert(signal)
+        if SLACK_WEBHOOK_ALERTS:
+            await slack_alert(signal)
+        if DISCORD_WEBHOOK_ALERTS:
+            await discord_alert(signal)
         if smtp_enabled:
             await email_alert(signal)
 
@@ -302,17 +381,19 @@ async def run_daily(collect_only: bool = False):
     if briefing_signals:
         logger.info("Generating daily briefing...")
         briefing_text = await generate_daily_briefing(briefing_signals)
-        await slack_daily(briefing_text)
-        await discord_daily(briefing_text)
+        if SLACK_WEBHOOK_DAILY:
+            await slack_daily(briefing_text)
+        if DISCORD_WEBHOOK_DAILY:
+            await discord_daily(briefing_text)
         if smtp_enabled:
             await email_daily(briefing_text)
-        logger.info("Daily briefing sent")
+        logger.info("Daily briefing generated")
 
     # 8. Save signals
-    from hedwig.storage import save_signals
+    from hedwig.storage import save_signals, get_backend_name
     relevant = [s for s in scored if s.relevance_score >= 0.3]
     saved = save_signals(relevant)
-    logger.info(f"Saved {saved} signals to Supabase")
+    logger.info(f"Saved {saved} signals to {get_backend_name()}")
 
     # 9. Daily evolution (self-improvement)
     await run_evolution_daily()
@@ -378,15 +459,21 @@ async def run_weekly():
     logger.info(f"Generating weekly briefing from {len(signals)} signals...")
     briefing_text = await generate_weekly_briefing(signals)
 
-    from hedwig.config import smtp_alerts_configured
+    from hedwig.config import (
+        SLACK_WEBHOOK_DAILY,
+        DISCORD_WEBHOOK_DAILY,
+        smtp_alerts_configured,
+    )
     from hedwig.delivery.slack import send_weekly_briefing as slack_weekly
     from hedwig.delivery.discord import send_weekly_briefing as discord_weekly
     from hedwig.delivery.email import send_weekly_briefing as email_weekly
-    await slack_weekly(briefing_text)
-    await discord_weekly(briefing_text)
+    if SLACK_WEBHOOK_DAILY:
+        await slack_weekly(briefing_text)
+    if DISCORD_WEBHOOK_DAILY:
+        await discord_weekly(briefing_text)
     if smtp_alerts_configured():
         await email_weekly(briefing_text)
-    logger.info("Weekly briefing sent")
+    logger.info("Weekly briefing generated")
 
     # Weekly evolution
     await run_evolution_weekly(total_signals=len(signals))
@@ -534,8 +621,77 @@ def list_sources():
 # CLI
 # ---------------------------------------------------------------------------
 
+async def run_critical_loop(interval: int = 1200) -> None:
+    """Continuous critical-tier polling loop. SIGINT-safe."""
+    import signal as _signal
+    from hedwig.engine.critical import run_critical_cycle
+    from hedwig.config import (
+        SLACK_WEBHOOK_ALERTS,
+        DISCORD_WEBHOOK_ALERTS,
+        smtp_alerts_configured,
+    )
+
+    stop_flag = {"stop": False}
+
+    def _handler(signum, _frame):
+        logger.info("Critical loop received signal %s — stopping", signum)
+        stop_flag["stop"] = True
+
+    try:
+        _signal.signal(_signal.SIGINT, _handler)
+        _signal.signal(_signal.SIGTERM, _handler)
+    except Exception:
+        pass
+
+    async def _deliver(signal):
+        if SLACK_WEBHOOK_ALERTS:
+            try:
+                from hedwig.delivery.slack import send_alert
+                await send_alert(signal)
+            except Exception as e:
+                logger.warning("slack alert failed: %s", e)
+        if DISCORD_WEBHOOK_ALERTS:
+            try:
+                from hedwig.delivery.discord import send_alert
+                await send_alert(signal)
+            except Exception as e:
+                logger.warning("discord alert failed: %s", e)
+        if smtp_alerts_configured():
+            try:
+                from hedwig.delivery.email import send_alert
+                await send_alert(signal)
+            except Exception as e:
+                logger.warning("email alert failed: %s", e)
+
+    logger.info("Critical loop starting — interval=%ds. Ctrl+C to stop.", interval)
+    while not stop_flag["stop"]:
+        try:
+            res = await run_critical_cycle(deliver=_deliver)
+            logger.info(
+                "Critical cycle: scanned=%d qualified=%d delivered=%d",
+                res.get("scanned", 0), res.get("qualified", 0), res.get("delivered", 0),
+            )
+        except Exception as e:
+            logger.warning("Critical cycle failed: %s", e)
+
+        # Sleep in 1s slices so SIGINT is honored quickly
+        for _ in range(max(1, interval)):
+            if stop_flag["stop"]:
+                break
+            await asyncio.sleep(1)
+
+    logger.info("Critical loop stopped.")
+
+
+async def run_meta_cycle_cli() -> None:
+    from hedwig.evolution.meta import run_meta_cycle
+    logger.info("Running one Meta-Evolution cycle (force=True)...")
+    result = run_meta_cycle(force=True)
+    logger.info("Meta cycle result: %s", result)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Hedwig v2.1 — Self-Evolving AI Signal Radar")
+    parser = argparse.ArgumentParser(description="Hedwig v3.0 — Self-Evolving AI Signal Radar")
     parser.add_argument("--weekly", action="store_true", help="Weekly briefing + macro-evolution")
     parser.add_argument("--dry-run", action="store_true", help="Collect only (no API keys needed)")
     parser.add_argument("--collect", action="store_true", help="Collect + score (needs OPENAI_API_KEY)")
@@ -548,6 +704,12 @@ def main():
     parser.add_argument("--tray", action="store_true", help="Run as macOS menubar tray app")
     parser.add_argument("--quickstart", action="store_true", help="Zero-config local mode (SQLite, only OpenAI key needed)")
     parser.add_argument("--port", type=int, default=8765, help="Dashboard port (default: 8765)")
+    parser.add_argument("--critical-loop", action="store_true",
+                        help="Run the Critical-tier polling loop (default every 20 min)")
+    parser.add_argument("--critical-interval", type=int, default=1200,
+                        help="Critical poll interval in seconds (default 1200 = 20 min)")
+    parser.add_argument("--meta-cycle", action="store_true",
+                        help="Run one Meta-Evolution cycle and exit")
     args = parser.parse_args()
 
     if args.quickstart:
@@ -576,6 +738,10 @@ def main():
         asyncio.run(run_dry())
     elif args.collect:
         asyncio.run(run_daily(collect_only=True))
+    elif args.critical_loop:
+        asyncio.run(run_critical_loop(interval=args.critical_interval))
+    elif args.meta_cycle:
+        asyncio.run(run_meta_cycle_cli())
     else:
         asyncio.run(run_daily())
 

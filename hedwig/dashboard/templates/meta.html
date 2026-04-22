@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Meta-Evolution — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🔬 Meta-Evolution</h1>
+  <p class="subtitle">Autoresearch on the algorithm itself: mutate → shadow evaluate → adopt if fitness improves.</p>
+</div>
+
+<div class="section">
+  <p class="muted">Runs <code>n</code> mutations against the current algorithm.yaml. Each candidate is shadow-scored; the winner is adopted if it clears the <code>fitness.adoption_threshold</code> in algorithm.yaml.</p>
+  <div class="meta-controls">
+    <label>Candidates: <input id="n" type="number" value="3" min="1" max="10" style="width: 70px;"></label>
+    <label><input id="force" type="checkbox" checked> Force-run (ignore <code>meta_evolution.enabled</code>)</label>
+    <button class="btn btn-primary" onclick="runMeta()">▶ Run one cycle</button>
+  </div>
+  <div id="meta-result" class="meta-result" style="display:none;"></div>
+</div>
+
+<div class="section">
+  <h2>Algorithm Version History</h2>
+  <div id="algo-history"><em>Loading…</em></div>
+</div>
+
+<script>
+async function runMeta() {
+  const n = parseInt(document.getElementById('n').value || '3');
+  const force = document.getElementById('force').checked;
+  const out = document.getElementById('meta-result');
+  out.style.display = 'block';
+  out.innerHTML = '<em>Running cycle…</em>';
+  try {
+    const r = await fetch('/meta/cycle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({n_candidates: n, force}),
+    });
+    const data = await r.json();
+    const adoptedBanner = data.adopted
+      ? `<div class="adopted-banner">✅ Adopted: ${data.chosen_strategy}, Δ fitness +${(data.fitness_delta * 100).toFixed(1)}%. New version v${data.new_version}</div>`
+      : `<div class="skipped-banner">No adoption — best Δ ${(data.fitness_delta * 100).toFixed(2)}% (threshold ${(data.threshold * 100).toFixed(1)}%)</div>`;
+    const rows = (data.candidates || []).map(c =>
+      `<tr>
+         <td>${c.strategy}</td>
+         <td>${(c.fitness_delta * 100).toFixed(2)}%</td>
+         <td>${c.recommend}</td>
+       </tr>`
+    ).join('');
+    out.innerHTML = `
+      ${adoptedBanner}
+      <table class="meta-table">
+        <thead><tr><th>Strategy</th><th>Δ fitness</th><th>Recommend</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    loadHistory();
+  } catch (e) {
+    out.innerHTML = `<em class="error">Error: ${e}</em>`;
+  }
+}
+
+async function loadHistory() {
+  const box = document.getElementById('algo-history');
+  try {
+    const r = await fetch('/evolution/timeline?days=365&limit=50');
+    const data = await r.json();
+    const versions = (data.events || []).filter(e => e.type === 'algorithm_version');
+    if (!versions.length) {
+      box.innerHTML = '<p class="muted">No algorithm versions recorded yet. Run a meta cycle above.</p>';
+      return;
+    }
+    box.innerHTML = '<table class="meta-table"><thead><tr><th>Version</th><th>When</th><th>Origin</th><th>Fitness</th></tr></thead><tbody>' +
+      versions.map(v => `<tr><td>v${v.version}</td><td>${(v.at || '').slice(0, 19)}</td><td>${v.origin || ''}</td><td>${v.fitness ? '+' + (v.fitness * 100).toFixed(1) + '%' : '—'}</td></tr>`).join('') +
+      '</tbody></table>';
+  } catch (e) {
+    box.innerHTML = `<em class="error">${e}</em>`;
+  }
+}
+
+loadHistory();
+</script>
+
+<style>
+.meta-controls { display: flex; gap: 12px; align-items: center; margin: 12px 0; }
+.meta-result { margin-top: 14px; padding: 14px; background: #f7f7f9; border-radius: 6px; }
+.adopted-banner { padding: 10px; background: #dcfce7; border-radius: 4px; margin-bottom: 10px; }
+.skipped-banner { padding: 10px; background: #fef3c7; border-radius: 4px; margin-bottom: 10px; }
+.meta-table { width: 100%; border-collapse: collapse; }
+.meta-table th, .meta-table td { padding: 6px 10px; border-bottom: 1px solid #eee; text-align: left; }
+</style>
+
+{% endblock %}

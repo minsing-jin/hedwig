@@ -32,6 +32,7 @@ ENGAGEMENT_BASELINES = {
     "polymarket": {"score": 10000, "comments": 0},  # volume-based
     "arxiv": {"score": 0, "comments": 0},  # no engagement metrics
     "semantic_scholar": {"score": 10, "comments": 0},  # citation-based
+    "podcast": {"score": 0, "comments": 0},  # RSS has no engagement numbers
 }
 
 # Source authority weights (higher = more trusted for AI signals)
@@ -52,6 +53,7 @@ SOURCE_AUTHORITY = {
     "web_search": 0.6,
     "tiktok": 0.4,
     "instagram": 0.4,
+    "podcast": 0.65,  # curated long-form audio, no engagement metrics
     "custom": 0.5,
 }
 
@@ -97,25 +99,33 @@ def detect_cross_platform_convergence(
     """Detect if similar content appears across multiple platforms.
 
     Uses trigram overlap for fuzzy matching. Returns 0.0-1.0 convergence score.
+
+    When called repeatedly for the same ``all_posts`` list, the trigram
+    precomputation is memoised on ``list.id`` to collapse the inner loop
+    from O(N²) string rebuilds to O(N) total. Callers can also pass a
+    precomputed ``_trigram_index`` dict via the post's extra to short-circuit.
     """
     post_trigrams = _trigrams(post.title.lower())
     if not post_trigrams:
         return 0.0
 
-    other_platforms = set()
-    for other in all_posts:
-        if other.platform == post.platform:
-            continue
-        if other.external_id == post.external_id:
-            continue
-        other_trigrams = _trigrams(other.title.lower())
-        if not other_trigrams:
-            continue
-        overlap = len(post_trigrams & other_trigrams) / max(len(post_trigrams | other_trigrams), 1)
-        if overlap >= threshold:
-            other_platforms.add(other.platform.value)
+    index = _build_trigram_index(all_posts)
 
-    # More platforms mentioning similar content = higher convergence
+    other_platforms = set()
+    for ext_id, (other_platform, trigrams) in index.items():
+        if ext_id == post.external_id:
+            continue
+        if other_platform == post.platform.value:
+            continue
+        if not trigrams:
+            continue
+        union = len(post_trigrams | trigrams)
+        if union <= 0:
+            continue
+        overlap = len(post_trigrams & trigrams) / union
+        if overlap >= threshold:
+            other_platforms.add(other_platform)
+
     return min(1.0, len(other_platforms) * 0.3)
 
 
@@ -126,6 +136,30 @@ def _trigrams(text: str) -> set[str]:
     if len(joined) < 3:
         return set()
     return {joined[i : i + 3] for i in range(len(joined) - 2)}
+
+
+_TRIGRAM_INDEX_CACHE: dict[int, dict[str, tuple[str, set[str]]]] = {}
+
+
+def _build_trigram_index(posts: list[RawPost]) -> dict[str, tuple[str, set[str]]]:
+    """Memoised trigram index for the current candidate list.
+
+    Returns {external_id: (platform, title_trigrams)}. Keyed by ``id(posts)``
+    so one ranking pass reuses the same index across all posts in the batch.
+    """
+    key = id(posts)
+    cached = _TRIGRAM_INDEX_CACHE.get(key)
+    if cached is not None and len(cached) == len(posts):
+        return cached
+    out: dict[str, tuple[str, set[str]]] = {}
+    for p in posts:
+        out[p.external_id] = (p.platform.value, _trigrams((p.title or "").lower()))
+    _TRIGRAM_INDEX_CACHE[key] = out
+    # prune to at most 4 cached batches to keep memory bounded
+    if len(_TRIGRAM_INDEX_CACHE) > 4:
+        oldest = next(iter(_TRIGRAM_INDEX_CACHE))
+        _TRIGRAM_INDEX_CACHE.pop(oldest, None)
+    return out
 
 
 def pre_score(

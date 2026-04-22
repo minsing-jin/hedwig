@@ -1,0 +1,113 @@
+# Hedwig Algorithm Config — user-owned recommendation algorithm definition.
+#
+# This file is a first-class user asset, peer to criteria.yaml.
+# It defines the Hybrid Ensemble structure and weights used by the ranking stage.
+# All changes are audit-logged to evolution/algorithm_log.jsonl.
+#
+# Meta-Evolution mutates this file via shadow-mode experiments.
+# Users may edit it directly or via natural-language commands.
+#
+# See docs/VISION_v3.md section 8-9 for the full architecture.
+
+version: 1
+updated_at: "2026-04-22"
+origin: initial_default_v3_hybrid
+
+# ---------------------------------------------------------------------------
+# Stage A — Retrieval (cheap, fast candidate generation)
+# Output: top_n candidates forwarded to Stage B
+# ---------------------------------------------------------------------------
+retrieval:
+  top_n: 200
+  threshold: 0.10        # pre_filter drops candidates below this numeric pre-score
+  components:
+    pre_scorer:
+      enabled: true
+      weight: 1.0
+      # uses hedwig/engine/pre_scorer.py (5-factor numeric)
+    embed_sim:
+      enabled: false          # retrieval-stage embedding of ALL posts is costly; enable when your usage warrants
+      weight: 0.8
+      model: text-embedding-3-small
+      criteria_vector_from: [signal_preferences.care_about, context.interests]
+    collaborative_filter:
+      enabled: false          # 사용자 풀 생기면
+      weight: 0.5
+
+# ---------------------------------------------------------------------------
+# Stage B — Ranking Ensemble
+# Output: top_k signals for delivery. Final score = Σ wᵢ · normalize(scoreᵢ)
+# ---------------------------------------------------------------------------
+ranking:
+  top_k: 30
+  # v3 default is a true 4-component hybrid.
+  # The cheap components (ltr/content/popularity) rank all retrieval candidates;
+  # llm_judge reranks only the top_k — see apply_to below.
+  components:
+    llm_judge:
+      enabled: true
+      weight: 0.35
+      model: ${OPENAI_MODEL_FAST}
+      apply_to: top_k         # honored: runs only on top_k AFTER cheap-component ranking
+    ltr:
+      enabled: true           # pure-Python logistic with default prior; online-trainable
+      weight: 0.25
+      features:
+        - text_relevance
+        - source_authority
+        - engagement_velocity
+        - recency_decay
+        - convergence_count
+        - past_upvote_similarity
+        - past_downvote_similarity
+        - dwell_time_proxy
+    content_based:
+      enabled: true           # OpenAI embeddings when key present, Jaccard fallback otherwise
+      weight: 0.20
+    popularity_prior:
+      enabled: true
+      weight: 0.10
+      decay_hours: 48
+    bandit:
+      enabled: false          # meaningful only after feedback history accrues; meta-evolution can flip this
+      weight: 0.10
+      strategy: thompson_sampling
+      exploration_rate: 0.1
+
+# ---------------------------------------------------------------------------
+# Fitness function — how we measure if an algorithm version is better
+# Meta-Evolution uses this to accept/reject mutations. The sandbox reads
+# these fields directly — changing the metrics here changes how mutations
+# are judged.
+# ---------------------------------------------------------------------------
+fitness:
+  short_horizon:                # daily/weekly
+    metric: upvote_ratio        # (#up / (#up + #down))
+    weight: 0.6
+  long_horizon:                 # monthly
+    metric: retention_x_acceptance
+    weight: 0.4
+    components:
+      retention: days_with_any_feedback_in_last_28_days
+      acceptance: on_demand_query_acceptance_rate
+  diversity_bonus:
+    enabled: true
+    magnitude: 0.1              # adjustment applied for healthy component mix
+  adoption_threshold: 0.05      # +5% required to adopt a mutation
+
+# ---------------------------------------------------------------------------
+# Meta-Evolution — Karpathy autoresearch pattern on the algorithm itself
+# Phase 4 activates this. Runs monthly by default.
+# ---------------------------------------------------------------------------
+meta_evolution:
+  enabled: false                # user flips on when they have enough feedback history
+  cadence_days: 28
+  mutation_strategies:
+    - weight_perturbation
+    - feature_toggle
+    - feature_suggest_from_papers
+    - structural_change
+  shadow_mode:
+    duration_days: 7
+    parallel_variants: 3
+  rollback_if_fitness_drops: true

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Evolution Timeline — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🧬 Evolution Timeline</h1>
+  <p class="subtitle">How your algorithm has drifted over time — every edit, Q&amp;A, and auto-mutation.</p>
+</div>
+
+<div class="section">
+  <div class="button-row">
+    <button class="btn" onclick="loadTimeline(7)">Last 7 days</button>
+    <button class="btn" onclick="loadTimeline(30)">Last 30 days</button>
+    <button class="btn" onclick="loadTimeline(90)">Last 90 days</button>
+  </div>
+  <div id="timeline-body" class="timeline">
+    <p class="muted">Loading…</p>
+  </div>
+</div>
+
+<script>
+async function loadTimeline(days) {
+  const body = document.getElementById('timeline-body');
+  body.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const r = await fetch(`/evolution/timeline?days=${days}&limit=200`);
+    const data = await r.json();
+    const events = data.events || [];
+    if (!events.length) {
+      body.innerHTML = '<p class="muted">No events in this window.</p>';
+      return;
+    }
+    body.innerHTML = events.map(e => {
+      const at = e.at || '';
+      const tag = ({
+        'criteria_edit': '📝',
+        'qa_accept': '👍',
+        'qa_reject': '👎',
+        'qa_ask': '❓',
+        'algorithm_version': '⚙️',
+        'evolution_cycle': '🔄',
+      })[e.type] || '•';
+      const summary = e.payload && e.payload.intent ? e.payload.intent :
+                      e.payload && e.payload.question ? e.payload.question :
+                      e.analysis_summary || e.origin || '';
+      const extra = e.type === 'algorithm_version'
+        ? `<span class="pill">v${e.version}</span> <span class="muted">(${e.origin || 'manual'})</span>`
+        : '';
+      return `
+        <div class="timeline-item">
+          <div class="timeline-when">${at.slice(0, 19).replace('T', ' ')}</div>
+          <div class="timeline-body">
+            <span class="timeline-tag">${tag}</span>
+            <span class="timeline-kind">${e.type}</span>
+            <span class="timeline-channel">${e.channel || ''}</span>
+            ${extra}
+            <div class="timeline-summary">${(summary || '').toString().slice(0, 240).replace(/</g, '&lt;')}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<p class="error">Load failed: ${e}</p>`;
+  }
+}
+
+loadTimeline(30);
+</script>
+
+<style>
+.timeline-item { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #eee; }
+.timeline-when { color: #888; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; min-width: 150px; }
+.timeline-body { flex: 1; }
+.timeline-tag { font-size: 16px; margin-right: 6px; }
+.timeline-kind { font-weight: 600; margin-right: 8px; }
+.timeline-channel { color: #666; font-size: 12px; text-transform: uppercase; margin-right: 8px; }
+.timeline-summary { color: #333; margin-top: 4px; font-size: 13px; line-height: 1.4; }
+.pill { display: inline-block; padding: 1px 7px; background: #eef; border-radius: 10px; font-size: 11px; }
+</style>
+
+{% endblock %}
