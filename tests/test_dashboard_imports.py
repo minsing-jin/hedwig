@@ -22,6 +22,7 @@ EXPECTED_MODULES = [
     "hedwig.dashboard",
     "hedwig.dashboard.app",
     "hedwig.dashboard.db_setup",
+    "hedwig.dashboard.demo_seed",
     "hedwig.dashboard.env_manager",
     "hedwig.dashboard.generative",
     "hedwig.dashboard.validator",

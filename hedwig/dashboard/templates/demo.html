@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Concept Demo — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🦉 Hedwig v3 — Concept Demo</h1>
+  <p class="subtitle">
+    <strong>Algorithm Sovereignty for individuals.</strong> 기업 알고리즘 대신,
+    당신이 자연어·👍/👎·질문으로 조각하는 자기진화 추천 엔진.
+  </p>
+</div>
+
+<div class="section">
+  <h2>⚡ 1분 Setup — 시드 데이터 주입</h2>
+  <p class="muted">
+    실제 daily 파이프라인 돌리기 전에 synthetic 시그널/피드백/진화 이벤트를 DB에 심어서
+    timeline, sandbox, meta 페이지를 즉시 의미있게 체험합니다.
+    실제 사용자 데이터(<code>criteria.yaml</code>, 실제 feedback)는 건드리지 않습니다 —
+    시드는 external_id <code>demo-*</code> 전용.
+  </p>
+  <div class="button-row">
+    <button class="btn btn-primary" onclick="seedDemo()">🌱 Seed demo data</button>
+    <button class="btn" onclick="resetDemo()">🧹 Reset demo data</button>
+  </div>
+  <div id="seed-result" class="muted" style="margin-top: 8px;"></div>
+</div>
+
+<div class="section">
+  <h2>🏛️ 5 Differentiators — 클릭해서 바로 체험</h2>
+  <div class="diff-grid">
+
+    <div class="diff-card">
+      <div class="diff-num">1</div>
+      <h3>Algorithm Sovereignty</h3>
+      <p>
+        <code>criteria.yaml</code> + <code>algorithm.yaml</code> + 진화 로그 = 사용자 소유.
+        audit / export / rollback 모두 가능.
+      </p>
+      <div class="button-row">
+        <a class="btn" href="/criteria">criteria.yaml →</a>
+        <a class="btn" href="/evolution" target="_blank">진화 타임라인 →</a>
+      </div>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-num">2</div>
+      <h3>Triple-Input Sculpting</h3>
+      <p>
+        <strong>Explicit</strong>(자연어 편집) + <strong>Semi</strong>(Q&amp;A 수용) +
+        <strong>Implicit</strong>(upvote). 세 경로 모두 같은 fitness로 수렴.
+      </p>
+      <div class="button-row">
+        <button class="btn" onclick="demoQA()">💬 Q&amp;A 샘플</button>
+        <button class="btn" onclick="demoNLEdit()">📝 NL diff 프리뷰</button>
+        <button class="btn" onclick="demoVote()">👍 Upvote 시뮬</button>
+      </div>
+      <pre id="triple-out" class="demo-output" style="display:none;"></pre>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-num">3</div>
+      <h3>Self-Evolving Fitness</h3>
+      <p>
+        Daily micro + Weekly macro + <strong>Monthly meta</strong> (Karpathy autoresearch
+        패턴을 알고리즘 구조 자체에 적용).
+      </p>
+      <div class="button-row">
+        <button class="btn" onclick="demoMeta()">🔬 Meta cycle 1회 (force)</button>
+        <a class="btn" href="/meta" target="_blank">/meta 페이지 →</a>
+      </div>
+      <pre id="meta-out" class="demo-output" style="display:none;"></pre>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-num">4</div>
+      <h3>4-Tier Temporal Lattice</h3>
+      <p>
+        <strong>Critical</strong>(instant) / <strong>Daily</strong>(morning) /
+        <strong>Weekly</strong>(strategy) / <strong>On-demand</strong>(Q&amp;A).
+        하나의 엔진이 네 시간축을 동시 서빙.
+      </p>
+      <div class="tier-grid">
+        <div class="tier"><span class="tier-icon">⚡</span><span class="tier-label">Critical</span></div>
+        <div class="tier"><span class="tier-icon">🌅</span><span class="tier-label">Daily</span></div>
+        <div class="tier"><span class="tier-icon">📈</span><span class="tier-label">Weekly</span></div>
+        <div class="tier"><span class="tier-icon">💬</span><span class="tier-label">On-demand</span></div>
+      </div>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-num">5</div>
+      <h3>Hybrid Ensemble + Meta-Evolution</h3>
+      <p>
+        4개 컴포넌트(llm_judge · ltr · content_based · popularity_prior) + 선택적 bandit.
+        가중치·feature·구조가 <strong>자체 진화 대상</strong>.
+      </p>
+      <div class="button-row">
+        <button class="btn" onclick="demoSandbox()">🧪 Sandbox what-if</button>
+        <a class="btn" href="/sandbox" target="_blank">/sandbox →</a>
+      </div>
+      <pre id="sandbox-out" class="demo-output" style="display:none;"></pre>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <h2>🏗️ 아키텍처 한눈</h2>
+  <pre class="arch-diagram">
+Collection (MCP · Skill · RSS · API — 19 sources)
+        │
+        ▼
+Stage A: Retrieval (pre_scorer + last30days enrichment)
+        │  top_n ≤ 200
+        ▼
+Stage B: Ranking Ensemble ◄───── algorithm.yaml
+        │  cheap pass (ltr · content · popularity)
+        │  rerank pass (llm_judge on top_k only)
+        ▼
+4-Tier Delivery (critical · daily · weekly · on-demand)
+        │
+        ▼
+Triple-Input Feedback ───────► Evolution (daily/weekly/monthly)
+ explicit · semi · implicit
+</pre>
+</div>
+
+<div class="section">
+  <h2>📊 현재 상태</h2>
+  <div id="state-summary" class="state-grid">
+    <em class="muted">Loading…</em>
+  </div>
+</div>
+
+<script>
+async function seedDemo() {
+  const el = document.getElementById('seed-result');
+  el.textContent = 'Seeding…';
+  const r = await fetch('/demo/seed', {method: 'POST'});
+  const data = await r.json();
+  el.textContent =
+    `✓ Seeded: ${data.signals_seeded} signals, ${data.feedback_seeded} feedbacks, ` +
+    `${data.evolution_signals_seeded} evolution events, ` +
+    `${data.criteria_versions_seeded} criteria versions, ` +
+    `${data.algorithm_versions_seeded} algorithm versions.`;
+  loadState();
+}
+
+async function resetDemo() {
+  const el = document.getElementById('seed-result');
+  el.textContent = 'Cleaning…';
+  await fetch('/demo/reset', {method: 'POST'});
+  el.textContent = '🧹 Demo rows removed.';
+  loadState();
+}
+
+async function demoQA() {
+  const out = document.getElementById('triple-out');
+  out.style.display = 'block';
+  out.textContent = 'Asking…';
+  const r = await fetch('/ask', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: '이번 주 agent 툴 중 뭐가 제일 빠르게 떴어?', top_k: 5}),
+  });
+  const data = await r.json();
+  out.textContent =
+    `>> ${(data.answer || '').slice(0, 300)}\n\n` +
+    `Sources: ${data.sources?.length || 0}\nFallback suggested: ${data.fallback_suggested}`;
+}
+
+async function demoNLEdit() {
+  const out = document.getElementById('triple-out');
+  out.style.display = 'block';
+  out.textContent = 'Proposing diff…';
+  const r = await fetch('/criteria/propose', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({intent: 'MoE 피로도 높아. agent framework 위주로 바꿔줘'}),
+  });
+  const data = await r.json();
+  if (!data.ok) {
+    out.textContent = `(skipped — ${data.error || 'no OpenAI key configured'})\n\n` +
+      'Example payload that would be generated:\n' +
+      '  summary: "MoE 제거, agent frameworks 추가"\n' +
+      '  changes:\n' +
+      '    - op=remove path=signal_preferences.care_about value=MoE\n' +
+      '    - op=add path=signal_preferences.care_about value=agent frameworks\n';
+    return;
+  }
+  out.textContent =
+    `Summary: ${data.summary}\nRationale: ${data.rationale}\n\n--- Diff preview ---\n${data.preview?.diff || ''}`;
+}
+
+async function demoVote() {
+  const out = document.getElementById('triple-out');
+  out.style.display = 'block';
+  out.textContent = 'Logging upvote on demo-0…';
+  await fetch('/feedback/demo-0/up', {method: 'POST'});
+  out.textContent = '👍 Implicit feedback saved. Check /evolution timeline for the event.';
+}
+
+async function demoMeta() {
+  const out = document.getElementById('meta-out');
+  out.style.display = 'block';
+  out.textContent = 'Running 3-candidate meta cycle (force=true)…';
+  const r = await fetch('/meta/cycle', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({n_candidates: 3, force: true}),
+  });
+  const data = await r.json();
+  const head = data.adopted
+    ? `✅ Adopted: ${data.chosen_strategy} Δfit +${(data.fitness_delta*100).toFixed(1)}% → v${data.new_version}`
+    : `ℹ️  No adoption (best Δ=${(data.fitness_delta*100).toFixed(2)}%, threshold=${(data.threshold*100).toFixed(1)}%)`;
+  const candidates = (data.candidates || []).map(c =>
+    `  ${c.strategy.padEnd(30)} Δ=${(c.fitness_delta*100).toFixed(2)}%  → ${c.recommend}`
+  ).join('\n');
+  out.textContent = head + '\n\n' + candidates;
+}
+
+async function demoSandbox() {
+  const out = document.getElementById('sandbox-out');
+  out.style.display = 'block';
+  out.textContent = 'Simulating: bandit↑ 0.3, llm_judge↓ 0.25…';
+  const r = await fetch('/sandbox/simulate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({perturbations: {bandit: 0.3, llm_judge: 0.25}}),
+  });
+  const data = await r.json();
+  out.textContent =
+    `Baseline fit: ${data.baseline.predicted_fitness}\n` +
+    `Candidate fit: ${data.candidate.predicted_fitness}\n` +
+    `Δ: ${(data.delta * 100).toFixed(2)}%   Verdict: ${data.recommend}`;
+}
+
+async function loadState() {
+  const out = document.getElementById('state-summary');
+  try {
+    const [health, timeline] = await Promise.all([
+      fetch('/health').then(r => r.json()),
+      fetch('/evolution/timeline?days=365&limit=10').then(r => r.json()),
+    ]);
+    const events = timeline.events || [];
+    const algoVersions = events.filter(e => e.type === 'algorithm_version');
+    const critVersions = events.filter(e => e.type === 'criteria_version');
+    const evolutionSignals = events.filter(e =>
+      ['criteria_edit','qa_accept','qa_reject','qa_ask'].includes(e.type)
+    );
+    out.innerHTML = `
+      <div class="state-card"><div class="state-label">Sources</div>
+        <div class="state-value">${health.source_count || 0}</div></div>
+      <div class="state-card"><div class="state-label">Algorithm versions</div>
+        <div class="state-value">${algoVersions.length}</div></div>
+      <div class="state-card"><div class="state-label">Criteria versions</div>
+        <div class="state-value">${critVersions.length}</div></div>
+      <div class="state-card"><div class="state-label">Evolution events (365d)</div>
+        <div class="state-value">${evolutionSignals.length}</div></div>
+      <div class="state-card"><div class="state-label">Daily runs total</div>
+        <div class="state-value">${health.total_daily_cycles || 0}</div></div>
+      <div class="state-card"><div class="state-label">Uptime (s)</div>
+        <div class="state-value">${health.uptime_seconds || 0}</div></div>
+    `;
+  } catch (e) {
+    out.innerHTML = `<em class="error">상태 로드 실패: ${e}</em>`;
+  }
+}
+
+loadState();
+</script>
+
+<style>
+.diff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+             gap: 16px; margin: 14px 0; }
+.diff-card { padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;
+             background: #fafafa; position: relative; }
+.diff-num { position: absolute; top: 12px; right: 14px; font-size: 34px; font-weight: 700;
+            color: #d1d5db; }
+.diff-card h3 { margin: 4px 0 8px 0; font-size: 16px; }
+.diff-card p { font-size: 13px; color: #4b5563; line-height: 1.5; margin-bottom: 10px; }
+.demo-output { background: #111827; color: #e5e7eb; padding: 10px; border-radius: 6px;
+               font-size: 11px; margin-top: 10px; overflow-x: auto; white-space: pre-wrap;
+               max-height: 260px; }
+.tier-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.tier { text-align: center; padding: 8px 4px; background: white; border: 1px solid #e5e7eb;
+        border-radius: 6px; }
+.tier-icon { display: block; font-size: 20px; }
+.tier-label { display: block; font-size: 11px; color: #6b7280; margin-top: 2px; }
+.arch-diagram { background: #111827; color: #9ca3af; padding: 16px; border-radius: 8px;
+                font-family: 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 1.5;
+                overflow-x: auto; white-space: pre; }
+.state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+              gap: 10px; }
+.state-card { padding: 12px; background: #f3f4f6; border-radius: 6px; text-align: center; }
+.state-label { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+.state-value { font-size: 24px; font-weight: 700; color: #111827; margin-top: 4px; }
+.error { color: #c0392b; }
+</style>
+
+{% endblock %}

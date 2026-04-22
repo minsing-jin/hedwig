@@ -387,6 +387,24 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def meta_page(request: Request):
         return TEMPLATES.TemplateResponse(request, "meta.html")
 
+    # -----------------------------------------------------------------------
+    # Demo — concept walkthrough with seed data
+    # -----------------------------------------------------------------------
+
+    @app.get("/demo", response_class=HTMLResponse)
+    async def demo_page(request: Request):
+        return TEMPLATES.TemplateResponse(request, "demo.html")
+
+    @app.post("/demo/seed")
+    async def demo_seed_endpoint():
+        from hedwig.dashboard.demo_seed import seed_demo
+        return JSONResponse(seed_demo(reset=True))
+
+    @app.post("/demo/reset")
+    async def demo_reset_endpoint():
+        from hedwig.dashboard.demo_seed import reset_demo
+        return JSONResponse(reset_demo())
+
     @app.post("/meta/cycle")
     async def meta_cycle_endpoint(request: Request):
         from hedwig.evolution.meta import run_meta_cycle
