@@ -350,6 +350,40 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         status_code = 200 if result.get("ok") else 500
         return JSONResponse(result, status_code=status_code)
 
+    # --- Natural-language editor for algorithm.yaml (HOW to recommend) -----
+
+    @app.post("/algorithm/propose")
+    async def algorithm_propose(request: Request):
+        from hedwig.onboarding.nl_algo_editor import propose_edit
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        intent = str(body.get("intent", "")).strip()
+        if not intent:
+            return JSONResponse({"ok": False, "error": "intent required"}, status_code=400)
+        result = await propose_edit(intent)
+        return JSONResponse(_jsonable(result))
+
+    @app.post("/algorithm/apply")
+    async def algorithm_apply(request: Request):
+        from hedwig.onboarding.nl_algo_editor import confirm_edit
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        changes = body.get("changes") or []
+        intent = str(body.get("intent", "")).strip()
+        if not isinstance(changes, list):
+            return JSONResponse({"ok": False, "error": "changes must be list"}, status_code=400)
+        result = confirm_edit(changes, intent=intent)
+        status_code = 200 if result.get("ok") else 500
+        return JSONResponse(result, status_code=status_code)
+
     # -----------------------------------------------------------------------
     # Phase 2 — Instrumentation: Why trace, Evolution timeline, Sandbox
     # -----------------------------------------------------------------------

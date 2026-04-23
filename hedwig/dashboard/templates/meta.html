@@ -7,6 +7,21 @@
   <p class="subtitle">Autoresearch on the algorithm itself: mutate → shadow evaluate → adopt if fitness improves.</p>
 </div>
 
+<div class="section" id="algo-nl-section">
+  <h2>📝 Edit algorithm.yaml in natural language</h2>
+  <p class="muted">
+    추천 알고리즘의 <strong>"어떻게"</strong> 부분 (ensemble 가중치, 컴포넌트 on/off,
+    top_k, fitness 등) 을 자연어로 바로 편집. 적용 시 새 algorithm_version 이 기록됩니다.
+  </p>
+  <div class="qa-input-row">
+    <input id="algo-intent" type="text" class="qa-input"
+           placeholder="예: bandit 비중 0.25로 올리고 content_based는 0.1로 낮춰"
+           onkeydown="if(event.key==='Enter') algoPropose()">
+    <button class="btn btn-primary" onclick="algoPropose()">Preview diff</button>
+  </div>
+  <div id="algo-result" class="meta-result" style="display:none;"></div>
+</div>
+
 <div class="section">
   <p class="muted">Runs <code>n</code> mutations against the current algorithm.yaml. Each candidate is shadow-scored; the winner is adopted if it clears the <code>fitness.adoption_threshold</code> in algorithm.yaml.</p>
   <div class="meta-controls">
@@ -73,6 +88,63 @@ async function loadHistory() {
       '</tbody></table>';
   } catch (e) {
     box.innerHTML = `<em class="error">${e}</em>`;
+  }
+}
+
+async function algoPropose() {
+  const input = document.getElementById('algo-intent');
+  const out = document.getElementById('algo-result');
+  const intent = input.value.trim();
+  if (!intent) return;
+  out.style.display = 'block';
+  out.innerHTML = '<em>제안 생성 중…</em>';
+  try {
+    const r = await fetch('/algorithm/propose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({intent}),
+    });
+    const data = await r.json();
+    if (!data.ok) {
+      out.innerHTML = `<em class="error">${data.error || 'failed'}</em>`;
+      return;
+    }
+    const diff = (data.preview?.diff || '(no changes)').replace(/</g, '&lt;');
+    out.innerHTML = `
+      <div><strong>${data.summary || ''}</strong></div>
+      <div class="muted">${data.rationale || ''}</div>
+      <pre style="background:#111827;color:#e5e7eb;padding:10px;border-radius:4px;
+                   font-size:12px;overflow:auto;max-height:300px">${diff}</pre>
+      <div class="button-row">
+        <button class="btn btn-primary"
+                onclick='algoConfirm(${JSON.stringify(data.changes).replace(/</g, "&lt;")}, ${JSON.stringify(intent)})'>
+          Apply to algorithm.yaml
+        </button>
+        <button class="btn" onclick="document.getElementById('algo-result').style.display='none'">Discard</button>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<em class="error">Error: ${e}</em>`;
+  }
+}
+
+async function algoConfirm(changes, intent) {
+  try {
+    const r = await fetch('/algorithm/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({changes, intent}),
+    });
+    const data = await r.json();
+    const out = document.getElementById('algo-result');
+    if (data.ok) {
+      out.innerHTML = `<div class="adopted-banner">✓ algorithm.yaml 업데이트 → v${data.version}</div>`;
+      document.getElementById('algo-intent').value = '';
+      loadHistory();
+    } else {
+      out.innerHTML = `<em class="error">${data.error || 'apply failed'}</em>`;
+    }
+  } catch (e) {
+    alert('Error: ' + e);
   }
 }
 
