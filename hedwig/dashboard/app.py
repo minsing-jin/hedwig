@@ -421,6 +421,21 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def meta_page(request: Request):
         return TEMPLATES.TemplateResponse(request, "meta.html")
 
+    @app.get("/brief", response_class=HTMLResponse)
+    async def brief_page(request: Request):
+        from hedwig.storage import get_briefings
+        cycle = request.query_params.get("cycle")
+        if cycle in ("daily", "weekly", "critical"):
+            rows = get_briefings(cycle_type=cycle, limit=30)
+            active = cycle
+        else:
+            rows = get_briefings(limit=30)
+            active = "all"
+        return TEMPLATES.TemplateResponse(
+            request, "brief.html",
+            {"briefings": rows, "cycle": active},
+        )
+
     # -----------------------------------------------------------------------
     # Demo — concept walkthrough with seed data
     # -----------------------------------------------------------------------

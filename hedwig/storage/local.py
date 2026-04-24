@@ -131,6 +131,16 @@ def init_db():
             captured_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- v3: Persisted daily/weekly briefings (engine 계기판 — users must be
+        -- able to read their brief on the web even without Slack/Discord)
+        CREATE TABLE IF NOT EXISTS briefings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cycle_type TEXT NOT NULL CHECK (cycle_type IN ('daily','weekly','critical')),
+            content TEXT NOT NULL,
+            signal_count INTEGER DEFAULT 0,
+            generated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         -- v3: Algorithm config version history (peer to criteria_versions)
         CREATE TABLE IF NOT EXISTS algorithm_versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,6 +162,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_evolution_signal_captured ON evolution_signal(captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_evolution_signal_channel ON evolution_signal(channel);
         CREATE INDEX IF NOT EXISTS idx_algorithm_versions_created ON algorithm_versions(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_briefings_generated ON briefings(generated_at DESC);
         """)
 
 
@@ -735,6 +746,59 @@ def save_algorithm_version(
     except Exception as e:
         logger.error("save_algorithm_version: %s", e)
         return False
+
+
+def save_briefing(cycle_type: str, content: str, signal_count: int = 0) -> int | None:
+    """Persist a generated briefing so the web UI can show it.
+
+    Returns the new row id or None on failure. Called from main.run_daily /
+    run_weekly / the critical loop after LLM generation but before delivery,
+    so users without Slack/Discord still have a place to read the brief.
+    """
+    if cycle_type not in ("daily", "weekly", "critical"):
+        logger.warning("save_briefing: invalid cycle_type %s", cycle_type)
+        return None
+    init_db()
+    try:
+        with _conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO briefings (cycle_type, content, signal_count)
+                   VALUES (?, ?, ?)""",
+                (cycle_type, content or "", int(signal_count or 0)),
+            )
+            return cur.lastrowid
+    except Exception as e:
+        logger.error("save_briefing: %s", e)
+        return None
+
+
+def get_briefings(cycle_type: str | None = None, limit: int = 30) -> list[dict]:
+    init_db()
+    # Tiebreak by id DESC so two briefs saved in the same second stay ordered.
+    if cycle_type:
+        q = ("""SELECT id, cycle_type, content, signal_count, generated_at
+               FROM briefings WHERE cycle_type = ?
+               ORDER BY generated_at DESC, id DESC LIMIT ?""")
+        params: tuple = (cycle_type, limit)
+    else:
+        q = ("""SELECT id, cycle_type, content, signal_count, generated_at
+               FROM briefings
+               ORDER BY generated_at DESC, id DESC LIMIT ?""")
+        params = (limit,)
+    with _conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_briefing(briefing_id: int) -> dict | None:
+    init_db()
+    with _conn() as conn:
+        row = conn.execute(
+            """SELECT id, cycle_type, content, signal_count, generated_at
+               FROM briefings WHERE id = ?""",
+            (briefing_id,),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def get_algorithm_history(limit: int = 50) -> list[dict]:

@@ -398,13 +398,22 @@ async def run_daily(collect_only: bool = False):
     if briefing_signals:
         logger.info("Generating daily briefing...")
         briefing_text = await generate_daily_briefing(briefing_signals)
+
+        # Persist first — the web /brief page must show it even when no
+        # webhook is configured. Delivery happens after.
+        try:
+            from hedwig.storage import save_briefing
+            save_briefing("daily", briefing_text, signal_count=len(briefing_signals))
+        except Exception as e:
+            logger.warning("save_briefing(daily) failed: %s", e)
+
         if SLACK_WEBHOOK_DAILY:
             await slack_daily(briefing_text)
         if DISCORD_WEBHOOK_DAILY:
             await discord_daily(briefing_text)
         if smtp_enabled:
             await email_daily(briefing_text)
-        logger.info("Daily briefing generated")
+        logger.info("Daily briefing generated + persisted")
 
     # 8. Save signals
     from hedwig.storage import save_signals, get_backend_name
@@ -475,6 +484,11 @@ async def run_weekly():
     from hedwig.engine.briefing import generate_weekly_briefing
     logger.info(f"Generating weekly briefing from {len(signals)} signals...")
     briefing_text = await generate_weekly_briefing(signals)
+    try:
+        from hedwig.storage import save_briefing
+        save_briefing("weekly", briefing_text, signal_count=len(signals))
+    except Exception as e:
+        logger.warning("save_briefing(weekly) failed: %s", e)
 
     from hedwig.config import (
         SLACK_WEBHOOK_DAILY,

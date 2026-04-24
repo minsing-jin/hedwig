@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Briefings — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>📰 Briefings</h1>
+  <p class="subtitle">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
+</div>
+
+<div class="section">
+  <div class="button-row">
+    <button class="btn{% if cycle == 'all' %} btn-primary{% endif %}" onclick="location='/brief'">All</button>
+    <button class="btn{% if cycle == 'daily' %} btn-primary{% endif %}" onclick="location='/brief?cycle=daily'">Daily</button>
+    <button class="btn{% if cycle == 'weekly' %} btn-primary{% endif %}" onclick="location='/brief?cycle=weekly'">Weekly</button>
+  </div>
+
+  {% if briefings %}
+    {% for b in briefings %}
+    <article class="brief-card">
+      <header class="brief-head">
+        <span class="brief-tag brief-tag-{{ b.cycle_type }}">{{ b.cycle_type }}</span>
+        <span class="brief-time">{{ b.generated_at[:19]|replace('T', ' ') }}</span>
+        <span class="brief-count">{{ b.signal_count }} signals</span>
+      </header>
+      <div class="brief-body"
+           data-raw="{{ b.content|e }}"
+           id="brief-{{ b.id }}">{{ b.content }}</div>
+    </article>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">
+      <p class="muted">
+        아직 브리핑이 없습니다.
+      </p>
+      <ol class="muted">
+        <li>홈에서 <strong>▶ Run Daily Pipeline</strong> 클릭 (수집 + 스코어링 + 브리핑 생성)</li>
+        <li>또는 <code>python -m hedwig</code> 1회 실행 → daily brief 생성</li>
+        <li>주간은 <code>python -m hedwig --weekly</code></li>
+      </ol>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+// Render the brief body as lightweight markdown (headings, lists, links, bold).
+// No external dep — inline because briefings are small.
+function renderMD(s) {
+  if (!s) return '';
+  let t = s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  t = t.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+  t = t.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+  t = t.replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  t = t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  t = t.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank">$2</a>');
+  t = t.replace(/^- (.*)$/gm, '<li>$1</li>');
+  t = t.replace(/(<li>.*<\/li>\n?)+/g, match => '<ul>' + match + '</ul>');
+  t = t.replace(/\n{2,}/g, '</p><p>');
+  t = '<p>' + t + '</p>';
+  return t;
+}
+document.querySelectorAll('.brief-body').forEach(el => {
+  const raw = el.textContent;
+  el.innerHTML = renderMD(raw);
+});
+</script>
+
+<style>
+.brief-card { margin: 16px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;
+              background: white; }
+.brief-head { display: flex; gap: 10px; align-items: center; margin-bottom: 12px;
+              font-size: 12px; color: #6b7280; }
+.brief-tag { display: inline-block; padding: 2px 8px; border-radius: 10px;
+             font-weight: 600; font-size: 11px; text-transform: uppercase; }
+.brief-tag-daily { background: #dbeafe; color: #1e40af; }
+.brief-tag-weekly { background: #fce7f3; color: #9d174d; }
+.brief-tag-critical { background: #fee2e2; color: #991b1b; }
+.brief-time { font-family: 'SF Mono', Menlo, monospace; }
+.brief-count { margin-left: auto; }
+.brief-body { line-height: 1.6; font-size: 14px; color: #111827; }
+.brief-body h1, .brief-body h2, .brief-body h3 { margin: 14px 0 8px 0; }
+.brief-body h3 { font-size: 15px; }
+.brief-body ul { margin: 6px 0 10px 18px; }
+.brief-body a { color: #2563eb; text-decoration: underline; }
+.empty-state { padding: 20px; background: #f9fafb; border-radius: 6px; }
+.empty-state ol { margin-top: 10px; padding-left: 20px; }
+</style>
+
+{% endblock %}
