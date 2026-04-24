@@ -1,0 +1,74 @@
+# Sovereignty boundary — the core moat (seed.yaml ontology + interview v2 #23)
+#
+# Declares which paths in criteria.yaml / algorithm.yaml / memory the USER may
+# edit directly, which paths the evolution LOOPS may mutate autonomously, and
+# which paths are readonly history (never modified).
+#
+# Enforced by hedwig/sovereignty.py. Both the natural-language editors
+# (nl_editor, nl_algo_editor) and the meta-evolution adopter consult this file
+# before writing.
+
+version: 1
+
+criteria:
+  user_editable:
+    - identity.*
+    - signal_preferences.care_about
+    - signal_preferences.ignore
+    - context.*
+    - delivery.*
+  system_mutable:
+    - signal_preferences.topic_weights
+    - signal_preferences.urgency_thresholds
+    - signal_preferences.anti_patterns
+  readonly_history:
+    - _schema_version
+    - created_at
+
+algorithm:
+  user_editable:
+    - retrieval.top_n
+    - retrieval.threshold
+    - ranking.top_k
+    - ranking.components.*.enabled
+    - ranking.components.*.weight
+    - ranking.components.*.features
+    - ranking.components.bandit.exploration_rate
+    - fitness.adoption_threshold
+    - meta_evolution.enabled
+    - meta_evolution.cadence_days
+  system_mutable:
+    - retrieval.components.*.weight
+    - ranking.components.*.enabled
+    - ranking.components.*.weight
+    - ranking.components.*.features
+    - meta_evolution.mutation_strategies
+    - fitness.diversity_bonus.magnitude
+  readonly_history:
+    - version
+    - updated_at
+    - origin
+
+memory:
+  user_editable: []              # user_memory is system-written but user-exportable
+  system_mutable:
+    - snapshot_week
+    - taste_trajectory
+    - confirmed_interests
+    - rejected_topics
+    - context
+    - natural_language_feedback
+  readonly_history:
+    - created_at
+
+export_contract:
+  format: yaml+jsonl
+  files:
+    - criteria.yaml
+    - algorithm.yaml
+    - user_memory.jsonl
+    - evolution_log.jsonl
+    - algorithm_log.jsonl
+  guarantee: >
+    These files are all the user needs to port their 'algorithm' to another
+    Hedwig install. No hidden state lives only in the SQLite DB.

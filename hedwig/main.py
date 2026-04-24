@@ -509,6 +509,36 @@ async def run_weekly():
     # Weekly evolution
     await run_evolution_weekly(total_signals=len(signals))
 
+    # Interpretation-style evolution (the 4th self_improvement axis,
+    # previously missing — see docs/phase_reports/interview_gap_audit.md G2/G11)
+    try:
+        from hedwig.evolution.interpretation import evolve_style_from_signals
+        from hedwig.storage import get_feedback_since
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+
+        since = _dt.now(tz=_tz.utc) - _td(days=7)
+        rows = get_feedback_since(since=since) or []
+        up = sum(1 for r in rows if r.get("vote") == "up")
+        down = sum(1 for r in rows if r.get("vote") == "down")
+        ratio = up / (up + down) if (up + down) else 0.5
+        nl_hints = [r.get("natural_language") for r in rows if r.get("natural_language")]
+        result = evolve_style_from_signals(
+            recent_feedback_ratio=ratio,
+            natural_language_hints=nl_hints,
+        )
+        logger.info("Interpretation-style evolve: %s", result)
+    except Exception as e:
+        logger.warning("interpretation evolution failed: %s", e)
+
+    # User memory snapshot (weekly append-only; portable identity anchor
+    # — see interview_gap_audit.md G3)
+    try:
+        from hedwig.memory.snapshot import create_weekly_snapshot
+        snap = create_weekly_snapshot()
+        logger.info("Weekly user_memory snapshot: %s", snap)
+    except Exception as e:
+        logger.warning("user_memory snapshot failed: %s", e)
+
     logger.info("━━━ Hedwig v2.0 Weekly Run Complete ━━━")
 
 

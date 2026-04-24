@@ -194,7 +194,16 @@ def confirm_edit(changes: list[dict], intent: str = "") -> dict:
     else:
         current = load_criteria() or {}
 
-    after = apply_changes(current, changes)
+    # Enforce sovereignty — only paths declared user_editable under criteria
+    # are applied here; anything else is reported so the UI can explain
+    # why a requested edit was ignored.
+    try:
+        from hedwig.sovereignty import filter_allowed_changes
+        allowed, rejected = filter_allowed_changes("criteria", changes, actor="user")
+    except Exception:
+        allowed, rejected = changes, []
+
+    after = apply_changes(current, allowed)
     diff = yaml_diff(current, after)
 
     try:
@@ -243,6 +252,8 @@ def confirm_edit(changes: list[dict], intent: str = "") -> dict:
         "path": str(CRITERIA_PATH),
         "version": new_version,
         "diff": diff,
+        "applied_changes": allowed,
+        "rejected_changes": rejected,
     }
 
 

@@ -421,6 +421,21 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def meta_page(request: Request):
         return TEMPLATES.TemplateResponse(request, "meta.html")
 
+    @app.get("/sovereignty", response_class=HTMLResponse)
+    async def sovereignty_page(request: Request):
+        from hedwig.sovereignty import load_sovereignty
+        spec = load_sovereignty()
+        domains = {k: v for k, v in spec.items() if k in ("criteria", "algorithm", "memory")}
+        export = spec.get("export_contract", {}) or {}
+        return TEMPLATES.TemplateResponse(
+            request, "sovereignty.html",
+            {
+                "domains": domains,
+                "export_files": export.get("files", []),
+                "export_guarantee": export.get("guarantee", ""),
+            },
+        )
+
     @app.get("/brief", response_class=HTMLResponse)
     async def brief_page(request: Request):
         from hedwig.storage import get_briefings

@@ -131,6 +131,20 @@ def init_db():
             captured_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- v3: First-class interpretation_style (seed.yaml ontology).
+        -- HOW signals are explained. Evolved weekly separately from criteria.
+        CREATE TABLE IF NOT EXISTS interpretation_styles (
+            id TEXT PRIMARY KEY,
+            version INTEGER NOT NULL,
+            tone TEXT DEFAULT 'mixed',
+            depth TEXT DEFAULT 'deep',
+            jargon_level TEXT DEFAULT 'medium',
+            prompt_template TEXT NOT NULL,
+            parent_version INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            is_active INTEGER DEFAULT 0
+        );
+
         -- v3: Persisted daily/weekly briefings (engine 계기판 — users must be
         -- able to read their brief on the web even without Slack/Discord)
         CREATE TABLE IF NOT EXISTS briefings (
@@ -746,6 +760,68 @@ def save_algorithm_version(
     except Exception as e:
         logger.error("save_algorithm_version: %s", e)
         return False
+
+
+def save_interpretation_style(style) -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO interpretation_styles
+                   (id, version, tone, depth, jargon_level, prompt_template,
+                    parent_version, created_at, is_active)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (
+                    style.id, style.version, style.tone, style.depth,
+                    style.jargon_level, style.prompt_template,
+                    style.parent_version,
+                    style.created_at.isoformat(),
+                ),
+            )
+        return True
+    except Exception as e:
+        logger.error("save_interpretation_style: %s", e)
+        return False
+
+
+def set_active_interpretation_style(style_id: str) -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute("UPDATE interpretation_styles SET is_active = 0")
+            conn.execute(
+                "UPDATE interpretation_styles SET is_active = 1 WHERE id = ?",
+                (style_id,),
+            )
+        return True
+    except Exception as e:
+        logger.error("set_active_interpretation_style: %s", e)
+        return False
+
+
+def get_active_interpretation_style() -> dict | None:
+    init_db()
+    with _conn() as conn:
+        row = conn.execute(
+            """SELECT id, version, tone, depth, jargon_level, prompt_template,
+                      parent_version, created_at
+               FROM interpretation_styles
+               WHERE is_active = 1 LIMIT 1"""
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_interpretation_style_history(limit: int = 30) -> list[dict]:
+    init_db()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT id, version, tone, depth, jargon_level, parent_version,
+                      created_at, is_active
+               FROM interpretation_styles
+               ORDER BY version DESC, id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def save_briefing(cycle_type: str, content: str, signal_count: int = 0) -> int | None:

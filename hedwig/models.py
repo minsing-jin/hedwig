@@ -108,6 +108,23 @@ class Feedback(BaseModel):
 # Criteria — versioned, auto-evolved
 # ---------------------------------------------------------------------------
 
+class InterpretationStyle(BaseModel):
+    """First-class artifact controlling HOW signals are explained.
+
+    Evolved weekly independently from criteria (seed.yaml ontology + AC 4).
+    Each Judgment records which interpretation_style_id produced it so
+    fitness attribution works across style versions.
+    """
+    id: str
+    version: int
+    tone: str = "mixed"        # technical | business | mixed
+    depth: str = "deep"        # surface | deep
+    jargon_level: str = "medium"  # low | medium | high
+    prompt_template: str = ""
+    parent_version: Optional[int] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+
+
 class CriteriaVersion(BaseModel):
     """A versioned snapshot of the user's filtering criteria."""
     version: int

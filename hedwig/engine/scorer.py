@@ -16,6 +16,13 @@ BATCH_SIZE = 20
 
 
 def _build_scoring_prompt(criteria: dict) -> str:
+    """Build scorer system prompt from the active InterpretationStyle.
+
+    Per seed.yaml ontology, `interpretation_style` is first-class and
+    evolves separately from criteria. The active style's prompt_template
+    is used verbatim with criteria values interpolated — so weekly style
+    evolution actually changes how signals are interpreted.
+    """
     focus = ", ".join(criteria.get("identity", {}).get("focus", []))
     care = "\n".join(f"- {c}" for c in criteria.get("signal_preferences", {}).get("care_about", []))
     ignore = "\n".join(f"- {i}" for i in criteria.get("signal_preferences", {}).get("ignore", []))
@@ -25,34 +32,28 @@ def _build_scoring_prompt(criteria: dict) -> str:
     context_interests = "\n".join(
         f"- {i}" for i in criteria.get("context", {}).get("interests", [])
     )
+    role = criteria.get("identity", {}).get("role", "AI builder")
 
-    return f"""You are an AI signal analyst for a personal intelligence radar.
+    try:
+        from hedwig.evolution.interpretation import DEFAULT_PROMPT_TEMPLATE, ensure_default_style
+        active = ensure_default_style()
+        template = active.get("prompt_template") or DEFAULT_PROMPT_TEMPLATE
+    except Exception:
+        from hedwig.evolution.interpretation import DEFAULT_PROMPT_TEMPLATE
+        template = DEFAULT_PROMPT_TEMPLATE
 
-## User Profile
-Role: {criteria.get('identity', {}).get('role', 'AI builder')}
-Focus areas: {focus}
-
-## What the user cares about:
-{care}
-
-## What to IGNORE (noise):
-{ignore}
-
-## Current context:
-Projects: {context_projects}
-Interests: {context_interests}
-
-## Your Task
-For each post, return a JSON object with:
-- "relevance_score": float 0.0-1.0 (how relevant to this user)
-- "urgency": "alert" | "digest" | "skip"
-- "why_relevant": 1-2 sentences explaining WHY this matters to this user (in Korean)
-- "devils_advocate": 1 sentence counter-perspective or hype warning (in Korean)
-- "exploration_tags": array of 1-3 short tags for adjacent areas or new categories worth exploring
-
-Respond with a JSON array. One object per post, in the same order as input.
-Be STRICT: most posts should score below 0.5. Only genuinely important signals get > 0.7.
-"""
+    try:
+        return template.format(
+            role=role, focus=focus, care=care, ignore=ignore,
+            context_projects=context_projects, context_interests=context_interests,
+        )
+    except Exception:
+        # If a user-edited template introduced bad placeholders, fall back
+        from hedwig.evolution.interpretation import DEFAULT_PROMPT_TEMPLATE
+        return DEFAULT_PROMPT_TEMPLATE.format(
+            role=role, focus=focus, care=care, ignore=ignore,
+            context_projects=context_projects, context_interests=context_interests,
+        )
 
 
 def _format_posts_for_scoring(posts: list[RawPost]) -> str:

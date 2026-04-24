@@ -187,7 +187,12 @@ async def propose_edit(user_intent: str) -> dict:
 def confirm_edit(changes: list[dict], intent: str = "") -> dict:
     """Apply changes to algorithm.yaml, bump algorithm_versions, log event."""
     current = load_algorithm_config() or {}
-    after = apply_changes(current, changes)
+    try:
+        from hedwig.sovereignty import filter_allowed_changes
+        allowed, rejected = filter_allowed_changes("algorithm", changes, actor="user")
+    except Exception:
+        allowed, rejected = changes, []
+    after = apply_changes(current, allowed)
     diff = yaml_diff(current, after)
 
     # bump version inside the yaml itself so load_algorithm_config reflects it
@@ -235,4 +240,6 @@ def confirm_edit(changes: list[dict], intent: str = "") -> dict:
         "path": str(ALGORITHM_PATH),
         "version": after["version"],
         "diff": diff,
+        "applied_changes": allowed,
+        "rejected_changes": rejected,
     }

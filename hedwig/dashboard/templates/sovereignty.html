@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Sovereignty — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🏛️ Algorithm Sovereignty</h1>
+  <p class="subtitle">
+    누가 어떤 path 를 쓸 수 있는가. <code>sovereignty.yaml</code> — 사용자 소유 자산.
+  </p>
+</div>
+
+{% for domain, spec in domains.items() %}
+<div class="section">
+  <h2>{{ domain|title }}</h2>
+  <div class="sov-grid">
+    <div class="sov-card user">
+      <h3>👤 User editable</h3>
+      <ul>
+        {% for p in spec.get('user_editable') or [] %}<li><code>{{ p }}</code></li>{% endfor %}
+        {% if not spec.get('user_editable') %}<li class="muted">(none)</li>{% endif %}
+      </ul>
+    </div>
+    <div class="sov-card system">
+      <h3>🤖 System mutable</h3>
+      <ul>
+        {% for p in spec.get('system_mutable') or [] %}<li><code>{{ p }}</code></li>{% endfor %}
+        {% if not spec.get('system_mutable') %}<li class="muted">(none)</li>{% endif %}
+      </ul>
+    </div>
+    <div class="sov-card readonly">
+      <h3>🔒 Readonly history</h3>
+      <ul>
+        {% for p in spec.get('readonly_history') or [] %}<li><code>{{ p }}</code></li>{% endfor %}
+        {% if not spec.get('readonly_history') %}<li class="muted">(none)</li>{% endif %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<div class="section">
+  <h2>📦 Export contract</h2>
+  <p class="muted">
+    이 파일들만 있으면 다른 Hedwig 설치로 알고리즘 이식 가능. SQLite DB에만 숨은 상태는 없습니다.
+  </p>
+  <ul>
+    {% for f in export_files %}<li><code>{{ f }}</code></li>{% endfor %}
+  </ul>
+  <p class="muted"><em>{{ export_guarantee }}</em></p>
+</div>
+
+<style>
+.sov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.sov-card { padding: 14px; border-radius: 8px; background: #f9fafb; border: 1px solid #e5e7eb; }
+.sov-card.user { border-left: 4px solid #2563eb; }
+.sov-card.system { border-left: 4px solid #16a34a; }
+.sov-card.readonly { border-left: 4px solid #9ca3af; }
+.sov-card h3 { margin: 0 0 8px 0; font-size: 14px; }
+.sov-card ul { margin: 0; padding-left: 18px; font-size: 12px; }
+.sov-card code { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; }
+</style>
+
+{% endblock %}
