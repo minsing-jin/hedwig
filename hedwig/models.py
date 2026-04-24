@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -75,7 +75,8 @@ class RawPost(BaseModel):
     author: str = ""
     score: int = 0
     comments_count: int = 0
-    published_at: datetime = Field(default_factory=datetime.utcnow)
+    # Always timezone-aware UTC so downstream comparisons don't mix naive/aware.
+    published_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     extra: dict = Field(default_factory=dict)
 
 

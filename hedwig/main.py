@@ -168,11 +168,28 @@ def _rows_to_posts(rows: list[dict]) -> list:
                     content=row.get("content") or "",
                     author=row.get("author") or "",
                     score=row.get("platform_score") or 0,
+                    # Pass published_at explicitly so the enrichment layer's
+                    # tz-aware cutoff comparison doesn't hit a naive default.
+                    published_at=_parse_ts(
+                        row.get("published_at") or row.get("collected_at")
+                    ),
                 )
             )
         except Exception:
             continue
     return out
+
+
+def _parse_ts(value) -> datetime:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not value:
+        return datetime.now(tz=timezone.utc)
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return datetime.now(tz=timezone.utc)
 
 
 # ---------------------------------------------------------------------------

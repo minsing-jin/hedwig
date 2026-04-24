@@ -50,7 +50,10 @@ def topic_persistence_score(
     days_with_match: set[str] = set()
 
     for other in historical_posts:
-        if other.published_at < cutoff:
+        other_ts = other.published_at
+        if other_ts.tzinfo is None:
+            other_ts = other_ts.replace(tzinfo=timezone.utc)
+        if other_ts < cutoff:
             continue
         other_tokens = set(_title_key(other).split())
         if not other_tokens:
