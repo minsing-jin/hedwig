@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Feed — Hedwig{% endblock %}
+{% block content %}
+
+<div class="feed-shell" data-stream="default">
+  <div class="feed-head">
+    <h1>📱 Feed</h1>
+    <span class="muted">키보드: j 다음 · k 이전 · u 👍 · d 👎 · s save · ? 묻기 · o 원본</span>
+  </div>
+
+  <div id="feed-list" class="feed-list" tabindex="0" aria-label="Hedwig feed"></div>
+  <div id="feed-end" class="feed-end muted">스크롤하면 더 불러옵니다…</div>
+</div>
+
+<script>
+const feedEl = document.getElementById('feed-list');
+const endEl = document.getElementById('feed-end');
+const stream = document.querySelector('.feed-shell').dataset.stream || 'default';
+let nextCursor = '';
+let loading = false;
+let hasMore = true;
+let focusIdx = -1;
+const eventQueue = [];
+const viewStarts = new Map();      // signalId → ts
+
+// ---- Beacon (S3) -----------------------------------------------------------
+function enqueue(ev) {
+  ev.captured_at = Date.now();
+  eventQueue.push(ev);
+  if (eventQueue.length >= 12) flushBeacon();
+}
+function flushBeacon() {
+  if (!eventQueue.length) return;
+  const payload = {events: eventQueue.splice(0)};
+  if (navigator.sendBeacon) {
+    const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+    navigator.sendBeacon('/events/beacon', blob);
+  } else {
+    fetch('/events/beacon', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload), keepalive: true,
+    });
+  }
+}
+window.addEventListener('pagehide', flushBeacon);
+window.addEventListener('beforeunload', flushBeacon);
+setInterval(flushBeacon, 3000);
+
+// ---- Card builder ----------------------------------------------------------
+function makeCard(item) {
+  const el = document.createElement('article');
+  el.className = 'feed-card';
+  el.dataset.signalId = item.id;
+  el.dataset.position = item.feed_position;
+  el.dataset.url = item.url || '';
+  const platform = (item.platform || '').replace(/[^a-z0-9_]/gi, '');
+  const score = (item.score || 0).toFixed(2);
+  const urgency = item.urgency || 'digest';
+  el.innerHTML = `
+    <header class="card-head">
+      <span class="pill plat-${platform}">${item.platform || ''}</span>
+      <span class="pill urg-${urgency}">${urgency}</span>
+      <span class="muted">score ${score}</span>
+    </header>
+    <h2 class="card-title">
+      <a href="${item.url || '#'}" target="_blank" rel="noopener">${escapeHtml(item.title || '')}</a>
+    </h2>
+    ${item.why_relevant ? `<p class="card-why">${escapeHtml(item.why_relevant)}</p>` : ''}
+    ${item.devils_advocate ? `<p class="card-devil"><em>↩ ${escapeHtml(item.devils_advocate)}</em></p>` : ''}
+    <div class="card-meta muted">${escapeHtml(item.author || '')}</div>
+    <div class="card-actions">
+      <button data-act="up">👍</button>
+      <button data-act="down">👎</button>
+      <button data-act="save">⭐ save</button>
+      <button data-act="share">↗ share</button>
+      <button data-act="qa">? ask</button>
+      <button data-act="open">↗ open</button>
+    </div>
+  `;
+  el.querySelectorAll('button[data-act]').forEach(b => {
+    b.addEventListener('click', e => onAction(el, e.currentTarget.dataset.act));
+  });
+  return el;
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ---- Page loader -----------------------------------------------------------
+async function loadPage() {
+  if (loading || !hasMore) return;
+  loading = true;
+  endEl.textContent = '불러오는 중…';
+  const url = `/feed/api?stream=${encodeURIComponent(stream)}&limit=30` +
+              (nextCursor ? `&cursor=${encodeURIComponent(nextCursor)}` : '');
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    (data.items || []).forEach(it => feedEl.appendChild(makeCard(it)));
+    nextCursor = data.next_cursor || '';
+    hasMore = !!data.has_more;
+    endEl.textContent = hasMore ? '스크롤하면 더 불러옵니다…' : '— 끝 —';
+    bindObserver();
+  } catch (e) {
+    endEl.textContent = `로드 실패: ${e}`;
+  } finally {
+    loading = false;
+  }
+}
+
+// ---- IntersectionObserver for view_start / view_end (S3) ------------------
+let io;
+function bindObserver() {
+  if (!io) {
+    io = new IntersectionObserver(entries => {
+      for (const en of entries) {
+        const sid = en.target.dataset.signalId;
+        const pos = parseInt(en.target.dataset.position || '0', 10);
+        if (en.isIntersecting && en.intersectionRatio >= 0.5) {
+          if (!viewStarts.has(sid)) {
+            viewStarts.set(sid, Date.now());
+            enqueue({signal_id: sid, event_type: 'view_start',
+                     position_in_feed: pos, feed_id: stream, device: deviceTag()});
+          }
+        } else if (viewStarts.has(sid)) {
+          const dwell = Date.now() - viewStarts.get(sid);
+          viewStarts.delete(sid);
+          enqueue({signal_id: sid, event_type: 'view_end', dwell_ms: dwell,
+                   position_in_feed: pos, feed_id: stream, device: deviceTag()});
+          if (dwell >= 2000) {
+            enqueue({signal_id: sid, event_type: 'dwell', dwell_ms: dwell,
+                     position_in_feed: pos, feed_id: stream, device: deviceTag()});
+          } else {
+            enqueue({signal_id: sid, event_type: 'skip', dwell_ms: dwell,
+                     position_in_feed: pos, feed_id: stream, device: deviceTag()});
+          }
+        }
+      }
+    }, {threshold: [0, 0.5, 1]});
+  }
+  document.querySelectorAll('.feed-card').forEach(card => io.observe(card));
+}
+function deviceTag() {
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad/i.test(ua)) return 'mobile_web';
+  return 'desktop';
+}
+
+// ---- Infinite scroll trigger ----------------------------------------------
+const tail = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) loadPage();
+}, {rootMargin: '300px'});
+tail.observe(endEl);
+
+// ---- Actions (S2) ----------------------------------------------------------
+async function onAction(card, act) {
+  const sid = card.dataset.signalId;
+  if (act === 'up') return doVote(sid, 'up', card);
+  if (act === 'down') return doVote(sid, 'down', card);
+  if (act === 'save') return enqueue({signal_id: sid, event_type: 'save',
+                                      feed_id: stream, device: deviceTag()});
+  if (act === 'share') return enqueue({signal_id: sid, event_type: 'share',
+                                       feed_id: stream, device: deviceTag()});
+  if (act === 'qa') return location.assign('/#qa-section');
+  if (act === 'open') {
+    enqueue({signal_id: sid, event_type: 'click_link',
+             feed_id: stream, device: deviceTag()});
+    if (card.dataset.url) window.open(card.dataset.url, '_blank');
+  }
+}
+async function doVote(sid, vote, card) {
+  card.classList.add(`voted-${vote}`);
+  try {
+    await fetch(`/feedback/${encodeURIComponent(sid)}/${vote}`, {method: 'POST'});
+  } catch (e) { /* swallow */ }
+}
+
+// ---- Keyboard (S2) ---------------------------------------------------------
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const cards = [...document.querySelectorAll('.feed-card')];
+  if (!cards.length) return;
+  if (e.key === 'j') {
+    focusIdx = Math.min(focusIdx + 1, cards.length - 1);
+    cards[focusIdx]?.scrollIntoView({block: 'center', behavior: 'smooth'});
+    cards.forEach((c, i) => c.classList.toggle('focused', i === focusIdx));
+    e.preventDefault();
+  } else if (e.key === 'k') {
+    focusIdx = Math.max(focusIdx - 1, 0);
+    cards[focusIdx]?.scrollIntoView({block: 'center', behavior: 'smooth'});
+    cards.forEach((c, i) => c.classList.toggle('focused', i === focusIdx));
+    e.preventDefault();
+  } else if (focusIdx >= 0 && focusIdx < cards.length) {
+    const card = cards[focusIdx];
+    if (e.key === 'u') onAction(card, 'up');
+    else if (e.key === 'd') onAction(card, 'down');
+    else if (e.key === 's') onAction(card, 'save');
+    else if (e.key === 'o') onAction(card, 'open');
+    else if (e.key === '?') onAction(card, 'qa');
+  }
+});
+
+// ---- Touch swipe (S2) ------------------------------------------------------
+let touchStart = null;
+feedEl.addEventListener('touchstart', e => {
+  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY,
+                target: e.target.closest('.feed-card')};
+}, {passive: true});
+feedEl.addEventListener('touchend', e => {
+  if (!touchStart || !touchStart.target) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+    onAction(touchStart.target, dx > 0 ? 'up' : 'down');
+  } else if (dy < -80 && Math.abs(dy) > Math.abs(dx)) {
+    onAction(touchStart.target, 'save');
+  }
+  touchStart = null;
+}, {passive: true});
+
+loadPage();
+</script>
+
+<style>
+.feed-shell { max-width: 720px; margin: 0 auto; }
+.feed-head h1 { margin: 4px 0; }
+.feed-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.feed-card { padding: 14px; border: 1px solid #e5e7eb; border-radius: 10px;
+              background: white; transition: box-shadow .15s, border-color .15s; }
+.feed-card.focused { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+.feed-card.voted-up { background: #ecfdf5; }
+.feed-card.voted-down { background: #fef2f2; opacity: .7; }
+.card-head { display: flex; gap: 8px; align-items: center; font-size: 11px; }
+.card-title { font-size: 16px; margin: 8px 0 6px; line-height: 1.4; }
+.card-title a { color: #111827; text-decoration: none; }
+.card-title a:hover { text-decoration: underline; }
+.card-why { color: #1f2937; font-size: 13px; line-height: 1.5; margin: 4px 0; }
+.card-devil { color: #7c2d12; font-size: 12px; line-height: 1.5; margin: 4px 0; }
+.card-meta { font-size: 11px; }
+.card-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.card-actions button { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+                       background: white; cursor: pointer; font-size: 12px; }
+.card-actions button:hover { background: #f3f4f6; }
+.pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px;
+        text-transform: lowercase; }
+.pill[class*="urg-alert"] { background: #fee2e2; color: #991b1b; }
+.pill[class*="urg-digest"] { background: #dbeafe; color: #1e40af; }
+.pill[class*="plat-"] { background: #f3f4f6; color: #374151; }
+.feed-end { padding: 24px; text-align: center; }
+.muted { color: #6b7280; }
+</style>
+
+{% endblock %}

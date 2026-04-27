@@ -421,6 +421,123 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def meta_page(request: Request):
         return TEMPLATES.TemplateResponse(request, "meta.html")
 
+    # -----------------------------------------------------------------------
+    # Phase 7 — Feed (SNS-style infinite scroll) + behavior beacon
+    # -----------------------------------------------------------------------
+
+    @app.get("/feed", response_class=HTMLResponse)
+    async def feed_page(request: Request):
+        return TEMPLATES.TemplateResponse(request, "feed.html")
+
+    @app.get("/feed/api")
+    async def feed_api(request: Request):
+        """Cursor-paginated feed JSON.
+
+        Query params:
+            stream: feed id (default 'default')
+            cursor: opaque base64 token (omit for first page)
+            limit:  page size (default 30, max 100)
+        """
+        import base64
+
+        from hedwig.storage import get_recent_signals
+        stream = request.query_params.get("stream", "default")
+        try:
+            limit = max(1, min(100, int(request.query_params.get("limit", 30))))
+        except ValueError:
+            limit = 30
+
+        # Pull a generous superset and slice; SQLite is fast enough for v1
+        all_rows = get_recent_signals(days=14) or []
+
+        cursor = request.query_params.get("cursor", "")
+        start_idx = 0
+        if cursor:
+            try:
+                token = base64.urlsafe_b64decode(cursor.encode()).decode()
+                last_id, _last_collected = token.split("|", 1)
+                for i, r in enumerate(all_rows):
+                    if str(r.get("id")) == last_id:
+                        start_idx = i + 1
+                        break
+            except Exception:
+                start_idx = 0
+
+        page = all_rows[start_idx : start_idx + limit]
+        next_cursor = ""
+        has_more = (start_idx + limit) < len(all_rows)
+        if page and has_more:
+            last = page[-1]
+            tok = f"{last.get('id')}|{last.get('collected_at') or ''}"
+            next_cursor = base64.urlsafe_b64encode(tok.encode()).decode()
+
+        items = []
+        for offset, r in enumerate(page):
+            items.append({
+                "id": r.get("id"),
+                "title": r.get("title"),
+                "url": r.get("url"),
+                "platform": r.get("platform"),
+                "score": r.get("relevance_score") or 0,
+                "urgency": r.get("urgency"),
+                "why_relevant": r.get("why_relevant"),
+                "devils_advocate": r.get("devils_advocate"),
+                "author": r.get("author"),
+                "feed_position": start_idx + offset,
+            })
+        return JSONResponse({
+            "items": items,
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+            "stream": stream,
+        })
+
+    @app.post("/events/beacon")
+    async def events_beacon(request: Request):
+        """Batch endpoint for /feed JS beacon — implicit-passive feedback."""
+        from hedwig.storage import save_behavior_events_batch, save_evolution_signal
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "expected JSON body"}, status_code=400)
+
+        events = body.get("events") or []
+        if not isinstance(events, list):
+            return JSONResponse({"error": "events must be a list"}, status_code=400)
+
+        saved = save_behavior_events_batch(events)
+
+        # Promote dwell/skip/share events into the unified evolution_signal
+        # stream (channel='implicit', kind='behavior_<type>') so the existing
+        # evolution loop sees them without new wiring.
+        for ev in events:
+            etype = ev.get("event_type")
+            if etype in ("dwell", "skip", "share", "save"):
+                weight = {"dwell": 0.3, "skip": 0.5, "share": 1.0, "save": 1.0}.get(etype, 0.3)
+                try:
+                    save_evolution_signal(
+                        channel="implicit",
+                        kind=f"behavior_{etype}",
+                        payload={
+                            "signal_id": ev.get("signal_id"),
+                            "dwell_ms": ev.get("dwell_ms"),
+                            "feed_id": ev.get("feed_id"),
+                        },
+                        weight=weight,
+                    )
+                except Exception:
+                    pass
+        return JSONResponse({"ok": True, "saved": saved})
+
+    @app.get("/status", response_class=HTMLResponse)
+    async def status_page(request: Request):
+        from hedwig.qa.exit_conditions import compute_exit_progress
+        return TEMPLATES.TemplateResponse(
+            request, "status.html",
+            {"conditions": compute_exit_progress()},
+        )
+
     @app.get("/sovereignty", response_class=HTMLResponse)
     async def sovereignty_page(request: Request):
         from hedwig.sovereignty import load_sovereignty

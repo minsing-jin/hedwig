@@ -147,18 +147,32 @@ def run_sandbox(
     baseline_config: dict,
     injected_events: list[dict] | None = None,
 ) -> dict:
-    """Compare candidate vs. baseline config on the same event pool."""
+    """Compare candidate vs. baseline config on the same event pool.
+
+    Reports both the cheap proxy fitness AND the seed.yaml-weighted
+    principled fitness (G9) so reviewers see both lenses.
+    """
     events = load_recent_events()
     baseline = synthesize_fitness(baseline_config, recent_events=events)
     candidate = synthesize_fitness(
         candidate_config, recent_events=events, injected_events=injected_events or [],
     )
     delta = candidate["predicted_fitness"] - baseline["predicted_fitness"]
+
+    # G9 — overlay the principled scoring (live data, identical for both
+    # configs — so it's a snapshot, not a delta. Useful for sanity-check.)
+    try:
+        from hedwig.evolution.principled_fitness import compute_principled_fitness
+        principled = compute_principled_fitness()
+    except Exception:
+        principled = None
+
     return {
         "baseline": baseline,
         "candidate": candidate,
         "delta": round(delta, 4),
         "recommend": "adopt" if delta >= 0.05 else ("reject" if delta < 0 else "inconclusive"),
+        "principled_fitness": principled,
     }
 
 

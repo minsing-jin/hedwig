@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Status — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>📊 Status — exit conditions</h1>
+  <p class="subtitle">seed.yaml 의 4개 exit_conditions 진행도. 각 게이트가 충족되면 다음 단계 가도 안전.</p>
+</div>
+
+<div class="section">
+  {% for c in conditions %}
+  <article class="status-card {{ 'met' if c.met else 'open' }}">
+    <header>
+      <span class="status-icon">{{ '✅' if c.met else '⏳' }}</span>
+      <h3>{{ c.name }}</h3>
+      <span class="status-progress">{{ "%.0f%%"|format(c.progress * 100) }}</span>
+    </header>
+    <p class="muted">{{ c.criteria }}</p>
+    <div class="status-bar">
+      <div class="status-fill" style="width:{{ (c.progress * 100)|round(0) }}%"></div>
+    </div>
+    <footer class="status-detail muted"><code>{{ c.detail }}</code></footer>
+  </article>
+  {% endfor %}
+</div>
+
+<style>
+.status-card { padding: 14px; border: 1px solid #e5e7eb; border-radius: 10px;
+                margin: 12px 0; background: white; }
+.status-card.met { border-color: #16a34a; background: #f0fdf4; }
+.status-card header { display: flex; gap: 10px; align-items: center; }
+.status-card h3 { margin: 0; font-size: 15px; flex: 1; }
+.status-progress { font-family: 'SF Mono', Menlo, monospace; font-size: 13px;
+                    color: #2563eb; }
+.status-bar { background: #e5e7eb; border-radius: 4px; height: 8px;
+               margin-top: 10px; overflow: hidden; }
+.status-fill { height: 100%; background: #2563eb; transition: width .3s; }
+.status-card.met .status-fill { background: #16a34a; }
+.status-detail { margin-top: 8px; font-size: 11px; }
+</style>
+
+{% endblock %}

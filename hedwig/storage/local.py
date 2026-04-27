@@ -131,6 +131,36 @@ def init_db():
             captured_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- v3 Phase 7: behavior_events — implicit-passive feedback channel
+        -- (dwell, skip, share, save) captured by the /feed page beacon.
+        CREATE TABLE IF NOT EXISTS behavior_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signal_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK (event_type IN (
+                'view_start','view_end','dwell','skip','share','save',
+                'expand_source','click_link','open_qa'
+            )),
+            dwell_ms INTEGER,
+            position_in_feed INTEGER,
+            feed_id TEXT DEFAULT 'default',
+            device TEXT,
+            captured_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- v3 Phase 7 G6: delivered_signals — first-class delivery row so
+        -- feedback can bind to a specific delivery instance per channel
+        -- (seed.yaml ontology delivery entity).
+        CREATE TABLE IF NOT EXISTS delivered_signals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signal_id TEXT NOT NULL,
+            channel TEXT NOT NULL CHECK (channel IN (
+                'slack','discord','email','dashboard','feed','critical'
+            )),
+            delivered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            message_ref TEXT,
+            acknowledged INTEGER DEFAULT 0
+        );
+
         -- v3: First-class interpretation_style (seed.yaml ontology).
         -- HOW signals are explained. Evolved weekly separately from criteria.
         CREATE TABLE IF NOT EXISTS interpretation_styles (
@@ -177,7 +207,46 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_evolution_signal_channel ON evolution_signal(channel);
         CREATE INDEX IF NOT EXISTS idx_algorithm_versions_created ON algorithm_versions(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_briefings_generated ON briefings(generated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_behavior_signal ON behavior_events(signal_id, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_behavior_type ON behavior_events(event_type, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_delivered_signal ON delivered_signals(signal_id, delivered_at DESC);
         """)
+        # G5 — feedback.attribution column (added separately so older
+        # databases get the column without dropping data).
+        try:
+            with _conn() as alter_conn:
+                alter_conn.execute("ALTER TABLE feedback ADD COLUMN attribution TEXT DEFAULT NULL")
+        except Exception:
+            pass  # column already exists
+        # G6 — feedback.delivered_signal_id column for cross-channel binding
+        try:
+            with _conn() as alter_conn:
+                alter_conn.execute(
+                    "ALTER TABLE feedback ADD COLUMN delivered_signal_id INTEGER DEFAULT NULL"
+                )
+        except Exception:
+            pass
+        # G7 — evolution_logs structured fields
+        for stmt in (
+            "ALTER TABLE evolution_logs ADD COLUMN scope TEXT DEFAULT NULL",
+            "ALTER TABLE evolution_logs ADD COLUMN axis TEXT DEFAULT NULL",
+            "ALTER TABLE evolution_logs ADD COLUMN inputs TEXT DEFAULT '{}'",
+            "ALTER TABLE evolution_logs ADD COLUMN outputs TEXT DEFAULT '{}'",
+            "ALTER TABLE evolution_logs ADD COLUMN evaluator_verdict TEXT DEFAULT NULL",
+        ):
+            try:
+                with _conn() as alter_conn:
+                    alter_conn.execute(stmt)
+            except Exception:
+                pass
+        # G10 — briefings structured-fields column
+        try:
+            with _conn() as alter_conn:
+                alter_conn.execute(
+                    "ALTER TABLE briefings ADD COLUMN structured TEXT DEFAULT '{}'"
+                )
+        except Exception:
+            pass
 
 
 def _now() -> str:
@@ -387,22 +456,65 @@ def is_duplicate(platform: str, external_id: str) -> bool:
 
 def save_feedback(feedback: Feedback) -> bool:
     init_db()
+    # Compute attribution lazily — which criterion keywords + which platform
+    # were associated with the signal. Stored as JSON so the evolution loop
+    # can later attribute fitness deltas back to specific criterion entries
+    # (G5 from interview_gap_audit).
+    attribution_json = None
+    try:
+        attribution_json = json.dumps(_compute_feedback_attribution(feedback.signal_id),
+                                       ensure_ascii=False)
+    except Exception:
+        attribution_json = "{}"
+
+    delivered_id = getattr(feedback, "delivered_signal_id", None)
+
     try:
         with _conn() as conn:
             conn.execute("""
-                INSERT INTO feedback (signal_id, vote, natural_language, source_channel, captured_at)
-                VALUES (?,?,?,?,?)
+                INSERT INTO feedback
+                  (signal_id, vote, natural_language, source_channel, captured_at,
+                   attribution, delivered_signal_id)
+                VALUES (?,?,?,?,?,?,?)
             """, (
                 feedback.signal_id,
                 feedback.vote.value,
                 feedback.natural_language,
                 feedback.source_channel,
                 feedback.captured_at.isoformat(),
+                attribution_json,
+                delivered_id,
             ))
         return True
     except Exception as e:
         logger.error(f"save_feedback: {e}")
         return False
+
+
+def _compute_feedback_attribution(signal_id: str) -> dict:
+    """Best-effort attribution payload — which criterion items + platform
+    are associated with this signal. Used by G5."""
+    out: dict = {"criterion_keywords": [], "platform": None}
+    try:
+        with _conn() as conn:
+            row = conn.execute(
+                "SELECT platform, title, content FROM signals WHERE id = ? OR external_id = ? LIMIT 1",
+                (str(signal_id), str(signal_id)),
+            ).fetchone()
+        if not row:
+            return out
+        out["platform"] = row["platform"]
+
+        from hedwig.config import load_criteria
+        crit = load_criteria() or {}
+        keywords = crit.get("signal_preferences", {}).get("care_about", []) or []
+        haystack = f"{row['title']} {(row['content'] or '')[:500]}".lower()
+        out["criterion_keywords"] = [
+            kw for kw in keywords if str(kw).lower() in haystack
+        ]
+    except Exception:
+        pass
+    return out
 
 
 async def save_feedback_batch(feedbacks: list[Feedback]) -> int:
@@ -762,6 +874,201 @@ def save_algorithm_version(
         return False
 
 
+def save_cycle_log(
+    cycle_type: str,
+    cycle_number: int,
+    *,
+    scope: str | None = None,           # micro | macro | meta
+    axis: str | None = None,            # criteria | source | interpretation | exploration
+    inputs: dict | None = None,
+    outputs: dict | None = None,
+    mutations_applied: list | None = None,
+    fitness_before: float | None = None,
+    fitness_after: float | None = None,
+    kept: bool = True,
+    analysis_summary: str = "",
+    evaluator_verdict: str | None = None,
+    criteria_version_before: int | None = None,
+    criteria_version_after: int | None = None,
+) -> bool:
+    """Structured cycle log per seed.yaml ontology (G7).
+
+    Backwards-compatible with the legacy evolution_logs columns; new columns
+    were added via ALTER TABLE in init_db.
+    """
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute("""
+                INSERT INTO evolution_logs
+                  (cycle_type, cycle_number, criteria_version_before,
+                   criteria_version_after, mutations_applied, fitness_before,
+                   fitness_after, kept, analysis_summary, scope, axis,
+                   inputs, outputs, evaluator_verdict)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                cycle_type, int(cycle_number),
+                criteria_version_before, criteria_version_after,
+                json.dumps(mutations_applied or [], ensure_ascii=False),
+                fitness_before, fitness_after,
+                1 if kept else 0,
+                analysis_summary,
+                scope, axis,
+                json.dumps(inputs or {}, ensure_ascii=False, default=str),
+                json.dumps(outputs or {}, ensure_ascii=False, default=str),
+                evaluator_verdict,
+            ))
+        return True
+    except Exception as e:
+        logger.error("save_cycle_log: %s", e)
+        return False
+
+
+def get_cycle_logs(scope: str | None = None, limit: int = 100) -> list[dict]:
+    init_db()
+    if scope:
+        q = ("SELECT * FROM evolution_logs WHERE scope = ? "
+             "ORDER BY timestamp DESC, id DESC LIMIT ?")
+        params: tuple = (scope, limit)
+    else:
+        q = "SELECT * FROM evolution_logs ORDER BY timestamp DESC, id DESC LIMIT ?"
+        params = (limit,)
+    with _conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        for jf in ("mutations_applied", "inputs", "outputs"):
+            try:
+                d[jf] = json.loads(d.get(jf) or ("[]" if jf == "mutations_applied" else "{}"))
+            except Exception:
+                pass
+        out.append(d)
+    return out
+
+
+def save_behavior_event(
+    signal_id: str,
+    event_type: str,
+    dwell_ms: int | None = None,
+    position_in_feed: int | None = None,
+    feed_id: str = "default",
+    device: str | None = None,
+) -> bool:
+    """Record one /feed UI interaction event."""
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                """INSERT INTO behavior_events
+                   (signal_id, event_type, dwell_ms, position_in_feed, feed_id, device)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (str(signal_id), event_type, dwell_ms, position_in_feed, feed_id, device),
+            )
+        return True
+    except Exception as e:
+        logger.error("save_behavior_event: %s", e)
+        return False
+
+
+def save_behavior_events_batch(events: list[dict]) -> int:
+    """Bulk-insert beacon batch. Returns count successfully saved."""
+    init_db()
+    saved = 0
+    valid_types = {
+        "view_start", "view_end", "dwell", "skip", "share", "save",
+        "expand_source", "click_link", "open_qa",
+    }
+    with _conn() as conn:
+        for ev in events:
+            etype = ev.get("event_type")
+            sid = ev.get("signal_id")
+            if etype not in valid_types or not sid:
+                continue
+            try:
+                conn.execute(
+                    """INSERT INTO behavior_events
+                       (signal_id, event_type, dwell_ms, position_in_feed, feed_id, device)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        str(sid), etype,
+                        ev.get("dwell_ms"), ev.get("position_in_feed"),
+                        str(ev.get("feed_id") or "default"),
+                        ev.get("device"),
+                    ),
+                )
+                saved += 1
+            except Exception as e:
+                logger.warning("behavior batch row failed: %s", e)
+    return saved
+
+
+def get_behavior_events(
+    signal_id: str | None = None,
+    event_types: list[str] | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    init_db()
+    q = "SELECT * FROM behavior_events"
+    conds = []
+    params: list = []
+    if signal_id:
+        conds.append("signal_id = ?")
+        params.append(str(signal_id))
+    if event_types:
+        placeholders = ",".join("?" for _ in event_types)
+        conds.append(f"event_type IN ({placeholders})")
+        params.extend(event_types)
+    if conds:
+        q += " WHERE " + " AND ".join(conds)
+    q += " ORDER BY captured_at DESC, id DESC LIMIT ?"
+    params.append(limit)
+    with _conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def save_delivered_signal(
+    signal_id: str,
+    channel: str,
+    message_ref: str | None = None,
+) -> int | None:
+    """Record one delivery event so feedback can bind to it (G6)."""
+    if channel not in ("slack", "discord", "email", "dashboard", "feed", "critical"):
+        logger.warning("delivered_signal: invalid channel %s", channel)
+        return None
+    init_db()
+    try:
+        with _conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO delivered_signals (signal_id, channel, message_ref)
+                   VALUES (?, ?, ?)""",
+                (str(signal_id), channel, message_ref),
+            )
+            return cur.lastrowid
+    except Exception as e:
+        logger.error("save_delivered_signal: %s", e)
+        return None
+
+
+def get_delivered_signals(
+    signal_id: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    init_db()
+    if signal_id:
+        q = ("SELECT * FROM delivered_signals WHERE signal_id = ? "
+             "ORDER BY delivered_at DESC, id DESC LIMIT ?")
+        params: tuple = (str(signal_id), limit)
+    else:
+        q = ("SELECT * FROM delivered_signals "
+             "ORDER BY delivered_at DESC, id DESC LIMIT ?")
+        params = (limit,)
+    with _conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    return [dict(r) for r in rows]
+
+
 def save_interpretation_style(style) -> bool:
     init_db()
     try:
@@ -827,20 +1134,30 @@ def get_interpretation_style_history(limit: int = 30) -> list[dict]:
 def save_briefing(cycle_type: str, content: str, signal_count: int = 0) -> int | None:
     """Persist a generated briefing so the web UI can show it.
 
-    Returns the new row id or None on failure. Called from main.run_daily /
-    run_weekly / the critical loop after LLM generation but before delivery,
-    so users without Slack/Discord still have a place to read the brief.
+    Also parses ``content`` into the structured ontology fields declared
+    in seed.yaml briefing entity (G10) and stores them in the
+    ``structured`` JSON column.
     """
     if cycle_type not in ("daily", "weekly", "critical"):
         logger.warning("save_briefing: invalid cycle_type %s", cycle_type)
         return None
     init_db()
+    structured_json = "{}"
+    try:
+        from hedwig.engine.briefing_parser import parse_briefing
+        parsed = parse_briefing(content or "")
+        # Drop the verbose raw_sections to keep DB rows compact
+        if isinstance(parsed, dict):
+            parsed.pop("raw_sections", None)
+        structured_json = json.dumps(parsed, ensure_ascii=False)
+    except Exception as e:
+        logger.debug("briefing parser skipped: %s", e)
     try:
         with _conn() as conn:
             cur = conn.execute(
-                """INSERT INTO briefings (cycle_type, content, signal_count)
-                   VALUES (?, ?, ?)""",
-                (cycle_type, content or "", int(signal_count or 0)),
+                """INSERT INTO briefings (cycle_type, content, signal_count, structured)
+                   VALUES (?, ?, ?, ?)""",
+                (cycle_type, content or "", int(signal_count or 0), structured_json),
             )
             return cur.lastrowid
     except Exception as e:
@@ -850,20 +1167,27 @@ def save_briefing(cycle_type: str, content: str, signal_count: int = 0) -> int |
 
 def get_briefings(cycle_type: str | None = None, limit: int = 30) -> list[dict]:
     init_db()
-    # Tiebreak by id DESC so two briefs saved in the same second stay ordered.
     if cycle_type:
-        q = ("""SELECT id, cycle_type, content, signal_count, generated_at
+        q = ("""SELECT id, cycle_type, content, signal_count, generated_at, structured
                FROM briefings WHERE cycle_type = ?
                ORDER BY generated_at DESC, id DESC LIMIT ?""")
         params: tuple = (cycle_type, limit)
     else:
-        q = ("""SELECT id, cycle_type, content, signal_count, generated_at
+        q = ("""SELECT id, cycle_type, content, signal_count, generated_at, structured
                FROM briefings
                ORDER BY generated_at DESC, id DESC LIMIT ?""")
         params = (limit,)
     with _conn() as conn:
         rows = conn.execute(q, params).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["structured"] = json.loads(d.get("structured") or "{}")
+        except Exception:
+            d["structured"] = {}
+        out.append(d)
+    return out
 
 
 def get_briefing(briefing_id: int) -> dict | None:

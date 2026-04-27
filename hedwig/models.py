@@ -100,8 +100,9 @@ class Feedback(BaseModel):
     signal_id: str
     vote: VoteType
     natural_language: Optional[str] = None
-    source_channel: str = ""  # "slack" or "discord"
-    captured_at: datetime = Field(default_factory=datetime.utcnow)
+    source_channel: str = ""  # "slack" | "discord" | "email" | "dashboard" | "feed"
+    delivered_signal_id: Optional[int] = None   # G6: cross-channel binding
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
 
 
 # ---------------------------------------------------------------------------
