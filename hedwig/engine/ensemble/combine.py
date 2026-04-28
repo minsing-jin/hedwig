@@ -34,6 +34,9 @@ def _registry() -> dict:
         "content_based": lambda: _import_and_build("hedwig.engine.ensemble.content", "ContentRanker"),
         "popularity_prior": lambda: _import_and_build("hedwig.engine.ensemble.popularity", "PopularityRanker"),
         "bandit": lambda: _import_and_build("hedwig.engine.ensemble.bandit", "BanditRanker"),
+        "sequential": lambda: _import_and_build(
+            "hedwig.engine.ensemble.sequential", "SequentialRanker"
+        ),
     }
 
 

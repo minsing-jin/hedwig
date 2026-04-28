@@ -109,6 +109,25 @@ class Feedback(BaseModel):
 # Criteria — versioned, auto-evolved
 # ---------------------------------------------------------------------------
 
+class Judgment(BaseModel):
+    """First-class LLM judgment artifact (seed.yaml ontology, G1).
+
+    Decouples LLM scoring from inline signal columns so each judgment can
+    be traced to the criteria.version + interpretation_style.id that
+    produced it. Enables cross-version fitness attribution.
+    """
+    signal_id: str
+    score: float
+    urgency: UrgencyLevel
+    rationale: Optional[str] = None
+    devil_advocate: Optional[str] = None
+    opportunity_note: Optional[str] = None
+    confidence: Optional[float] = None
+    exploration_tags: list[str] = Field(default_factory=list)
+    criteria_version: Optional[int] = None
+    interpretation_style_id: Optional[str] = None
+
+
 class InterpretationStyle(BaseModel):
     """First-class artifact controlling HOW signals are explained.
 

@@ -150,6 +150,26 @@ def init_db():
             FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id)
         );
 
+        -- v3 G1: judgment first-class artifact (seed.yaml ontology).
+        -- Decouples LLM judgment from inline signal columns so each judgment
+        -- can be traced back to the criteria/interpretation_style version
+        -- that produced it (cross-version fitness attribution).
+        CREATE TABLE IF NOT EXISTS judgments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signal_id TEXT NOT NULL,
+            score REAL NOT NULL,
+            urgency TEXT NOT NULL,
+            rationale TEXT,
+            devil_advocate TEXT,
+            opportunity_note TEXT,
+            confidence REAL,
+            exploration_tags TEXT DEFAULT '[]',
+            criteria_version INTEGER,
+            interpretation_style_id TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(signal_id, criteria_version, interpretation_style_id)
+        );
+
         -- v3 Phase 7: behavior_events — implicit-passive feedback channel
         -- (dwell, skip, share, save) captured by the /feed page beacon.
         CREATE TABLE IF NOT EXISTS behavior_events (
@@ -231,6 +251,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_delivered_signal ON delivered_signals(signal_id, delivered_at DESC);
         CREATE INDEX IF NOT EXISTS idx_chat_msg_convo ON chat_messages(conversation_id, id);
         CREATE INDEX IF NOT EXISTS idx_chat_convo_last ON chat_conversations(last_message_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_judgments_signal ON judgments(signal_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_judgments_versions ON judgments(criteria_version, interpretation_style_id);
         """)
         # G5 — feedback.attribution column (added separately so older
         # databases get the column without dropping data).
@@ -265,6 +287,14 @@ def init_db():
             with _conn() as alter_conn:
                 alter_conn.execute(
                     "ALTER TABLE briefings ADD COLUMN structured TEXT DEFAULT '{}'"
+                )
+        except Exception:
+            pass
+        # G1 — signals.judgment_id FK to first-class judgments
+        try:
+            with _conn() as alter_conn:
+                alter_conn.execute(
+                    "ALTER TABLE signals ADD COLUMN judgment_id INTEGER DEFAULT NULL"
                 )
         except Exception:
             pass
@@ -1206,6 +1236,69 @@ def get_delivered_signals(
     with _conn() as conn:
         rows = conn.execute(q, params).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_judgment(judgment) -> int | None:
+    """Persist a first-class Judgment row (G1) and return its rowid.
+
+    Idempotent on (signal_id, criteria_version, interpretation_style_id).
+    """
+    init_db()
+    try:
+        with _conn() as conn:
+            cur = conn.execute(
+                """INSERT OR REPLACE INTO judgments
+                   (signal_id, score, urgency, rationale, devil_advocate,
+                    opportunity_note, confidence, exploration_tags,
+                    criteria_version, interpretation_style_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(judgment.signal_id),
+                    float(judgment.score),
+                    judgment.urgency.value if hasattr(judgment.urgency, "value") else str(judgment.urgency),
+                    judgment.rationale,
+                    judgment.devil_advocate,
+                    judgment.opportunity_note,
+                    judgment.confidence,
+                    json.dumps(list(judgment.exploration_tags or []), ensure_ascii=False),
+                    judgment.criteria_version,
+                    judgment.interpretation_style_id,
+                ),
+            )
+            jid = cur.lastrowid
+        # Backfill signals.judgment_id pointer when we know the signal row
+        try:
+            with _conn() as conn2:
+                conn2.execute(
+                    "UPDATE signals SET judgment_id = ? "
+                    "WHERE id = ? OR external_id = ?",
+                    (jid, str(judgment.signal_id), str(judgment.signal_id)),
+                )
+        except Exception:
+            pass
+        return jid
+    except Exception as e:
+        logger.error("save_judgment: %s", e)
+        return None
+
+
+def get_judgments_for_signal(signal_id: str, limit: int = 10) -> list[dict]:
+    init_db()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM judgments WHERE signal_id = ?
+               ORDER BY created_at DESC, id DESC LIMIT ?""",
+            (str(signal_id), limit),
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["exploration_tags"] = json.loads(d.get("exploration_tags") or "[]")
+        except Exception:
+            d["exploration_tags"] = []
+        out.append(d)
+    return out
 
 
 def save_interpretation_style(style) -> bool:

@@ -539,6 +539,23 @@ async def run_weekly():
     except Exception as e:
         logger.warning("user_memory snapshot failed: %s", e)
 
+    # Multi-task fitness snapshot (S8.5 MMOE-lite)
+    try:
+        from hedwig.evolution.multi_task import compute_multi_task_fitness
+        mt = compute_multi_task_fitness(days=28)
+        logger.info("Multi-task fitness: %s", mt)
+    except Exception as e:
+        logger.warning("multi_task fitness skipped: %s", e)
+
+    # REINFORCE-lite policy gradient on LTR weights (S8.6)
+    try:
+        from hedwig.evolution.rlhf import reinforce_update
+        keywords = _extract_keywords_from_criteria()
+        rl = reinforce_update(criteria_keywords=keywords, days=14)
+        logger.info("RLHF update: %s", rl)
+    except Exception as e:
+        logger.warning("RLHF skipped: %s", e)
+
     logger.info("━━━ Hedwig v2.0 Weekly Run Complete ━━━")
 
 

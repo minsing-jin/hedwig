@@ -86,6 +86,60 @@ def _parse_exploration_tags(value: object) -> list[str]:
     return tags
 
 
+def _persist_judgment(
+    *,
+    signal_id: str,
+    relevance: float,
+    urgency: str,
+    why: str,
+    devil: str,
+    opp: str = "",
+    confidence: float | None = None,
+    exploration_tags: list | None = None,
+) -> None:
+    """Persist a first-class Judgment row with version provenance (G1)."""
+    try:
+        from hedwig.models import Judgment, UrgencyLevel
+        from hedwig.storage import (
+            get_active_interpretation_style,
+            get_criteria_versions,
+            save_judgment,
+        )
+        crit_ver = None
+        try:
+            cv = get_criteria_versions(limit=1) or []
+            if cv:
+                crit_ver = int(cv[0].get("version", 0)) or None
+        except Exception:
+            pass
+        style_id = None
+        try:
+            active = get_active_interpretation_style() or {}
+            style_id = active.get("id")
+        except Exception:
+            pass
+
+        try:
+            urg = UrgencyLevel(urgency)
+        except Exception:
+            urg = UrgencyLevel.SKIP
+
+        save_judgment(Judgment(
+            signal_id=signal_id,
+            score=float(relevance),
+            urgency=urg,
+            rationale=why or None,
+            devil_advocate=devil or None,
+            opportunity_note=opp or None,
+            confidence=confidence,
+            exploration_tags=list(exploration_tags or []),
+            criteria_version=crit_ver,
+            interpretation_style_id=style_id,
+        ))
+    except Exception:
+        pass
+
+
 async def score_posts(posts: list[RawPost]) -> list[ScoredSignal]:
     if not posts:
         return []
@@ -126,18 +180,36 @@ async def score_posts(posts: list[RawPost]) -> list[ScoredSignal]:
                 except ValueError:
                     urgency = UrgencyLevel.SKIP
 
-                scored.append(
-                    ScoredSignal(
-                        raw=batch[j],
-                        relevance_score=float(result.get("relevance_score", 0)),
-                        urgency=urgency,
-                        why_relevant=result.get("why_relevant", ""),
-                        devils_advocate=result.get("devils_advocate", ""),
-                        exploration_tags=_parse_exploration_tags(
-                            result.get("exploration_tags", [])
-                        ),
-                    )
+                why = result.get("why_relevant", "")
+                devil = result.get("devils_advocate", "")
+                tags = _parse_exploration_tags(result.get("exploration_tags", []))
+                relevance = float(result.get("relevance_score", 0))
+
+                signal = ScoredSignal(
+                    raw=batch[j],
+                    relevance_score=relevance,
+                    urgency=urgency,
+                    why_relevant=why,
+                    devils_advocate=devil,
+                    exploration_tags=tags,
                 )
+                scored.append(signal)
+
+                # G1 — also persist a first-class Judgment row tagged with
+                # the criteria + interpretation_style version that produced it.
+                try:
+                    _persist_judgment(
+                        signal_id=batch[j].external_id,
+                        relevance=relevance,
+                        urgency=urgency.value,
+                        why=why,
+                        devil=devil,
+                        opp=str(result.get("opportunity_note") or ""),
+                        confidence=result.get("confidence"),
+                        exploration_tags=tags,
+                    )
+                except Exception as e:
+                    logger.debug("Judgment persist skipped: %s", e)
         except Exception as e:
             logger.error(f"Scoring batch failed: {e}")
             for post in batch:
