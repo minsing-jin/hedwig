@@ -131,6 +131,25 @@ def init_db():
             captured_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- v3: ChatGPT-style chat persistence (single entry point per user
+        -- emphasis #1 + #3: 정보 홍수 → 한 화면 / 인지 부하 0).
+        CREATE TABLE IF NOT EXISTS chat_conversations (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT 'New chat',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_message_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('user','assistant','tool','system')),
+            content TEXT NOT NULL,
+            tool_calls TEXT DEFAULT NULL,    -- JSON when assistant invoked tools
+            tool_name TEXT DEFAULT NULL,     -- when role='tool'
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id)
+        );
+
         -- v3 Phase 7: behavior_events — implicit-passive feedback channel
         -- (dwell, skip, share, save) captured by the /feed page beacon.
         CREATE TABLE IF NOT EXISTS behavior_events (
@@ -210,6 +229,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_behavior_signal ON behavior_events(signal_id, captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_behavior_type ON behavior_events(event_type, captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_delivered_signal ON delivered_signals(signal_id, delivered_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_chat_msg_convo ON chat_messages(conversation_id, id);
+        CREATE INDEX IF NOT EXISTS idx_chat_convo_last ON chat_conversations(last_message_at DESC);
         """)
         # G5 — feedback.attribution column (added separately so older
         # databases get the column without dropping data).
@@ -454,8 +475,15 @@ def is_duplicate(platform: str, external_id: str) -> bool:
 # Feedback
 # ---------------------------------------------------------------------------
 
-def save_feedback(feedback: Feedback) -> bool:
+def save_feedback(feedback: Feedback, user_id: str | None = None) -> bool:
+    """Persist a feedback row.
+
+    ``user_id`` is accepted for parity with the supabase backend (which is
+    multi-tenant). The local SQLite backend is single-user, so the value
+    is intentionally ignored — callers can pass it without a guard.
+    """
     init_db()
+    _ = user_id  # silence linters; documented above
     # Compute attribution lazily — which criterion keywords + which platform
     # were associated with the signal. Stored as JSON so the evolution loop
     # can later attribute fitness deltas back to specific criterion entries
@@ -941,6 +969,114 @@ def get_cycle_logs(scope: str | None = None, limit: int = 100) -> list[dict]:
         for jf in ("mutations_applied", "inputs", "outputs"):
             try:
                 d[jf] = json.loads(d.get(jf) or ("[]" if jf == "mutations_applied" else "{}"))
+            except Exception:
+                pass
+        out.append(d)
+    return out
+
+
+def create_conversation(conversation_id: str, title: str = "New chat") -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO chat_conversations (id, title) VALUES (?, ?)",
+                (conversation_id, title),
+            )
+        return True
+    except Exception as e:
+        logger.error("create_conversation: %s", e)
+        return False
+
+
+def list_conversations(limit: int = 50) -> list[dict]:
+    init_db()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT id, title, created_at, last_message_at
+               FROM chat_conversations
+               ORDER BY last_message_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_conversation_title(conversation_id: str, title: str) -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                "UPDATE chat_conversations SET title = ? WHERE id = ?",
+                (title, conversation_id),
+            )
+        return True
+    except Exception as e:
+        logger.error("update_conversation_title: %s", e)
+        return False
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute("DELETE FROM chat_messages WHERE conversation_id = ?",
+                         (conversation_id,))
+            conn.execute("DELETE FROM chat_conversations WHERE id = ?",
+                         (conversation_id,))
+        return True
+    except Exception as e:
+        logger.error("delete_conversation: %s", e)
+        return False
+
+
+def append_chat_message(
+    conversation_id: str,
+    role: str,
+    content: str,
+    *,
+    tool_calls: list | None = None,
+    tool_name: str | None = None,
+) -> int | None:
+    if role not in ("user", "assistant", "tool", "system"):
+        return None
+    init_db()
+    try:
+        with _conn() as conn:
+            cur = conn.execute(
+                """INSERT INTO chat_messages
+                   (conversation_id, role, content, tool_calls, tool_name)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    conversation_id, role, content,
+                    json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None,
+                    tool_name,
+                ),
+            )
+            conn.execute(
+                "UPDATE chat_conversations SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (conversation_id,),
+            )
+            return cur.lastrowid
+    except Exception as e:
+        logger.error("append_chat_message: %s", e)
+        return None
+
+
+def get_chat_messages(conversation_id: str, limit: int = 200) -> list[dict]:
+    init_db()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT id, role, content, tool_calls, tool_name, created_at
+               FROM chat_messages WHERE conversation_id = ?
+               ORDER BY id ASC LIMIT ?""",
+            (conversation_id, limit),
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        if d.get("tool_calls"):
+            try:
+                d["tool_calls"] = json.loads(d["tool_calls"])
             except Exception:
                 pass
         out.append(d)

@@ -274,7 +274,9 @@ def test_brief_page_renders_structured_section(tmp_env):
     resp = client.get("/brief?cycle=weekly")
     assert resp.status_code == 200
     assert "WIN_OPPORTUNITY_MARKER" in resp.text
-    assert "Structured view" in resp.text
+    # New GeekNews-style headline+toggle layout
+    assert "headline-card" in resp.text
+    assert "기회 포착" in resp.text
 
 
 # --- Misc — nav + status link ------------------------------------------

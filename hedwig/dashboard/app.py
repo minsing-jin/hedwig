@@ -425,6 +425,46 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     # Phase 7 — Feed (SNS-style infinite scroll) + behavior beacon
     # -----------------------------------------------------------------------
 
+    # ChatGPT-style chat — single entry point ("정보 홍수에서 한 화면" pillar)
+    @app.get("/chat", response_class=HTMLResponse)
+    async def chat_page(request: Request):
+        from hedwig.chat.router import new_conversation_id
+        return TEMPLATES.TemplateResponse(
+            request, "chat.html",
+            {"conversation_id": new_conversation_id()},
+        )
+
+    @app.get("/chat/conversations")
+    async def chat_conversations():
+        from hedwig.storage import list_conversations
+        return JSONResponse({"conversations": list_conversations(limit=50)})
+
+    @app.get("/chat/conversations/{conv_id}/messages")
+    async def chat_messages_endpoint(conv_id: str):
+        from hedwig.storage import get_chat_messages
+        return JSONResponse({"messages": get_chat_messages(conv_id, limit=200)})
+
+    @app.delete("/chat/conversations/{conv_id}")
+    async def chat_conversation_delete(conv_id: str):
+        from hedwig.storage import delete_conversation
+        return JSONResponse({"ok": delete_conversation(conv_id)})
+
+    @app.post("/chat/message")
+    async def chat_message(request: Request):
+        from hedwig.chat.router import handle_user_message, new_conversation_id
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "expected JSON body"}, status_code=400)
+
+        message = str(body.get("message", "")).strip()
+        if not message:
+            return JSONResponse({"error": "message required"}, status_code=400)
+        conv_id = str(body.get("conversation_id") or "").strip() or new_conversation_id()
+        result = await handle_user_message(conv_id, message)
+        return JSONResponse(result)
+
     @app.get("/feed", response_class=HTMLResponse)
     async def feed_page(request: Request):
         return TEMPLATES.TemplateResponse(request, "feed.html")

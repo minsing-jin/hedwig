@@ -1,0 +1,148 @@
+/* v3 overlay — readability + GeekNews-style headline+toggle.
+   Loaded after style.css. The base theme is dark; this layer ensures any
+   v3 page that hard-codes light surfaces still has correct contrast. */
+
+/* --- Light surfaces inside dark page: text color guaranteed readable --- */
+.feed-card, .brief-card, .meta-card, .meta-result, .sov-card,
+.diff-card, .struct-block, .status-card, .empty-state, .sandbox-result,
+.qa-result, .qa-input, .composer textarea, .messages,
+.feed-list, .feed-shell, .timeline-item .timeline-body {
+  color: #111827;
+}
+.feed-card a, .brief-card a, .meta-card a, .sov-card a, .diff-card a,
+.brief-body a, .struct-block a {
+  color: #1d4ed8;
+}
+.bubble, .bubble *, .qa-answer, .qa-result *, .yaml-diff {
+  color: inherit;
+}
+
+/* base style.css uses .muted with dark-theme color; on light cards it gets
+   too light. Restore decent contrast on light surfaces. */
+.feed-card .muted, .brief-card .muted, .meta-card .muted, .sov-card .muted,
+.diff-card .muted, .empty-state .muted, .sandbox-result .muted,
+.status-card .muted, .qa-result .muted, .messages .muted {
+  color: #4b5563;
+}
+
+/* Inputs always opaque white so dark <body> doesn't bleed through */
+.qa-input, .composer textarea, input[type="text"], input[type="number"],
+textarea, select {
+  background: white !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db;
+}
+input::placeholder, textarea::placeholder { color: #6b7280; }
+
+/* --- GeekNews-style headline + toggle ----------------------------------- */
+.headline-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin: 10px 0;
+  overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+.headline-card:hover { border-color: #c7d2fe; box-shadow: 0 1px 6px rgba(0,0,0,.06); }
+.headline-card[open] { border-color: #2563eb; box-shadow: 0 2px 10px rgba(37,99,235,.08); }
+
+.headline-card > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  color: #111827;
+  font-size: 14px;
+}
+.headline-card > summary::-webkit-details-marker { display: none; }
+.headline-card > summary::before {
+  content: "▸";
+  color: #6b7280;
+  transition: transform .2s;
+  font-size: 11px;
+}
+.headline-card[open] > summary::before { transform: rotate(90deg); }
+
+.headline-meta { font-size: 11px; color: #6b7280; display: flex; gap: 8px;
+                 align-items: center; flex-wrap: wrap; }
+.headline-meta .pill {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+}
+.headline-meta .pill-daily { background: #dbeafe; color: #1e40af; }
+.headline-meta .pill-weekly { background: #fce7f3; color: #9d174d; }
+.headline-meta .pill-critical { background: #fee2e2; color: #991b1b; }
+.headline-meta .pill-alert { background: #fee2e2; color: #991b1b; }
+.headline-meta .pill-digest { background: #e0e7ff; color: #3730a3; }
+.headline-meta .pill-platform { background: #f3f4f6; color: #374151; }
+
+.headline-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.headline-body {
+  padding: 4px 16px 14px 16px;
+  border-top: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.6;
+}
+.headline-body p { margin: 8px 0; }
+.headline-body ul { margin: 6px 0 8px 18px; }
+.headline-body strong { color: #111827; }
+.headline-body details.full-text {
+  margin-top: 10px;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.headline-body details.full-text summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #4b5563;
+  font-weight: 500;
+}
+.headline-body details.full-text[open] summary { color: #1f2937; margin-bottom: 6px; }
+.headline-body .quick-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+.headline-body .quick-actions a, .headline-body .quick-actions button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #1f2937;
+  text-decoration: none;
+  cursor: pointer;
+}
+.headline-body .quick-actions a:hover, .headline-body .quick-actions button:hover {
+  background: #f3f4f6;
+}
+
+/* hero on light cards still uses light theme; ensure heading color */
+.hero h1, .section h2, .section h3 { color: #111827; }
+.hero .subtitle { color: #4b5563; }
+
+/* signals page — make rows readable on dark base */
+.signal-item, .signal-list .signal-item {
+  background: white;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.signal-item .platform { color: #4b5563; }
+.signal-item a { color: #1d4ed8; }
+
+/* timeline */
+.timeline { padding: 8px 0; }
+.timeline-item { background: white; border-radius: 8px; padding: 10px 14px;
+                  margin-bottom: 6px; border: 1px solid #e5e7eb; }
+.timeline-item .timeline-when { color: #6b7280; }
+.timeline-item .timeline-summary { color: #1f2937; }

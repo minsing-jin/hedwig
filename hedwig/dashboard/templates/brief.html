@@ -4,11 +4,11 @@
 
 <div class="hero">
   <h1>📰 Briefings</h1>
-  <p class="subtitle">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
+  <p class="subtitle muted">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
 </div>
 
 <div class="section">
-  <div class="button-row">
+  <div class="button-row" style="margin-bottom: 14px;">
     <button class="btn{% if cycle == 'all' %} btn-primary{% endif %}" onclick="location='/brief'">All</button>
     <button class="btn{% if cycle == 'daily' %} btn-primary{% endif %}" onclick="location='/brief?cycle=daily'">Daily</button>
     <button class="btn{% if cycle == 'weekly' %} btn-primary{% endif %}" onclick="location='/brief?cycle=weekly'">Weekly</button>
@@ -16,51 +16,70 @@
 
   {% if briefings %}
     {% for b in briefings %}
-    <article class="brief-card">
-      <header class="brief-head">
-        <span class="brief-tag brief-tag-{{ b.cycle_type }}">{{ b.cycle_type }}</span>
-        <span class="brief-time">{{ b.generated_at[:19]|replace('T', ' ') }}</span>
-        <span class="brief-count">{{ b.signal_count }} signals</span>
-      </header>
+    {%- set s = b.structured or {} -%}
+    {%- set has_struct = s.alerts or s.trend_patterns or s.opportunity_hypotheses or s.exploration_suggestions -%}
+    {%- set headline_text = '' -%}
+    {%- if s.alerts and s.alerts|length > 0 -%}
+      {%- set headline_text = s.alerts[0] -%}
+    {%- elif s.opportunity_hypotheses and s.opportunity_hypotheses|length > 0 -%}
+      {%- set headline_text = s.opportunity_hypotheses[0] -%}
+    {%- elif s.trend_patterns and s.trend_patterns|length > 0 -%}
+      {%- set headline_text = s.trend_patterns[0] -%}
+    {%- else -%}
+      {%- set headline_text = b.content[:120] -%}
+    {%- endif %}
 
-      {% if b.structured and (b.structured.alerts or b.structured.opportunity_hypotheses) %}
-      <details class="brief-structured" open>
-        <summary>Structured view</summary>
-        {% if b.structured.alerts %}
-        <div class="struct-block alert"><h4>🔴 Alerts</h4>
-          <ul>{% for x in b.structured.alerts %}<li>{{ x }}</li>{% endfor %}</ul></div>
+    <details class="headline-card">
+      <summary>
+        <span></span>
+        <span class="headline-title">{{ headline_text|truncate(140, True, '…') }}</span>
+        <span class="headline-meta">
+          <span class="pill pill-{{ b.cycle_type }}">{{ b.cycle_type }}</span>
+          <span>{{ b.generated_at[:16]|replace('T', ' ') }}</span>
+          <span>· {{ b.signal_count }} signals</span>
+        </span>
+      </summary>
+      <div class="headline-body">
+        {% if has_struct %}
+          {% if s.alerts %}
+            <p><strong>🔴 즉시 주목</strong></p>
+            <ul>{% for x in s.alerts %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if s.trend_patterns %}
+            <p><strong>🟡 흐름</strong></p>
+            <ul>{% for x in s.trend_patterns %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if s.opportunity_hypotheses %}
+            <p><strong>🎯 기회 포착</strong></p>
+            <ul>{% for x in s.opportunity_hypotheses %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if s.exploration_suggestions %}
+            <p><strong>💡 인사이트</strong></p>
+            <ul>{% for x in s.exploration_suggestions %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if s.overheating_warnings %}
+            <p><strong>⚖️ 과열 경고</strong></p>
+            <ul>{% for x in s.overheating_warnings %}<li>{{ x }}</li>{% endfor %}</ul>
+          {% endif %}
         {% endif %}
-        {% if b.structured.trend_patterns %}
-        <div class="struct-block"><h4>🟡 Trends</h4>
-          <ul>{% for x in b.structured.trend_patterns %}<li>{{ x }}</li>{% endfor %}</ul></div>
-        {% endif %}
-        {% if b.structured.opportunity_hypotheses %}
-        <div class="struct-block opp"><h4>🎯 Opportunities</h4>
-          <ul>{% for x in b.structured.opportunity_hypotheses %}<li>{{ x }}</li>{% endfor %}</ul></div>
-        {% endif %}
-        {% if b.structured.exploration_suggestions %}
-        <div class="struct-block"><h4>💡 Exploration</h4>
-          <ul>{% for x in b.structured.exploration_suggestions %}<li>{{ x }}</li>{% endfor %}</ul></div>
-        {% endif %}
-        {% if b.structured.overheating_warnings %}
-        <div class="struct-block warn"><h4>⚖️ Overheating</h4>
-          <ul>{% for x in b.structured.overheating_warnings %}<li>{{ x }}</li>{% endfor %}</ul></div>
-        {% endif %}
-      </details>
-      {% endif %}
 
-      <div class="brief-body"
-           data-raw="{{ b.content|e }}"
-           id="brief-{{ b.id }}">{{ b.content }}</div>
-    </article>
+        <details class="full-text">
+          <summary>📄 원문 전체 보기</summary>
+          <div class="full-text-body" data-raw="{{ b.content|e }}">{{ b.content }}</div>
+        </details>
+
+        <div class="quick-actions">
+          <a href="/chat?q={{ ('이 브리핑 더 자세히 설명해줘 — ' + headline_text)|urlencode }}">💬 Chat에서 더 깊이</a>
+          <a href="/evolution">🧬 evolution timeline</a>
+        </div>
+      </div>
+    </details>
     {% endfor %}
   {% else %}
     <div class="empty-state">
-      <p class="muted">
-        아직 브리핑이 없습니다.
-      </p>
+      <p class="muted">아직 브리핑이 없습니다.</p>
       <ol class="muted">
-        <li>홈에서 <strong>▶ Run Daily Pipeline</strong> 클릭 (수집 + 스코어링 + 브리핑 생성)</li>
+        <li>홈 또는 Chat에서 "daily 파이프라인 실행" 요청</li>
         <li>또는 <code>python -m hedwig</code> 1회 실행 → daily brief 생성</li>
         <li>주간은 <code>python -m hedwig --weekly</code></li>
       </ol>
@@ -69,12 +88,9 @@
 </div>
 
 <script>
-// Render the brief body as lightweight markdown (headings, lists, links, bold).
-// No external dep — inline because briefings are small.
 function renderMD(s) {
   if (!s) return '';
-  let t = s
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let t = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   t = t.replace(/^### (.*)$/gm, '<h3>$1</h3>');
   t = t.replace(/^## (.*)$/gm, '<h2>$1</h2>');
   t = t.replace(/^# (.*)$/gm, '<h1>$1</h1>');
@@ -84,45 +100,14 @@ function renderMD(s) {
   t = t.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
   t = t.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank">$2</a>');
   t = t.replace(/^- (.*)$/gm, '<li>$1</li>');
-  t = t.replace(/(<li>.*<\/li>\n?)+/g, match => '<ul>' + match + '</ul>');
+  t = t.replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>');
   t = t.replace(/\n{2,}/g, '</p><p>');
-  t = '<p>' + t + '</p>';
-  return t;
+  return '<p>' + t + '</p>';
 }
-document.querySelectorAll('.brief-body').forEach(el => {
+document.querySelectorAll('.full-text-body').forEach(el => {
   const raw = el.textContent;
   el.innerHTML = renderMD(raw);
 });
 </script>
-
-<style>
-.brief-card { margin: 16px 0; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px;
-              background: white; }
-.brief-head { display: flex; gap: 10px; align-items: center; margin-bottom: 12px;
-              font-size: 12px; color: #6b7280; }
-.brief-tag { display: inline-block; padding: 2px 8px; border-radius: 10px;
-             font-weight: 600; font-size: 11px; text-transform: uppercase; }
-.brief-tag-daily { background: #dbeafe; color: #1e40af; }
-.brief-tag-weekly { background: #fce7f3; color: #9d174d; }
-.brief-tag-critical { background: #fee2e2; color: #991b1b; }
-.brief-time { font-family: 'SF Mono', Menlo, monospace; }
-.brief-count { margin-left: auto; }
-.brief-body { line-height: 1.6; font-size: 14px; color: #111827; }
-.brief-body h1, .brief-body h2, .brief-body h3 { margin: 14px 0 8px 0; }
-.brief-body h3 { font-size: 15px; }
-.brief-body ul { margin: 6px 0 10px 18px; }
-.brief-body a { color: #2563eb; text-decoration: underline; }
-.empty-state { padding: 20px; background: #f9fafb; border-radius: 6px; }
-.empty-state ol { margin-top: 10px; padding-left: 20px; }
-.brief-structured { margin-bottom: 12px; padding: 10px; background: #f9fafb;
-                    border-radius: 6px; border: 1px solid #e5e7eb; }
-.brief-structured summary { font-weight: 600; cursor: pointer; font-size: 13px; color: #374151; }
-.struct-block { margin-top: 8px; }
-.struct-block h4 { margin: 4px 0; font-size: 13px; }
-.struct-block ul { margin: 4px 0 8px 18px; font-size: 12px; line-height: 1.5; }
-.struct-block.alert h4 { color: #b91c1c; }
-.struct-block.opp h4 { color: #047857; }
-.struct-block.warn h4 { color: #b45309; }
-</style>
 
 {% endblock %}

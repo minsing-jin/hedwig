@@ -26,54 +26,77 @@ DEFAULT_TIMEOUT = 10.0
 JINA_API_KEY = os.getenv("JINA_API_KEY", "")
 
 
-async def normalize_content(post: RawPost, timeout: float = DEFAULT_TIMEOUT) -> str:
-    """Fetch clean markdown for a post's URL via r.jina.ai.
+async def fetch_clean_markdown(url: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
+    """Fetch clean markdown for an arbitrary URL.
 
-    Returns normalized content or falls back to post.content if jina fails.
-    Handles timeouts, connection errors, and HTTP errors gracefully — the
-    caller always receives usable content (original post.content at worst).
+    Strategy:
+      1. r.jina.ai (handles JS-rendered SPAs, free with key)
+      2. trafilatura local extraction (no rate limit, OSS)
+      3. None (caller decides fallback)
     """
-    if not post.url or post.url.startswith("https://r.jina.ai"):
-        return post.content
+    if not url or url.startswith("https://r.jina.ai"):
+        return None
+
+    # 1. Jina
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout, connect=min(timeout, 5.0)),
+            follow_redirects=True,
+        ) as client:
+            headers = {"Accept": "text/markdown", "x-respond-with": "markdown"}
+            if JINA_API_KEY:
+                headers["Authorization"] = f"Bearer {JINA_API_KEY}"
+            resp = await client.get(f"{JINA_READER}{url}", headers=headers)
+            if resp.status_code == 200 and len(resp.text) > 50:
+                return resp.text[:5000]
+            if resp.status_code == 429:
+                logger.debug("Jina rate-limited for %s — trying trafilatura", url)
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.debug("Jina unavailable (%s) — trying trafilatura", e)
+    except Exception as e:
+        logger.debug("Jina failed (%s) — trying trafilatura", e)
+
+    # 2. trafilatura
+    try:
+        return await _trafilatura_extract(url, timeout=timeout)
+    except Exception as e:
+        logger.debug("trafilatura also failed for %s: %s", url, e)
+    return None
+
+
+async def _trafilatura_extract(url: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
+    """OSS local content extraction (handles non-JS HTML well)."""
+    try:
+        import trafilatura
+    except ImportError:
+        return None
+    import asyncio
 
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(timeout, connect=min(timeout, 5.0)),
             follow_redirects=True,
         ) as client:
-            headers = {
-                "Accept": "text/markdown",
-                "x-respond-with": "markdown",
-            }
-            if JINA_API_KEY:
-                headers["Authorization"] = f"Bearer {JINA_API_KEY}"
-            resp = await client.get(f"{JINA_READER}{post.url}", headers=headers)
-            if resp.status_code == 200 and len(resp.text) > 50:
-                return resp.text[:5000]
-            if resp.status_code == 429:
-                logger.debug("Jina rate-limited for %s — using raw content", post.url)
-            else:
-                logger.debug(
-                    "Jina returned status=%s len=%d for %s",
-                    resp.status_code,
-                    len(resp.text),
-                    post.url,
-                )
-    except httpx.TimeoutException:
-        logger.warning(
-            "Jina normalization timed out after %.1fs for %s — falling back to raw content",
-            timeout,
-            post.url,
-        )
-    except httpx.ConnectError:
-        logger.warning(
-            "Jina connection failed for %s — falling back to raw content",
-            post.url,
-        )
-    except Exception as e:
-        logger.debug("Jina normalization failed for %s: %s", post.url, e)
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 Hedwig"})
+        if resp.status_code != 200:
+            return None
+        html = resp.text
+    except Exception:
+        return None
 
-    return post.content
+    def _extract():
+        return trafilatura.extract(
+            html, include_links=False, include_formatting=True,
+            include_tables=False, output_format="markdown", favor_recall=False,
+        )
+    text = await asyncio.to_thread(_extract)
+    return (text or "")[:5000] if text else None
+
+
+async def normalize_content(post: RawPost, timeout: float = DEFAULT_TIMEOUT) -> str:
+    """Compatibility wrapper used by normalize_batch — preserves post.content fallback."""
+    cleaned = await fetch_clean_markdown(post.url, timeout=timeout) if post.url else None
+    return cleaned or post.content
 
 
 async def normalize_batch(

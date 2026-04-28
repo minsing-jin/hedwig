@@ -4,58 +4,72 @@
 
 <div class="hero">
   <h1>📡 Recent Signals</h1>
-  <p class="subtitle">Click 👍/👎 to teach the algorithm what matters to you.</p>
+  <p class="subtitle muted">헤드라인만 먼저 읽고, 클릭해서 펼쳐보세요. 👍/👎 가 알고리즘 진화 연료.</p>
 </div>
 
 {% if signals %}
-<div class="signal-list-full">
+<div class="section">
   {% for s in signals %}
-  <div class="signal-card">
-    <div class="signal-header">
-      <span class="platform">{{ s.platform }}</span>
-      <span class="urgency {{ s.urgency }}">{{ s.urgency }}</span>
-      <span class="score">{{ "%.2f"|format(s.relevance_score or 0) }}</span>
-    </div>
-    <h3 class="signal-title">
-      <a href="{{ s.url }}" target="_blank">{{ s.title }}</a>
-    </h3>
-    <div class="signal-body">
-      {% if s.why_relevant %}
-      <p class="why">💡 {{ s.why_relevant }}</p>
+  {%- set urgency = s.urgency or 'digest' -%}
+  <details class="headline-card">
+    <summary>
+      <span></span>
+      <span class="headline-title">
+        <a href="{{ s.url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+          {{ s.title|truncate(140, True, '…') }}
+        </a>
+      </span>
+      <span class="headline-meta">
+        <span class="pill pill-platform">{{ s.platform }}</span>
+        {% if urgency in ('alert','digest') %}
+        <span class="pill pill-{{ urgency }}">{{ urgency }}</span>
+        {% endif %}
+        <span>{{ "%.2f"|format(s.relevance_score or 0) }}</span>
+      </span>
+    </summary>
+    <div class="headline-body">
+      {% if s.why_relevant %}<p>💡 <strong>왜 중요</strong> — {{ s.why_relevant }}</p>{% endif %}
+      {% if s.devils_advocate %}<p>😈 <strong>반대 관점</strong> — {{ s.devils_advocate }}</p>{% endif %}
+      {% if s.author %}<p class="muted" style="font-size:11px;">by {{ s.author }}</p>{% endif %}
+      {% if s.content %}
+      <details class="full-text">
+        <summary>📄 원본 발췌</summary>
+        <div style="margin-top:8px;">{{ s.content[:1500] }}</div>
+      </details>
       {% endif %}
-      {% if s.devils_advocate %}
-      <p class="devil">😈 {{ s.devils_advocate }}</p>
-      {% endif %}
-    </div>
-    <div class="signal-footer">
-      <span class="author">{{ s.author }}</span>
-      <div class="vote-buttons">
-        <button class="vote-up" hx-post="/feedback/{{ s.id }}/up" hx-swap="none"
-                onclick="this.classList.add('voted'); showToast('👍 Upvoted')">
-          👍 Upvote
-        </button>
-        <button class="vote-down" hx-post="/feedback/{{ s.id }}/down" hx-swap="none"
-                onclick="this.classList.add('voted'); showToast('👎 Downvoted')">
-          👎 Downvote
-        </button>
+      <div class="quick-actions">
+        <button onclick="vote('{{ s.id }}', 'up', this)">👍 Upvote</button>
+        <button onclick="vote('{{ s.id }}', 'down', this)">👎 Downvote</button>
+        <a href="{{ s.url }}" target="_blank">↗ 원본</a>
+        <a href="/chat?q={{ ('이 시그널 더 분석해줘 — ' + s.title)|urlencode }}">💬 Chat</a>
       </div>
     </div>
-  </div>
+  </details>
   {% endfor %}
 </div>
 {% else %}
 <div class="empty-state">
-  <p>No signals yet. Go to <a href="/">Home</a> and click "Run Daily Pipeline".</p>
+  <p class="muted">아직 시그널이 없습니다. <a href="/">Home</a> 의 "Run Daily Pipeline" 또는 <a href="/chat">Chat</a> 에서 "daily 실행" 요청.</p>
 </div>
 {% endif %}
 
 <div id="toast" class="toast"></div>
 <script>
+async function vote(id, dir, btn) {
+  btn.disabled = true;
+  try {
+    await fetch(`/feedback/${encodeURIComponent(id)}/${dir}`, {method: 'POST'});
+    btn.textContent = dir === 'up' ? '👍 Upvoted' : '👎 Downvoted';
+    showToast(dir === 'up' ? '👍 Upvoted' : '👎 Downvoted');
+  } catch (e) {
+    showToast('Error: ' + e);
+    btn.disabled = false;
+  }
+}
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
 }
 </script>
 
