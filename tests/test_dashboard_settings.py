@@ -175,9 +175,9 @@ async def test_settings_page_lists_registered_sources_and_saved_states(
     assert str(config_path) in resp.text
     assert "GitHub Trending" in resp.text
     assert "arXiv" in resp.text
-    # v3 added arxiv_recsys (self-referential paper monitor) and podcast → 19
-    assert len(get_registered_sources()) == 19
-    assert resp.text.count('name="enabled_sources"') == 19
+    # v3 added arxiv_recsys + podcast + ai_labs → 20
+    assert len(get_registered_sources()) == 20
+    assert resp.text.count('name="enabled_sources"') == 20
     for plugin_id in get_registered_sources():
         _extract_checkbox(resp.text, plugin_id)
     assert "checked" in _extract_checkbox(resp.text, "github_trending")
@@ -298,9 +298,9 @@ async def test_settings_save_persists_authenticated_saas_user_source_preferences
 
     registry = get_registered_sources()
     user_rows = [row for row in state if row["user_id"] == "user-123"]
-    # v3 added arxiv_recsys + podcast → 19
-    assert len(registry) == 19
-    assert len(user_rows) == 19
+    # v3 added arxiv_recsys + podcast + ai_labs → 20
+    assert len(registry) == 20
+    assert len(user_rows) == 20
     enabled_by_plugin = {
         row["plugin_id"]: row["enabled"]
         for row in user_rows

@@ -2,6 +2,7 @@
 
 # Import all builtin sources to trigger @register_source decorators
 from hedwig.sources import (  # noqa: F401
+    ai_labs,
     arxiv,
     arxiv_recsys,
     bluesky,
