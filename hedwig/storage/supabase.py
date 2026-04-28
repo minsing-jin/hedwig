@@ -330,7 +330,7 @@ def is_duplicate(platform: str, external_id: str) -> bool:
 # Feedback (v2: boolean + natural language)
 # ---------------------------------------------------------------------------
 
-def save_feedback(feedback: Feedback, user_id: str | None = None) -> bool:
+def save_feedback(feedback: Feedback, user_id: str | None = None, **_kwargs) -> bool:
     try:
         user_id = _normalize_user_id(user_id)
     except ValueError as e:

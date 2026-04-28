@@ -756,7 +756,8 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
         from hedwig.feedback import FeedbackCollector
         from hedwig.models import VoteType
-        from hedwig.storage import save_feedback
+        # Dynamic import — survives code-edit reloads without restarting uvicorn.
+        from hedwig import storage as _storage
 
         user_id: str | None = None
         if saas_mode:
@@ -770,7 +771,16 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             signal_id=signal_id,
             vote=VoteType.UP if vote == "up" else VoteType.DOWN,
         )
-        save_feedback(fb, user_id=user_id)
+        # Defensive: if user_id is None, call without the kwarg so any
+        # backend whose signature isn't user_id-aware still works.
+        try:
+            if user_id is not None:
+                _storage.save_feedback(fb, user_id=user_id)
+            else:
+                _storage.save_feedback(fb)
+        except TypeError:
+            # Last-ditch — backend has neither signature; call positional only.
+            _storage.save_feedback(fb)
 
         return JSONResponse({"ok": True, "vote": vote})
 

@@ -475,12 +475,15 @@ def is_duplicate(platform: str, external_id: str) -> bool:
 # Feedback
 # ---------------------------------------------------------------------------
 
-def save_feedback(feedback: Feedback, user_id: str | None = None) -> bool:
+def save_feedback(feedback: Feedback, user_id: str | None = None, **_kwargs) -> bool:
     """Persist a feedback row.
 
     ``user_id`` is accepted for parity with the supabase backend (which is
     multi-tenant). The local SQLite backend is single-user, so the value
     is intentionally ignored — callers can pass it without a guard.
+
+    ``**_kwargs`` absorbs any future kwargs the supabase backend grows so
+    the storage dispatcher never raises TypeError on signature drift.
     """
     init_db()
     _ = user_id  # silence linters; documented above

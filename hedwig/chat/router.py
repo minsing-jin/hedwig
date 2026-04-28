@@ -42,11 +42,20 @@ SYSTEM_PROMPT = """당신은 Hedwig — 사용자 본인이 소유한 추천 알
 - 사용자가 daily/weekly/critical 파이프라인 실행을 요청하면 trigger_pipeline.
 - 수집 DB에 없을 것 같은 정보는 live_search 사용.
 
-## 답변 스타일
-- 한국어로, 간결하게.
-- 인용 시 시그널 ID 또는 URL 명시.
-- propose 결과의 diff는 사용자에게 보여준 뒤 'Apply' 버튼을 누르도록 안내. 자동 적용 금지.
+## ⚠️ 답변 형식 (반드시 지킬 것)
+- **사용자에게는 항상 자연스러운 한국어 문장으로 답하세요. JSON, raw dict, 코드 블록만 던지면 안 됩니다.**
+- 도구를 호출했더라도 도구 결과를 받은 다음 턴에 반드시 한국어 요약을 작성하세요. 빈 응답 금지.
+- 도구 결과의 핵심 항목 (제목 / URL / 점수 등) 을 골라 1~5줄로 요약하고, 필요하면 bullet 사용.
+- 시그널 인용 시 [번호] 또는 짧은 제목을 그대로 표기. 사용자가 클릭할 수 있게 URL은 그대로 노출.
+- propose_* 결과의 diff는 사용자에게 보여준 뒤 'Apply' 버튼을 누르도록 안내. 자동 적용 금지.
+- 정보가 부족하면 "더 자세한 검색이 필요한가요?" 식으로 물어보세요.
 """
+
+FORCE_SUMMARY_PROMPT = (
+    "위 도구 결과를 바탕으로 사용자에게 한국어로 자연스러운 답변을 작성하세요. "
+    "JSON 그대로 보여주지 말고, 핵심을 1~5줄로 요약 + 인용. "
+    "추가 도구 호출은 하지 마세요."
+)
 
 
 def new_conversation_id() -> str:
@@ -177,6 +186,29 @@ async def handle_user_message(
 
         # Final plain reply
         final_text = (message.content or "").strip()
+
+        # If LLM returned an empty/very short reply after tool calls, force
+        # one more summarization pass — this is the "json만 나옴" case.
+        if (not final_text or len(final_text) < 12) and tool_log:
+            try:
+                messages2 = _build_history_for_llm(conversation_id) + [
+                    {"role": "user", "content": FORCE_SUMMARY_PROMPT},
+                ]
+                resp2 = await client.chat.completions.create(
+                    model=OPENAI_MODEL_FAST,
+                    messages=messages2,
+                    temperature=0.3,
+                    max_tokens=800,
+                )
+                forced = (resp2.choices[0].message.content or "").strip()
+                if forced:
+                    final_text = forced
+            except Exception as e:
+                logger.debug("forced summary failed: %s", e)
+
+        if not final_text:
+            final_text = "죄송합니다. 답변을 생성하지 못했습니다. 더 구체적으로 다시 물어봐주세요."
+
         append_chat_message(conversation_id, "assistant", final_text)
         return {
             "conversation_id": conversation_id,
@@ -184,8 +216,22 @@ async def handle_user_message(
             "tool_calls": tool_log,
         }
 
-    # Max iterations exceeded — emit a graceful fallback
-    fallback = "도구 호출이 너무 많아 종료했습니다. 더 구체적으로 다시 물어봐주세요."
+    # Max iterations exceeded — try one final summarization before giving up
+    try:
+        messages_final = _build_history_for_llm(conversation_id) + [
+            {"role": "user", "content": FORCE_SUMMARY_PROMPT},
+        ]
+        resp_final = await client.chat.completions.create(
+            model=OPENAI_MODEL_FAST,
+            messages=messages_final,
+            temperature=0.3,
+            max_tokens=800,
+        )
+        final_text = (resp_final.choices[0].message.content or "").strip()
+    except Exception:
+        final_text = ""
+
+    fallback = final_text or "도구 호출이 너무 많아 종료했습니다. 더 구체적으로 다시 물어봐주세요."
     append_chat_message(conversation_id, "assistant", fallback)
     return {"conversation_id": conversation_id, "answer": fallback,
             "tool_calls": tool_log, "max_iterations_exceeded": True}
