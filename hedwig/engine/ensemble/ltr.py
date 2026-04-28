@@ -52,6 +52,39 @@ WEIGHTS_PATH = Path(os.getenv(
     "HEDWIG_LTR_WEIGHTS",
     str(Path.home() / ".hedwig" / "ltr_weights.json"),
 ))
+LGBM_MODEL_PATH = Path(os.getenv(
+    "HEDWIG_LTR_LGBM",
+    str(Path.home() / ".hedwig" / "ltr_lgbm.txt"),
+))
+
+
+def _has_lightgbm() -> bool:
+    try:
+        import lightgbm  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _load_lgbm_model():
+    if not _has_lightgbm():
+        return None
+    if not LGBM_MODEL_PATH.exists():
+        return None
+    try:
+        import lightgbm as lgb
+        return lgb.Booster(model_file=str(LGBM_MODEL_PATH))
+    except Exception as e:
+        logger.debug("lgbm load failed: %s", e)
+        return None
+
+
+def _save_lgbm_model(booster) -> None:
+    try:
+        LGBM_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        booster.save_model(str(LGBM_MODEL_PATH))
+    except Exception as e:
+        logger.warning("lgbm save failed: %s", e)
 
 DEFAULT_FEATURES = [
     "text_relevance",
@@ -195,12 +228,24 @@ def _predict(
 
 
 class LTRRanker:
+    """LTR component.
+
+    Backend selection:
+      - LightGBM LGBMRanker (LambdaMART) when ``~/.hedwig/ltr_lgbm.txt`` exists
+        and lightgbm is importable. Industry-standard for personalized ranking.
+      - Pure-Python logistic + SGD (the v3 baseline) otherwise.
+
+    Both share the same name-keyed feature registry — meta-evolution can
+    expand `ltr.features` and either backend handles the new dimension
+    (logistic adds neutral prior; lightgbm needs a retrain on next fit).
+    """
     name = "ltr"
 
     def __init__(self, criteria_keywords: list[str] | None = None) -> None:
         self.weights, self.bias = load_weights()
         self.criteria_keywords = criteria_keywords or []
         self.features = _active_features()
+        self._lgbm = _load_lgbm_model()
 
     async def score_posts(self, posts: list[RawPost], context: dict | None = None) -> list[float]:
         if not posts:
@@ -212,10 +257,21 @@ class LTRRanker:
         context.setdefault("positive_tokens", pos_tokens)
         context.setdefault("negative_tokens", neg_tokens)
 
-        return [
-            _predict(_feature_vector(p, self.features, context), self.weights, self.bias)
-            for p in posts
-        ]
+        feature_rows = [_feature_vector(p, self.features, context) for p in posts]
+
+        if self._lgbm is not None:
+            try:
+                X = [[row.get(f, 0.5) for f in self.features] for row in feature_rows]
+                preds = self._lgbm.predict(X)
+                # LambdaMART produces relevance-relative scores; min-max for stability
+                lo, hi = float(min(preds)), float(max(preds))
+                if hi - lo < 1e-9:
+                    return [0.5] * len(posts)
+                return [float((p - lo) / (hi - lo)) for p in preds]
+            except Exception as e:
+                logger.warning("LGBM predict failed (%s) — falling back to logistic", e)
+
+        return [_predict(row, self.weights, self.bias) for row in feature_rows]
 
 
 def _load_feedback_token_sets(days: int = 28) -> tuple[set[str], set[str]]:
@@ -248,6 +304,116 @@ def _load_feedback_token_sets(days: int = 28) -> tuple[set[str], set[str]]:
         if sid in down_ids:
             neg_tokens |= tokens
     return pos_tokens, neg_tokens
+
+
+def fit_lgbm_from_history(
+    criteria_keywords: list[str],
+    lookback_days: int = 90,
+    num_boost_round: int = 100,
+) -> dict:
+    """Train LightGBM LGBMRanker (LambdaMART) from stored feedback +
+    behavior_events. Saves to ``~/.hedwig/ltr_lgbm.txt`` so the next
+    LTRRanker() picks it up automatically.
+
+    Returns a status dict; if lightgbm or numpy isn't available, returns
+    ``{"trained": False, "reason": "..."}`` so callers can fall back to
+    fit_from_history (logistic SGD).
+    """
+    if not _has_lightgbm():
+        return {"trained": False, "reason": "lightgbm not installed"}
+    try:
+        import numpy as np
+        import lightgbm as lgb
+    except Exception as e:
+        return {"trained": False, "reason": f"numpy/lightgbm import failed: {e}"}
+
+    since = datetime.now(tz=timezone.utc) - timedelta(days=lookback_days)
+    try:
+        from hedwig.storage import get_feedback_since, get_recent_signals, get_behavior_events
+    except ImportError:
+        return {"trained": False, "reason": "storage not available"}
+
+    feedback_rows = get_feedback_since(since=since) or []
+    if len(feedback_rows) < 8:
+        return {"trained": False, "reason": "not enough feedback events (<8)"}
+
+    signals = get_recent_signals(days=lookback_days) or []
+    behavior_events = get_behavior_events(limit=2000) or []
+
+    features = _active_features()
+    pos_tokens, neg_tokens = _load_feedback_token_sets(days=lookback_days)
+
+    from hedwig.models import Platform, RawPost as _RP
+    reconstructed: list[RawPost] = []
+    id_to_index: dict[str, int] = {}
+    for idx, s in enumerate(signals):
+        try:
+            reconstructed.append(_RP(
+                platform=Platform(s.get("platform", "custom")),
+                external_id=str(s.get("external_id") or s.get("id") or ""),
+                title=s.get("title", ""), url=s.get("url", ""),
+                content=s.get("content", ""), author=s.get("author", ""),
+                score=s.get("platform_score", 0) or 0,
+                comments_count=s.get("comments_count", 0) or 0,
+            ))
+            id_to_index[str(s.get("id", ""))] = idx
+        except Exception:
+            continue
+
+    base_ctx = {
+        "criteria_keywords": criteria_keywords,
+        "same_cycle_posts": reconstructed,
+        "positive_tokens": pos_tokens,
+        "negative_tokens": neg_tokens,
+    }
+
+    # Compose label: vote dominates, behavior dwells/skips are weaker signal
+    # signal_id -> aggregated label in [0..3] for lambdarank relevance scale
+    labels: dict[str, float] = {}
+    for r in feedback_rows:
+        sid = str(r.get("signal_id", ""))
+        labels[sid] = 3.0 if r.get("vote") == "up" else 0.0
+    for ev in behavior_events:
+        sid = str(ev.get("signal_id", ""))
+        if sid in labels:
+            continue
+        et = ev.get("event_type")
+        if et == "dwell" and (ev.get("dwell_ms") or 0) >= 3000:
+            labels[sid] = max(labels.get(sid, 0.0), 2.0)
+        elif et == "skip":
+            labels[sid] = labels.get(sid, 0.0)
+        elif et == "save" or et == "share":
+            labels[sid] = max(labels.get(sid, 0.0), 3.0)
+
+    X: list[list[float]] = []
+    y: list[float] = []
+    for sid, lbl in labels.items():
+        idx = id_to_index.get(sid)
+        if idx is None:
+            continue
+        post = reconstructed[idx]
+        feats = _feature_vector(post, features, base_ctx)
+        X.append([feats.get(f, 0.5) for f in features])
+        y.append(float(lbl))
+    if len(X) < 8:
+        return {"trained": False, "reason": "not enough matched signal+label pairs (<8)"}
+
+    X_arr = np.array(X, dtype=np.float64)
+    y_arr = np.array(y, dtype=np.int32)
+    group = [len(X_arr)]   # single query group — single user
+    train = lgb.Dataset(X_arr, label=y_arr, group=group, free_raw_data=False)
+    params = {
+        "objective": "lambdarank", "metric": "ndcg",
+        "learning_rate": 0.05, "num_leaves": 15, "min_data_in_leaf": 1,
+        "ndcg_eval_at": [10, 20], "verbosity": -1,
+    }
+    booster = lgb.train(params, train, num_boost_round=num_boost_round)
+    _save_lgbm_model(booster)
+    return {
+        "trained": True, "backend": "lightgbm",
+        "n_examples": len(X), "features": features,
+        "num_boost_round": num_boost_round,
+    }
 
 
 def fit_from_history(

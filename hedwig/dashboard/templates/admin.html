@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Reset — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>🔧 Admin — 데이터 초기화</h1>
+  <p class="subtitle muted">처음부터 테스트하고 싶을 때. <strong>criteria.yaml / algorithm.yaml / sovereignty.yaml / feeds.yaml 은 보존됩니다.</strong> 시그널/피드백/진화 이벤트만 wipe.</p>
+</div>
+
+<div class="section">
+  <article class="profile-card" style="max-width:600px;">
+    <h3>초기화 범위 선택</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+      <label style="display:flex; gap:10px; align-items:flex-start;">
+        <input type="radio" name="scope" value="signals">
+        <div>
+          <strong>signals only</strong>
+          <div class="muted" style="font-size:12px;">signals + feedback + behavior_events + delivered_signals</div>
+        </div>
+      </label>
+      <label style="display:flex; gap:10px; align-items:flex-start;">
+        <input type="radio" name="scope" value="evolution">
+        <div>
+          <strong>evolution only</strong>
+          <div class="muted" style="font-size:12px;">evolution_signal/logs + algorithm/criteria_versions + interpretation_styles + briefings + user_memory + jsonl files</div>
+        </div>
+      </label>
+      <label style="display:flex; gap:10px; align-items:flex-start;">
+        <input type="radio" name="scope" value="chat">
+        <div>
+          <strong>chat only</strong>
+          <div class="muted" style="font-size:12px;">chat_conversations + chat_messages</div>
+        </div>
+      </label>
+      <label style="display:flex; gap:10px; align-items:flex-start;">
+        <input type="radio" name="scope" value="all" checked>
+        <div>
+          <strong>전체 (all)</strong>
+          <div class="muted" style="font-size:12px;">위 3개 합치기. 가장 깨끗한 시작.</div>
+        </div>
+      </label>
+    </div>
+    <div class="button-row" style="margin-top:18px;">
+      <button id="reset-btn" class="btn btn-primary" onclick="doReset()" style="background:#dc2626; border-color:#dc2626;">⚠️ 초기화 실행</button>
+    </div>
+    <pre id="reset-out" style="display:none; margin-top:14px;"></pre>
+  </article>
+</div>
+
+<div class="section">
+  <article class="profile-card" style="max-width:600px;">
+    <h3>CLI에서도 가능</h3>
+    <pre>python -m hedwig --reset            # 전체
+python -m hedwig --reset signals    # signals만
+python -m hedwig --reset evolution  # evolution만
+python -m hedwig --reset chat       # chat만</pre>
+  </article>
+</div>
+
+<script>
+async function doReset() {
+  const scope = (document.querySelector('input[name=scope]:checked') || {}).value || 'all';
+  if (!confirm(`정말 "${scope}" 범위를 초기화할까요? 되돌릴 수 없습니다.`)) return;
+  const btn = document.getElementById('reset-btn');
+  const out = document.getElementById('reset-out');
+  btn.disabled = true;
+  out.style.display = 'block';
+  out.textContent = '처리 중…';
+  try {
+    const r = await fetch('/admin/reset', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({scope}),
+    });
+    const data = await r.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    out.textContent = `오류: ${e}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+
+{% endblock %}

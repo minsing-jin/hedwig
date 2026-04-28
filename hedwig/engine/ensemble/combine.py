@@ -29,6 +29,7 @@ def _registry() -> dict:
     """
     return {
         "llm_judge": lambda: _import_and_build("hedwig.engine.ensemble.llm_judge", "LLMJudge"),
+        "llm_rec": lambda: _import_and_build("hedwig.engine.ensemble.llm_rec", "LLMRecRanker"),
         "ltr": lambda: _import_and_build("hedwig.engine.ensemble.ltr", "LTRRanker"),
         "content_based": lambda: _import_and_build("hedwig.engine.ensemble.content", "ContentRanker"),
         "popularity_prior": lambda: _import_and_build("hedwig.engine.ensemble.popularity", "PopularityRanker"),
@@ -176,6 +177,24 @@ async def rank_with_ensemble(
             for n, norm in exp_normalized.items():
                 s += (exp_weights[n] / total_w) * norm[rank]
             final_by_idx[i] = max(0.0, min(1.0, s))
+
+    # Optional IPS debias (S8.4) — applied after fusion, before sort.
+    ips_cfg = (cfg.get("ranking", {}).get("ips_debias") or {})
+    if ips_cfg.get("enabled"):
+        try:
+            from hedwig.engine.ensemble.debias import (
+                apply_ips_correction,
+                compute_platform_propensity,
+            )
+            propensity = compute_platform_propensity(
+                lookback_days=int(ips_cfg.get("lookback_days", 14))
+            )
+            score_list = [final_by_idx[i] for i in range(len(candidates))]
+            adjusted = apply_ips_correction(score_list, candidates, propensity)
+            for i, s in enumerate(adjusted):
+                final_by_idx[i] = s
+        except Exception as e:
+            logger.warning("IPS debias failed: %s", e)
 
     # Per-candidate breakdown (cheap for all; expensive only for top_k)
     enriched: list[tuple[RawPost, float, dict]] = []

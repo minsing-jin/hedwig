@@ -7,7 +7,16 @@
   <link rel="icon" href="/assets/hedwig-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/v3.css">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#7c5cff">
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </head>
 <body>
   <nav class="nav">
@@ -22,6 +31,7 @@
       <a href="/">Home</a>
       <a href="/feed">📱 Feed</a>
       <a href="/brief">Brief</a>
+      <a href="/profile">👤 Profile</a>
       <a href="/signals">Signals</a>
       <a href="/evolution">Evolution</a>
       <a href="/sandbox">Sandbox</a>
@@ -31,6 +41,7 @@
       <a href="/sources">Sources</a>
       <a href="/criteria">Criteria</a>
       <a href="/setup">Setup</a>
+      <a href="/admin" style="color:#dc2626;">🔧 Reset</a>
     </div>
   </nav>
 

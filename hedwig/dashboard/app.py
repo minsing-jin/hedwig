@@ -467,7 +467,16 @@ def create_app(saas_mode: bool = False) -> FastAPI:
 
     @app.get("/feed", response_class=HTMLResponse)
     async def feed_page(request: Request):
-        return TEMPLATES.TemplateResponse(request, "feed.html")
+        from hedwig.feeds import list_feeds
+        return TEMPLATES.TemplateResponse(
+            request, "feed.html",
+            {"feeds_list": list_feeds()},
+        )
+
+    @app.get("/feed/list")
+    async def feed_list_endpoint():
+        from hedwig.feeds import list_feeds
+        return JSONResponse({"feeds": list_feeds()})
 
     @app.get("/feed/api")
     async def feed_api(request: Request):
@@ -577,6 +586,81 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             request, "status.html",
             {"conditions": compute_exit_progress()},
         )
+
+    # -----------------------------------------------------------------------
+    # Phase 7 S5 — /profile single page
+    # -----------------------------------------------------------------------
+
+    @app.get("/profile", response_class=HTMLResponse)
+    async def profile_page(request: Request):
+        from hedwig.config import load_algorithm_config, load_criteria
+        from hedwig.evolution.timeline import build_timeline
+        from hedwig.qa.personality import compute_feed_personality
+        from hedwig.storage import get_active_interpretation_style
+        import yaml as _yaml
+        criteria = load_criteria() or {}
+        algorithm = load_algorithm_config() or {}
+        style = get_active_interpretation_style() or {}
+        personality = compute_feed_personality(days=7)
+        recent_evolution = build_timeline(days=14, limit=10)
+        criteria_yaml = _yaml.safe_dump(criteria, allow_unicode=True, sort_keys=False)
+        return TEMPLATES.TemplateResponse(
+            request, "profile.html",
+            {
+                "criteria": criteria,
+                "criteria_yaml": criteria_yaml,
+                "algorithm": algorithm,
+                "style": style,
+                "personality": personality,
+                "recent_evolution": recent_evolution,
+                "source_count": _count_sources(),
+            },
+        )
+
+    # -----------------------------------------------------------------------
+    # Phase 7 S6 — Algorithm export/import bundle
+    # -----------------------------------------------------------------------
+
+    @app.get("/algorithm/export")
+    async def algorithm_export_endpoint():
+        from hedwig.onboarding.bundle import export_bundle
+        blob, filename = export_bundle()
+        return Response(
+            content=blob,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.post("/algorithm/import/dry-run")
+    async def algorithm_import_dry_run(request: Request):
+        from hedwig.onboarding.bundle import dry_run_import
+        body = await request.body()
+        return JSONResponse(_jsonable(dry_run_import(body)))
+
+    @app.post("/algorithm/import")
+    async def algorithm_import_endpoint(request: Request):
+        from hedwig.onboarding.bundle import confirm_import
+        body = await request.body()
+        return JSONResponse(_jsonable(confirm_import(body)))
+
+    # -----------------------------------------------------------------------
+    # Admin — data reset (keeps YAML configs)
+    # -----------------------------------------------------------------------
+
+    @app.get("/admin", response_class=HTMLResponse)
+    async def admin_page(request: Request):
+        return TEMPLATES.TemplateResponse(request, "admin.html")
+
+    @app.post("/admin/reset")
+    async def admin_reset(request: Request):
+        from hedwig.admin import reset_data
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        scope = str(body.get("scope") or "all")
+        result = reset_data(scope=scope)
+        return JSONResponse(result)
 
     @app.get("/sovereignty", response_class=HTMLResponse)
     async def sovereignty_page(request: Request):

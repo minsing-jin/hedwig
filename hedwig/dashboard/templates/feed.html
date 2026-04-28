@@ -2,10 +2,17 @@
 {% block title %}Feed — Hedwig{% endblock %}
 {% block content %}
 
-<div class="feed-shell" data-stream="default">
+<div class="feed-shell" data-stream="{{ request.query_params.get('stream', 'default') }}">
   <div class="feed-head">
     <h1>📱 Feed</h1>
     <span class="muted">키보드: j 다음 · k 이전 · u 👍 · d 👎 · s save · ? 묻기 · o 원본</span>
+  </div>
+
+  <div class="feed-tabs">
+    {% for f in feeds_list %}
+    <a class="feed-tab{% if f.id == request.query_params.get('stream', 'default') %} active{% endif %}"
+       href="/feed?stream={{ f.id }}" title="{{ f.description or '' }}">{{ f.name }}</a>
+    {% endfor %}
   </div>
 
   <div id="feed-list" class="feed-list" tabindex="0" aria-label="Hedwig feed"></div>

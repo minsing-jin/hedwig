@@ -771,7 +771,21 @@ def main():
                         help="Critical poll interval in seconds (default 1200 = 20 min)")
     parser.add_argument("--meta-cycle", action="store_true",
                         help="Run one Meta-Evolution cycle and exit")
+    parser.add_argument("--reset", nargs="?", const="all", default=None,
+                        choices=["all", "signals", "evolution", "chat"],
+                        help="Wipe collected data (keeps YAML configs). "
+                             "Optional scope; default 'all'.")
     args = parser.parse_args()
+
+    if args.reset is not None:
+        from hedwig.admin import reset_data
+        result = reset_data(scope=args.reset)
+        print(f"Reset complete (scope={args.reset}):")
+        for table, count in (result.get("deleted") or {}).items():
+            print(f"  {table}: {count} rows")
+        for f in result.get("files_removed") or []:
+            print(f"  removed file: {f}")
+        return
 
     if args.quickstart:
         from hedwig.quickstart import run_quickstart

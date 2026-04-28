@@ -1,14 +1,52 @@
-/* v3 overlay — readability + GeekNews-style headline+toggle.
-   Loaded after style.css. The base theme is dark; this layer ensures any
-   v3 page that hard-codes light surfaces still has correct contrast. */
+/* v3 overlay — AGGRESSIVE readability pass. Base style.css is dark, but
+   v3 pages all draw on white surfaces. This file forces contrast: every
+   text-bearing element on a light card gets dark text, every .muted gets
+   mid-gray instead of pale silver. WCAG AA contrast guaranteed. */
 
-/* --- Light surfaces inside dark page: text color guaranteed readable --- */
-.feed-card, .brief-card, .meta-card, .meta-result, .sov-card,
-.diff-card, .struct-block, .status-card, .empty-state, .sandbox-result,
-.qa-result, .qa-input, .composer textarea, .messages,
-.feed-list, .feed-shell, .timeline-item .timeline-body {
+/* --- Global page light theme override (the v3 vision is light-on-light
+       for cards; the base dark theme keeps the page chrome only). --- */
+body { background: #f5f5f7 !important; color: #111827 !important; }
+.main, main.main { color: #111827 !important; background: #f5f5f7; }
+.hero { background: transparent; padding: 24px 0 12px; }
+.hero h1 { color: #0f172a !important; }
+.hero p, .hero .subtitle { color: #4b5563 !important; }
+.section { background: transparent; }
+.section h2 { color: #0f172a !important; }
+
+/* Universal text inheritance to prevent #8b92a5 from base.css bleeding through */
+.section p, .section li, .section span, .section td, .section th,
+.feed-card, .brief-card, .meta-card, .sov-card, .diff-card, .struct-block,
+.status-card, .empty-state, .sandbox-result, .qa-result,
+.feed-list, .feed-shell, .timeline-item, .timeline-item *,
+.headline-card, .headline-card *, .profile-card, .profile-card *,
+.bubble, .bubble *, details, details * {
   color: #111827;
 }
+
+/* Hyperlinks always blue and visible */
+.section a, .feed-card a, .brief-card a, .headline-card a, .bubble a,
+.profile-card a, .sov-card a, .diff-card a, .struct-block a, .timeline-item a {
+  color: #1d4ed8 !important;
+}
+
+/* .muted EVERYWHERE — was the main culprit (style.css set #8b92a5 on white) */
+.muted, p.muted, span.muted, div.muted, em.muted, .subtitle.muted,
+.subtitle, .section .muted, .feed-card .muted, .brief-card .muted,
+.meta-card .muted, .sov-card .muted, .diff-card .muted, .empty-state .muted,
+.sandbox-result .muted, .status-card .muted, .qa-result .muted,
+.messages .muted, .headline-card .muted, .profile-card .muted,
+.timeline-item .muted, .convo-list .muted, .footer span {
+  color: #4b5563 !important;
+}
+
+/* Nav stays subtle but readable on light bg */
+.nav { background: white !important; border-bottom: 1px solid #e5e7eb !important; }
+.nav-brand .name { color: #0f172a !important; }
+.nav-brand .version { color: #6b7280 !important; }
+.nav-links a { color: #1f2937 !important; }
+.nav-links a:hover { color: #1d4ed8 !important; }
+.footer { background: transparent; }
+.footer span { color: #6b7280 !important; }
 .feed-card a, .brief-card a, .meta-card a, .sov-card a, .diff-card a,
 .brief-body a, .struct-block a {
   color: #1d4ed8;
@@ -146,3 +184,25 @@ input::placeholder, textarea::placeholder { color: #6b7280; }
                   margin-bottom: 6px; border: 1px solid #e5e7eb; }
 .timeline-item .timeline-when { color: #6b7280; }
 .timeline-item .timeline-summary { color: #1f2937; }
+
+/* feed deck tabs (Phase 7 S4) */
+.feed-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0 16px;
+             border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+.feed-tab { padding: 6px 14px; border-radius: 18px; font-size: 13px;
+             color: #4b5563; text-decoration: none; background: white;
+             border: 1px solid #e5e7eb; }
+.feed-tab:hover { background: #f3f4f6; color: #111827; }
+.feed-tab.active { background: #2563eb; color: white; border-color: #2563eb; }
+
+/* profile (Phase 7 S5) */
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 14px; }
+.profile-card { background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+                 padding: 14px; color: #111827; }
+.profile-card h3 { margin: 0 0 8px 0; font-size: 14px; }
+.profile-card pre { background: #f3f4f6; padding: 10px; border-radius: 4px;
+                     font-size: 11px; max-height: 220px; overflow: auto;
+                     white-space: pre-wrap; }
+.profile-stat { display: grid; grid-template-columns: 1fr auto; padding: 4px 0;
+                 font-size: 13px; border-bottom: 1px dashed #f3f4f6; }
+.profile-stat:last-child { border-bottom: none; }

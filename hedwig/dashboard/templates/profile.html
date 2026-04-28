@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Profile — Hedwig{% endblock %}
+{% block content %}
+
+<div class="hero">
+  <h1>👤 My Algorithm Profile</h1>
+  <p class="subtitle muted">criteria + algorithm + interpretation_style + 최근 행동을 한 페이지에. Export로 이식 가능.</p>
+</div>
+
+<div class="section">
+  <div class="button-row">
+    <a class="btn btn-primary" href="/algorithm/export" download>📦 Export bundle</a>
+    <a class="btn" href="/sovereignty">🏛️ sovereignty 보기</a>
+    <a class="btn" href="/evolution">🧬 진화 timeline</a>
+  </div>
+</div>
+
+<div class="section">
+  <div class="profile-grid">
+
+    <article class="profile-card">
+      <h3>📝 Criteria — 무엇을 추천할지</h3>
+      {% if criteria %}
+        <pre>{{ criteria_yaml }}</pre>
+      {% else %}
+        <p class="muted">criteria.yaml 가 비어있습니다. <a href="/onboarding">온보딩</a>으로 채우세요.</p>
+      {% endif %}
+    </article>
+
+    <article class="profile-card">
+      <h3>⚙️ Algorithm — 어떻게 추천할지 (v{{ algorithm.version }})</h3>
+      <p class="muted" style="font-size:11px;">origin: {{ algorithm.origin }} · updated_at: {{ algorithm.updated_at }}</p>
+      <details>
+        <summary>활성 ranking components</summary>
+        <ul>
+          {% for name, spec in (algorithm.ranking.components or {}).items() %}
+            {% if spec.enabled %}
+            <li><code>{{ name }}</code> — weight {{ spec.weight }}</li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </details>
+    </article>
+
+    <article class="profile-card">
+      <h3>🎙 Interpretation Style</h3>
+      {% if style %}
+        <div class="profile-stat"><span>tone</span><span>{{ style.tone }}</span></div>
+        <div class="profile-stat"><span>depth</span><span>{{ style.depth }}</span></div>
+        <div class="profile-stat"><span>jargon</span><span>{{ style.jargon_level }}</span></div>
+        <div class="profile-stat"><span>version</span><span>v{{ style.version }}</span></div>
+      {% else %}
+        <p class="muted">아직 활성화된 스타일이 없습니다.</p>
+      {% endif %}
+    </article>
+
+    <article class="profile-card">
+      <h3>📊 Feed Personality (지난 7일)</h3>
+      <div class="profile-stat"><span>upvote ratio</span><span>{{ "%.0f%%"|format((personality.upvote_ratio or 0) * 100) }}</span></div>
+      <div class="profile-stat"><span>feedback 수</span><span>{{ personality.feedback_count or 0 }}</span></div>
+      <div class="profile-stat"><span>주 활동 시간 (UTC)</span><span>{% if personality.favorite_hour_utc is not none %}{{ personality.favorite_hour_utc }}시{% else %}—{% endif %}</span></div>
+      <div class="profile-stat"><span>평균 dwell</span><span>{{ ((personality.avg_dwell_ms or 0) / 1000)|round(1) }}s</span></div>
+      <div class="profile-stat"><span>view → skip 비율</span><span>{{ "%.0f%%"|format((personality.skip_ratio or 0) * 100) }}</span></div>
+      <div class="profile-stat"><span>save / share</span><span>{{ personality.save_count or 0 }} / {{ personality.share_count or 0 }}</span></div>
+      {% if personality.top_platforms %}
+      <div class="profile-stat"><span>top platforms</span><span>{{ personality.top_platforms|map(attribute='platform')|join(', ') }}</span></div>
+      {% endif %}
+    </article>
+
+    <article class="profile-card">
+      <h3>📡 Sources</h3>
+      <p class="muted">총 {{ source_count }}개 소스 등록됨.</p>
+      <a href="/sources" class="btn" style="margin-top:8px;">소스 관리</a>
+      <a href="/settings" class="btn" style="margin-top:8px;">on/off 토글</a>
+    </article>
+
+    <article class="profile-card">
+      <h3>🧬 Recent Evolution</h3>
+      {% if recent_evolution %}
+      <ul style="font-size:12px;">
+        {% for e in recent_evolution[:5] %}
+        <li>{{ e.type }} <span class="muted">{{ (e.at or '')[:16]|replace('T',' ') }}</span></li>
+        {% endfor %}
+      </ul>
+      <a href="/evolution" class="btn">전체 타임라인</a>
+      {% else %}
+      <p class="muted">아직 진화 이벤트가 없습니다.</p>
+      {% endif %}
+    </article>
+
+  </div>
+</div>
+
+{% endblock %}

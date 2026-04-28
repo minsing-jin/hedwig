@@ -1,0 +1,46 @@
+# Feeds (Deck) — multiple personal SNS streams that share the engine but
+# differ in which criteria/algorithm overrides apply (Phase 7 S4).
+#
+# Each feed becomes a top-tab on /feed. Override fields layer on top of
+# the base criteria.yaml + algorithm.yaml without mutating them.
+#
+# Sovereignty: feeds.yaml is user-owned (sovereignty.yaml.feeds).
+
+version: 1
+default_feed: default
+
+feeds:
+  - id: default
+    name: 메인 피드
+    description: 종합 피드. criteria.yaml + algorithm.yaml 그대로.
+
+  - id: morning_deep
+    name: 🌅 아침 딥다이브
+    description: 출근 길에 정말 깊게 봐야 하는 것만. LLM judge 비중↑.
+    algorithm_overrides:
+      ranking:
+        top_k: 12
+        components:
+          llm_judge: { enabled: true, weight: 0.55 }
+          popularity_prior: { enabled: true, weight: 0.05 }
+
+  - id: weekend_explore
+    name: 🪐 주말 탐색
+    description: 평소 안 보던 것까지. bandit exploration 강화.
+    algorithm_overrides:
+      ranking:
+        top_k: 40
+        components:
+          bandit: { enabled: true, weight: 0.30, exploration_rate: 0.4 }
+          llm_judge: { enabled: true, weight: 0.25 }
+
+  - id: critical_only
+    name: ⚡ Critical만
+    description: alert 급만. retrieval threshold 높임.
+    algorithm_overrides:
+      retrieval:
+        threshold: 0.30
+      ranking:
+        top_k: 10
+        components:
+          llm_judge: { enabled: true, weight: 0.7 }
