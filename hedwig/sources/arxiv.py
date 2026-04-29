@@ -8,7 +8,7 @@ import httpx
 from hedwig.models import FetchMethod, Platform, RawPost
 from hedwig.sources.base import Source, register_source
 
-ARXIV_API = "http://export.arxiv.org/api/query"
+ARXIV_API = "https://export.arxiv.org/api/query"
 
 AI_CATEGORIES = [
     "cs.AI", "cs.CL", "cs.LG", "cs.CV", "cs.MA",
@@ -38,7 +38,7 @@ class ArxivSource(Source):
             "max_results": limit,
         }
         posts: list[RawPost] = []
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             try:
                 resp = await client.get(ARXIV_API, params=params)
                 if resp.status_code != 200:

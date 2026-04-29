@@ -28,7 +28,7 @@ from hedwig.sources.base import Source, register_source
 logger = logging.getLogger(__name__)
 
 
-ARXIV_API = "http://export.arxiv.org/api/query"
+ARXIV_API = "https://export.arxiv.org/api/query"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
 RECSYS_KEYWORDS = [
@@ -66,7 +66,7 @@ class ArxivRecSysSource(Source):
         }
         posts: list[RawPost] = []
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
                 resp = await client.get(ARXIV_API, params=params)
                 if resp.status_code != 200:
                     logger.warning("arxiv_recsys: status %s", resp.status_code)
