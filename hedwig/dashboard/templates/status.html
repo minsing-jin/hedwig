@@ -24,6 +24,33 @@
   {% endfor %}
 </div>
 
+<div class="section">
+  <h2>📡 Source Health (지난 24시간)</h2>
+  <p class="muted">소스별 최근 수집 카운트. 0 이면 (a) 트렌드 부족 or (b) env 키 미설정. 미설정 키는 우측에 경고로 표시.</p>
+  <table class="src-health">
+    <thead><tr><th>plugin</th><th>platform</th><th>최근 24h</th><th>상태</th></tr></thead>
+    <tbody>
+      {% for s in source_health %}
+      <tr class="{{ 'src-row-zero' if s.recent_count_approx == 0 else 'src-row-ok' }}">
+        <td><code>{{ s.plugin_id }}</code></td>
+        <td>{{ s.platform }}</td>
+        <td><strong>{{ s.recent_count_approx }}</strong></td>
+        <td>
+          {% if s.missing_env %}
+            <span class="src-warn">⚠️ <code>{{ s.missing_env }}</code> 미설정 — {{ s.hint }}</span>
+            &nbsp;<a href="/setup">설정</a>
+          {% elif s.recent_count_approx == 0 %}
+            <span class="muted">시그널 없음 (트렌드 부족 또는 RSS 일시 장애)</span>
+          {% else %}
+            <span class="src-ok">✅</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
 <style>
 .status-card { padding: 14px; border: 1px solid #e5e7eb; border-radius: 10px;
                 margin: 12px 0; background: white; }
@@ -37,6 +64,16 @@
 .status-fill { height: 100%; background: #2563eb; transition: width .3s; }
 .status-card.met .status-fill { background: #16a34a; }
 .status-detail { margin-top: 8px; font-size: 11px; }
+
+.src-health { width: 100%; border-collapse: collapse; margin-top: 12px;
+              background: white; border-radius: 8px; overflow: hidden; }
+.src-health th, .src-health td { padding: 8px 12px; text-align: left;
+                                  border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+.src-health th { background: #f9fafb; color: #374151; font-weight: 600; }
+.src-row-zero td:nth-child(3) { color: #b91c1c; }
+.src-row-ok td:nth-child(3) { color: #1a7f37; font-weight: 600; }
+.src-warn { color: #b45309; font-size: 12px; }
+.src-ok { color: #1a7f37; }
 </style>
 
 {% endblock %}

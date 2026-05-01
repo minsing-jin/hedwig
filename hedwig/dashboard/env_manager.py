@@ -106,11 +106,11 @@ class EnvManager:
         },
     }
 
-    # Optional - expand source coverage
+    # Optional — expand source coverage / improve normalization
     OPTIONAL_KEYS = {
         "EXA_API_KEY": {
             "label": "Exa API Key (optional)",
-            "help": "Semantic web search. 1000 free/month at exa.ai",
+            "help": "Semantic web search + on-demand live_search. 1000 free/month at exa.ai",
             "required": False,
             "secret": True,
         },
@@ -119,6 +119,42 @@ class EnvManager:
             "help": "Enables TikTok + Instagram collection. scrapecreators.com",
             "required": False,
             "secret": True,
+        },
+        "JINA_API_KEY": {
+            "label": "Jina Reader API Key (optional, recommended)",
+            "help": "100× rate limit on URL→Markdown normalization. Free at jina.ai/reader",
+            "required": False,
+            "secret": True,
+        },
+        "HEDWIG_PODCAST_FEEDS": {
+            "label": "Podcast RSS feeds (optional)",
+            "help": "Comma-separated 'url|name' list. e.g. https://lexfridman.com/feed/podcast/|Lex",
+            "required": False,
+            "secret": False,
+        },
+        "HEDWIG_PODCAST_TRANSCRIBE": {
+            "label": "Podcast transcription (0/1)",
+            "help": "Set to 1 to auto-transcribe podcasts via OpenAI Whisper API (cost per minute). Requires OPENAI_API_KEY.",
+            "required": False,
+            "secret": False,
+        },
+        "HEDWIG_BSKY_HANDLES": {
+            "label": "Bluesky handles to track (optional)",
+            "help": "Comma-separated. e.g. karpathy.bsky.social,ylecun.bsky.social. Default: 5 AI builders.",
+            "required": False,
+            "secret": False,
+        },
+        "HEDWIG_PIPELINE": {
+            "label": "Pipeline mode (single|ensemble)",
+            "help": "ensemble=Hybrid (default), single=legacy LLM-only. Restart needed.",
+            "required": False,
+            "secret": False,
+        },
+        "HEDWIG_DISABLE_EMBEDDINGS": {
+            "label": "Force-disable OpenAI embeddings (0/1)",
+            "help": "Set to 1 to fall back to Jaccard token-overlap (no API cost).",
+            "required": False,
+            "secret": False,
         },
     }
 

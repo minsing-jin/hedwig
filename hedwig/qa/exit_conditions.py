@@ -79,3 +79,54 @@ def compute_exit_progress() -> list[dict]:
         },
     ]
     return conditions
+
+
+def compute_source_health(days: int = 1) -> list[dict]:
+    """Per-source health snapshot for the /status panel.
+
+    Reports the most recent collection count per registered source +
+    annotates 0-count rows with the env var most likely to fix it.
+    """
+    from collections import Counter
+    from datetime import timedelta as _td, datetime as _dt, timezone as _tz
+    import os as _os
+    try:
+        from hedwig.sources import get_registered_sources
+        from hedwig.storage import get_recent_signals
+    except Exception:
+        return []
+
+    registry = get_registered_sources() or {}
+    rows = get_recent_signals(days=days) or []
+    by_platform = Counter(r.get("platform", "") for r in rows)
+
+    plugin_to_platform = {}
+    for plugin_id, cls in registry.items():
+        try:
+            plugin_to_platform[plugin_id] = cls.platform.value
+        except Exception:
+            plugin_to_platform[plugin_id] = ""
+
+    fix_hints = {
+        "instagram": ("SCRAPECREATORS_API_KEY", "scrapecreators.com 키 필요"),
+        "tiktok": ("SCRAPECREATORS_API_KEY", "scrapecreators.com 키 필요"),
+        "podcast": ("HEDWIG_PODCAST_FEEDS", "RSS 피드 URL 등록 필요"),
+        "web_search": ("EXA_API_KEY", "exa.ai 키 (live_search 도구용)"),
+    }
+
+    out: list[dict] = []
+    for plugin_id in sorted(registry):
+        platform = plugin_to_platform.get(plugin_id, "")
+        # multiple plugins map to same platform (newsletter + ai_labs both → newsletter);
+        # we still expose per-plugin so user sees what they actually have
+        approx_count = by_platform.get(platform, 0)
+        env_key, hint = fix_hints.get(plugin_id, (None, None))
+        env_set = bool(_os.getenv(env_key)) if env_key else None
+        out.append({
+            "plugin_id": plugin_id,
+            "platform": platform,
+            "recent_count_approx": approx_count,
+            "missing_env": env_key if env_key and not env_set else None,
+            "hint": hint if env_key and not env_set else None,
+        })
+    return out
