@@ -1,20 +1,21 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/sources-17+-orange" alt="Sources">
+  <img src="https://img.shields.io/badge/sources-20-orange" alt="Sources">
   <img src="https://img.shields.io/badge/version-3.0-purple" alt="Version">
-  <img src="https://img.shields.io/badge/tests-321%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-562%20passing-brightgreen" alt="Tests">
 </p>
 
 # 🦉 Hedwig
 
-**Self-Evolving Personal AI Signal Radar** — Algorithm sovereignty for individuals.
+**Personal SNS Platform whose recommendation algorithm you own and evolve in natural language.**
 
-> **[한국어](docs/README.ko.md)** · **English** · **[中文](docs/README.zh.md)**
+기업 알고리즘(engagement 최적화) ↔ Hedwig(**내가 소유**한 자기진화 추천 엔진).
+크로스플랫폼 신호를 critical / daily / weekly / on-demand / **feed** 5개 시간축으로 소비.
 
 ---
 
-## ⚡ Get Started in 3 Minutes
+## ⚡ 3분 안에 시작
 
 ```bash
 git clone https://github.com/minsing-jin/hedwig.git
@@ -25,229 +26,267 @@ uv pip install -e .
 python -m hedwig --quickstart
 ```
 
-You only need an **OpenAI API key**. No Supabase, no Slack, no Discord, no migrations.
-
-```
-🦉 Hedwig Quickstart
-
-Step 1: OpenAI API key
-  OPENAI_API_KEY: sk-...
-
-Step 2: What AI signals are you interested in?
-  Interest (one sentence): AI agent frameworks and LLM tooling
-
-✓ .env saved
-✓ criteria.yaml generated
-✓ SQLite DB initialized at ~/.hedwig/hedwig.db
-✓ 17 source plugins ready
-🚀 Dashboard at http://127.0.0.1:8765
-```
-
-Browser opens automatically. That's it.
+OpenAI API 키 하나만 있으면 됨. Supabase·Slack·Discord 모두 옵션.
+브라우저가 `http://127.0.0.1:8765/chat` 으로 자동 열림.
 
 ---
 
-## 🎯 Why Hedwig
+## 🏛️ 9가지 핵심 원칙
 
-Most information tools are **hands** — they fetch what you point at.
-Hedwig is a **brain + hands** — it learns what you care about and improves itself over time.
+| # | 원칙 | 무엇을 의미하나 |
+|---|---|---|
+| 1 | **Algorithm Sovereignty** | `criteria.yaml` + `algorithm.yaml` + `sovereignty.yaml` + `feeds.yaml` 모두 사용자 소유. 감사·이식 가능 |
+| 2 | **Self-Evolving Fitness** | daily micro · weekly macro · **monthly meta** 3층 진화. Karpathy autoresearch 패턴을 알고리즘 구조에 적용 |
+| 3 | **Quad-Input Sculpting** | explicit (NL 편집) + semi (Q&A 수용) + implicit-active (👍/👎) + implicit-passive (dwell/skip/share) |
+| 4 | **5-Tier Temporal Lattice** | critical · daily · weekly · on-demand · feed 동시 서빙 |
+| 5 | **Absorption Gradient** | L1 API → L2 OSS 코드 체화 → L3 패턴 추출. 신규 Novelty는 최후 |
+| 6 | **Web = Engine 계기판** | dogfooding + sandbox. 상업 껍데기 금지 |
+| 7 | **Cognitive Augmentation** | 주의·편향·작업기억·메타인지 4한계 매핑 |
+| 8 | **Hybrid Ensemble** | LLM + LightGBM LTR + content + popularity + bandit + sequential. 가중치·feature 자체가 진화 대상 |
+| 9 | **Personal SNS Platform** | 소비 UX 자체가 알고리즘 표면 + 행동신호 입력. 브리프=pull, Feed=push |
 
-| | YouTube / X | Other tools | **Hedwig** |
+전체 비전: [`docs/VISION_v3.md`](docs/VISION_v3.md)
+
+---
+
+## 💬 Chat — 단일 entry point
+
+`/chat` 한 화면에서 LLM이 11개 도구로 라우팅:
+
+```
+"오늘 daily 브리핑 보여줘"     → get_brief
+"agent framework 5개 뽑아줘"   → search_signals
+"이 URL 요약: youtu.be/..."   → summarize_url (yt-dlp 자막 추출)
+"agent 위주로 바꾸고 crypto 빼" → propose_criteria → diff → apply
+"bandit 비중 0.3으로"         → propose_algorithm → diff → apply
+"daily 실행해줘"              → trigger_pipeline
+"이번 주 진화 요약"           → get_evolution_timeline
+"최근 RecSys oral 논문"       → live_search (exa.ai)
+```
+
+ChatGPT 스타일 사이드바 + 대화 영속. 마크다운/코드블록 렌더링.
+
+---
+
+## 📰 5개 시간축 소비 모드
+
+| 층위 | 트리거 | 형태 | 위치 |
 |---|---|---|---|
-| **Who owns the algorithm?** | Corporate | Fixed / open source | **You** |
-| **Optimizes for?** | Ad engagement | N/A | **Your upvote ratio** |
-| **Learns your taste?** | Yes (for ads) | No | **Yes (for you)** |
-| **Self-improves?** | For engagement | No | **For your relevance** |
-| **Devil's Advocate?** | No | No | **Every signal** |
-
-### Five Moats
-
-1. **Socratic Onboarding** — LLM asks questions until criteria are clear
-2. **Self-Evolving Algorithm** — Daily micro + weekly macro mutations (Karpathy autoresearch pattern)
-3. **Boolean Feedback** — Just 👍/👎, the system handles the rest
-4. **Long-Horizon Memory** — Weekly snapshots track taste drift over months
-5. **Algorithm Sovereignty** — You own and audit the fitness function
+| ⚡ **Critical** | 즉시 (15-30분 polling) | push | `python -m hedwig --critical-loop` |
+| 🌅 **Daily** | 매일 아침 | LLM brief | `/brief` + Slack/Discord/Email |
+| 📈 **Weekly** | 주 1회 | 전략 brief + 기회 포착 | `/brief?cycle=weekly` |
+| 💬 **On-Demand** | 사용자 질문 | RAG + live search | `/chat` |
+| 📱 **Feed** | 사용자가 열 때 | SNS 무한스크롤 | `/feed` (4 deck: 메인/딥다이브/주말/Critical만) |
 
 ---
 
-## 📋 Three Ways to Run
+## 🧠 추천 알고리즘 — Hybrid Ensemble + Meta-Evolution
 
-### 1. Quickstart (Recommended for personal use)
+### Stage A — Retrieval (저렴)
+- `pre_scorer` 5-factor (engagement · authority · recency · convergence · text-match)
+- last30days-style enrichment (persistence + saturation + velocity)
 
-```bash
-python -m hedwig --quickstart
-```
-SQLite local, OpenAI key only, 3 minutes.
+### Stage B — Ranking Ensemble (`algorithm.yaml`로 사용자 제어)
+- **llm_judge** — top_k 만 (deep qualitative + Devil's Advocate)
+- **ltr** — LightGBM LambdaMART (libomp 있을 때) / pure-Python logistic SGD fallback
+- **content_based** — OpenAI embedding cosine / Jaccard fallback
+- **popularity_prior** — authority × recency
+- **bandit** — Thompson sampling per platform
+- **sequential** — SASRec-inspired Jaccard over recent dwell sequence
+- **IPS debias** — opt-in propensity correction
 
-### 2. Full Self-Hosted (For power users)
+### Evolution 3층
+- **Daily** — criteria weight 미세조정
+- **Weekly** — interpretation_style 진화 + user_memory 스냅샷 + multi-task fitness + REINFORCE-lite (LTR weights)
+- **Monthly Meta** — algorithm.yaml 자체 mutate → shadow test → adopt
+  - 4 strategies: weight_perturb / feature_toggle / structural / **feature_suggest_from_papers**
 
-Use Supabase + Slack/Discord for persistence and delivery:
-
-```bash
-cp .env.example .env
-# Fill OpenAI, Supabase, Slack/Discord keys
-python -m hedwig --dashboard
-```
-Open http://localhost:8765 → `/setup` handles everything in browser.
-
-### 3. SaaS Deployment (For teams, hosted)
-
-```bash
-bash scripts/deploy_railway.sh
-```
-One command → Railway + Supabase + Stripe. See [docs/HOSTING.md](docs/HOSTING.md).
+전부 `/evolution` 타임라인에 audit 가능.
 
 ---
 
-## 🔁 Daily Usage
+## 📡 20개 소스 (병렬 수집)
 
 ```
-1. python -m hedwig --quickstart    (one time)
-2. Dashboard opens automatically
-3. Click "▶ Run Daily Pipeline"
-4. Signals arrive in browser
-5. 👍 / 👎 on each signal
-6. System evolves overnight
+Frontier labs   : ai_labs (OpenAI, Anthropic, Google AI/Research,
+                  DeepMind, HF, Meta, Microsoft + TechCrunch/Verge/VB/Wired)
+Academic        : arxiv (cs.AI/CL/LG/CV/MA/stat.ML),
+                  arxiv_recsys (자기참조 — Hedwig이 자기 발전 위해
+                  recsys 논문 모니터),
+                  semantic_scholar, papers_with_code (HF Daily Papers)
+Tech            : hackernews, github_trending, geeknews, youtube
+Social          : twitter, reddit, linkedin, threads, bluesky (handle RSS),
+                  tiktok, instagram (SCRAPECREATORS_API_KEY)
+Newsletters     : Latent Space, Bensbites, The Decoder, AINews, ImportAI,
+                  TheAIEdge, Superhuman AI, The Gradient
+Markets         : polymarket
+Multimedia      : youtube + podcast (RSS + optional OpenAI Whisper)
+Web search      : exa.ai (on-demand)
 ```
 
-### Automate with cron
+`asyncio.gather` 로 동시 fetch — 가장 느린 소스만큼만 기다림 (~20-30초).
 
-```bash
-# Daily 9am + 7pm
-0 9,19 * * * cd /path/to/hedwig && .venv/bin/python -m hedwig
-
-# Weekly Monday 10am (deep evolution)
-0 10 * * 1 cd /path/to/hedwig && .venv/bin/python -m hedwig --weekly
-```
+`/status` 페이지에서 소스별 health + 빠진 env 키까지 한눈에 표시.
 
 ---
 
-## 🧩 17 Built-in Sources
+## 🎛️ 주요 페이지
 
-| Category | Sources |
+| 경로 | 용도 |
 |---|---|
-| **Social** | X, Reddit, LinkedIn, Threads, Bluesky, TikTok, Instagram |
-| **Tech** | Hacker News, GeekNews, YouTube, Polymarket, **GitHub Trending** |
-| **Academic** | arXiv, Semantic Scholar, Papers With Code |
-| **Web** | Exa semantic search |
-| **Newsletters** | Ben's Bites, Latent Space, The Decoder, etc. |
-
-YouTube includes **automatic transcript enrichment** via yt-dlp.
-All sources can be toggled on/off in `/settings`.
+| `/chat` | 모든 기능을 자연어로. ChatGPT 스타일 |
+| `/feed` | 무한스크롤 + j/k/u/d/s 키보드 + swipe + dwell beacon |
+| `/brief` | daily/weekly LLM 브리핑. GeekNews 스타일 헤드라인+토글 |
+| `/profile` | criteria + algorithm + style + 7일 personality + export |
+| `/evolution` | criteria/algorithm 변경 + Q&A + 진화 사이클 통합 timeline |
+| `/sandbox` | "bandit 비중 바꾸면?" what-if 시뮬레이션 |
+| `/meta` | Meta-Evolution 한 사이클 + 자연어 algorithm.yaml 편집 |
+| `/status` | exit_conditions 4 게이트 + 20개 소스 health |
+| `/sovereignty` | user_editable / system_mutable / readonly_history 경계 |
+| `/admin` | 데이터 초기화 (signals/evolution/chat/all 스코프) |
+| `/demo` | 개념 투어 + seed 가짜 데이터로 즉시 체험 |
 
 ---
 
-## ⚙️ CLI Reference
+## 🔁 일상 루틴
+
+### 매일 (5분)
+1. `/chat` 또는 홈에서 `▶ Run Daily Pipeline`
+2. `/feed` 에서 j/k 로 스크롤하며 👍/👎 (dwell 자동 수집)
+3. 자연어로 방향 조정: `/chat`에 "agent 위주로"
+
+### 매주
+```bash
+python -m hedwig --weekly
+```
+- weekly brief 생성 (`/brief?cycle=weekly`)
+- interpretation_style 진화
+- user_memory 스냅샷
+- multi-task fitness 계산
+- REINFORCE-lite LTR weight 업데이트
+
+### 자동화
+```bash
+crontab -e
+```
+```
+0 9 * * *  cd ~/Desktop/hedwig && .venv/bin/python -m hedwig
+0 10 * * 1 cd ~/Desktop/hedwig && .venv/bin/python -m hedwig --weekly
+@reboot    cd ~/Desktop/hedwig && .venv/bin/python -m hedwig --critical-loop
+```
+
+---
+
+## ⚙️ 사용자 자산 (모두 export 가능)
+
+```
+criteria.yaml          # 무엇을 추천할지 (관심사·care_about·ignore)
+algorithm.yaml         # 어떻게 추천할지 (component weight·feature·구조)
+feeds.yaml             # 다중 피드 (메인/아침 딥다이브/주말 탐색/Critical만)
+sovereignty.yaml       # 누가 어떤 path 쓸 수 있나
+evolution_log.jsonl    # daily/weekly 사이클 audit
+algorithm_log.jsonl    # meta-evolution 채택/기각 audit
+user_memory.jsonl      # 주간 사용자 메모리 스냅샷
+~/.hedwig/hedwig.db    # SQLite (signals + feedback + behavior + judgments + …)
+```
+
+`POST /algorithm/export` → 위 4 yaml + 활성 interpretation style을 zip 번들로 다운로드.
+`POST /algorithm/import` → 다른 사람의 알고리즘 import (sovereignty 검사 + dry-run preview 후).
+
+---
+
+## 🔧 CLI
 
 ```bash
-python -m hedwig --quickstart           # Zero-config local mode
-python -m hedwig                        # Daily full pipeline
-python -m hedwig --weekly               # Weekly brief + macro-evolution
-python -m hedwig --dry-run              # Collect only (no API keys)
-python -m hedwig --sources              # List source plugins
-python -m hedwig --dashboard            # Web dashboard (manual start)
-python -m hedwig --dashboard --saas     # SaaS mode (multi-user)
-python -m hedwig --native               # Native desktop app (pywebview)
-python -m hedwig --tray                 # macOS menu bar
-python -m hedwig --onboard              # Socratic interview (CLI)
-```
-
----
-
-## 🏗️ Pipeline
-
-```
-┌───────────────────────────────────────────────────────────┐
-│   Agent Strategy   → LLM decides what/where/how deep      │
-│   Collection       → 17 sources in parallel               │
-│   Normalization    → r.jina.ai cleans HTML → markdown     │
-│   Pre-scoring      → 5-factor numeric filter              │
-│                      (engagement + authority + recency    │
-│                       + convergence + relevance)          │
-│   LLM Scoring      → Relevance + Devil's Advocate         │
-│   Delivery         → Dashboard / Slack / Discord / Email  │
-│   Evolution        → Daily micro + Weekly macro           │
-└───────────────────────────────────────────────────────────┘
+python -m hedwig --quickstart           # zero-config local mode
+python -m hedwig                        # daily 풀 파이프라인
+python -m hedwig --weekly               # weekly brief + macro + RLHF
+python -m hedwig --critical-loop        # critical 폴링 데몬 (20분 간격)
+python -m hedwig --critical-interval 600 # 간격 조정
+python -m hedwig --meta-cycle           # meta-evolution 1회
+python -m hedwig --dry-run              # 수집만 (LLM 비용 0)
+python -m hedwig --reset [scope]        # 데이터 초기화 (all/signals/evolution/chat)
+python -m hedwig --dashboard            # 웹만 따로 기동
+python -m hedwig --sources              # 등록된 20개 소스 출력
+python -m hedwig --onboard              # CLI Socratic 인터뷰
 ```
 
 ---
 
 ## 🔧 Configuration
 
-### Minimum (.env)
-
+### 필수
 ```bash
-OPENAI_API_KEY=sk-...          # Only this is truly required
+OPENAI_API_KEY=sk-...
 ```
 
-### Optional Delivery
-
+### 선택 (UI `/setup` 에서 설정)
 ```bash
-# Pick any one or combine
-SLACK_WEBHOOK_ALERTS=...
-SLACK_WEBHOOK_DAILY=...
-DISCORD_WEBHOOK_ALERTS=...
-DISCORD_WEBHOOK_DAILY=...
-SMTP_HOST=smtp.gmail.com  SMTP_USER=...  SMTP_PASS=...  SMTP_FROM=...
-```
+JINA_API_KEY=...                   # 100× rate limit on URL→Markdown
+EXA_API_KEY=...                    # live_search 도구
+SCRAPECREATORS_API_KEY=...         # TikTok + Instagram 활성
+HEDWIG_PODCAST_FEEDS=url1|name1,url2|name2
+HEDWIG_PODCAST_TRANSCRIBE=1        # OpenAI Whisper로 자동 자막
+HEDWIG_BSKY_HANDLES=alice.bsky.social,bob.bsky.social
+HEDWIG_PIPELINE=ensemble           # default. 'single'로 legacy LLM-only
 
-### Optional Storage (instead of local SQLite)
+# delivery (모두 옵션)
+SLACK_WEBHOOK_ALERTS=...   SLACK_WEBHOOK_DAILY=...
+DISCORD_WEBHOOK_ALERTS=... DISCORD_WEBHOOK_DAILY=...
+SMTP_HOST=... SMTP_USER=... SMTP_PASS=... SMTP_FROM=...
 
-```bash
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_KEY=eyJ...
-# Set HEDWIG_STORAGE=sqlite to force local; else auto-detects
-```
-
-### Optional Sources
-
-```bash
-EXA_API_KEY=...                 # Semantic web search
-SCRAPECREATORS_API_KEY=...      # TikTok + Instagram
-```
-
-See [.env.example](.env.example) for the full list.
-
----
-
-## 🧪 Tests
-
-```bash
-.venv/bin/python -m pytest tests/ -q
-# 321 passed
+# storage (자동 감지 — 둘 다 비우면 SQLite local)
+SUPABASE_URL=...    SUPABASE_KEY=...
+HEDWIG_STORAGE=sqlite|supabase
 ```
 
 ---
 
-## 💰 SaaS Tiers (when deploying publicly)
+## 🧪 테스트
 
-| Feature | Free | Pro $19/mo | Team $49/mo |
-|---|---|---|---|
-| Sources | 5 | Unlimited | Unlimited |
-| Signals/day | 50 | Unlimited | Unlimited |
-| Evolution | Daily | Daily + Weekly | Daily + Weekly |
-| Memory | 2 weeks | Unlimited | Unlimited |
-| Custom sources | ❌ | ✅ | ✅ |
-| Team members | — | — | 10 |
+```bash
+.venv/bin/python -m pytest tests/
+# 562 passed
+```
 
 ---
 
-## 📚 Documentation
+## 🆚 뉴스레터 vs Hedwig
 
-- [docs/HOSTING.md](docs/HOSTING.md) — Full SaaS deployment guide (Railway + Supabase + Stripe)
-- [docs/interviews/](docs/interviews/) — Ouroboros Socratic interviews that shaped the design
-- [seed.yaml](seed.yaml) — Full project specification (ambiguity 0.10)
+| 축 | 뉴스레터 | Hedwig |
+|---|---|---|
+| 누구를 위한 큐레이션 | 만 명 → 같은 1개 | **나만의** 1개 |
+| 취향 학습 | 정적 | **자기 진화 (daily/weekly/monthly)** |
+| 소스 통합 | 1-3개 분야 | **20개 플랫폼** 한 번에 |
+| 반대 관점 | 편집자 1명 | **Devil's Advocate 자동** |
+| 알고리즘 소유권 | 발행자 자산 | **algorithm.yaml = 내 자산. export 가능** |
+
+> **뉴스레터는 "남이 만든 메뉴", Hedwig는 "내가 매일 깎는 부엌".**
 
 ---
 
-## 🙏 Built With & Inspired By
+## 📚 더 읽기
+
+- [`docs/VISION_v3.md`](docs/VISION_v3.md) — 9원칙 / 6 차별축 / 전체 아키텍처
+- [`docs/phase_reports/principle_alignment.md`](docs/phase_reports/principle_alignment.md) — 원칙 ↔ 코드 매핑
+- [`docs/phase_reports/sns_platform_gap.md`](docs/phase_reports/sns_platform_gap.md) — Personal SNS Platform 전환 분석
+- [`docs/phase8_prd.md`](docs/phase8_prd.md) — SOTA 추천 모델 도입 PRD
+- [`docs/absorption_backlog.md`](docs/absorption_backlog.md) — 흡수 대기 OSS + 논문
+- [`docs/LIBRARY_EXTRACTION.md`](docs/LIBRARY_EXTRACTION.md) — `hedwig-engine` 분리 계획
+- [`seed.yaml`](seed.yaml) — Ouroboros Socratic 인터뷰 결과물 (ambiguity 0.12)
+
+---
+
+## 🙏 영감을 받은 것들
 
 | Project | What we borrowed |
 |---|---|
-| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | Self-improvement loop pattern |
-| [jina-ai/reader](https://github.com/jina-ai/reader) | URL-to-Markdown normalization |
-| [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill) | Multi-signal scoring |
-| Supabase · Stripe · FastAPI · Pydantic · htmx | Infrastructure |
+| [karpathy/autoresearch](https://github.com/karpathy/autoresearch) | Self-improvement 루프 패턴 |
+| [jina-ai/reader](https://github.com/jina-ai/reader) | URL→Markdown 정규화 |
+| [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill) | Multi-signal 스코어링 (L2 흡수) |
+| Ouroboros Socratic Interview | criteria 명료화 (ambiguity ≤ 0.2) |
+| Twitter the-algorithm · YouTube ranker · MMOE | 2-stage retrieval + ranking 구조 |
+| SIGIR / RecSys / NeurIPS oral papers | feature_suggest_from_papers 메타 진화 연료 |
 
 ---
 
