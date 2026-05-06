@@ -248,17 +248,89 @@ def adopt(new_cfg: dict, reason: str, fitness_delta: float) -> dict:
     return new_cfg
 
 
+def _retrain_sota_models(lookback_days: int = 28) -> dict:
+    """Retrain the actual ML model parameters with 28-day lookback.
+
+    Monthly cycle calls this AFTER the structural mutation pass so the
+    refreshed structure is paired with up-to-date model weights. Daily
+    fitness improvements come from criteria; this is the "true SOTA
+    parameter update" path users expect from `monthly auto-research`.
+
+    Steps (each independent — failure of one doesn't block others):
+      1. LightGBM LambdaMART retrain via fit_lgbm_from_history (full
+         28-day window of feedback + behavior_events).
+      2. Logistic LTR weights re-tuned via REINFORCE-lite.
+      3. Interpretation style re-evolved with monthly signal.
+    """
+    out: dict = {"lookback_days": lookback_days}
+    try:
+        keywords = []
+        try:
+            from hedwig.config import load_criteria
+            crit = load_criteria() or {}
+            care = crit.get("signal_preferences", {}).get("care_about", []) or []
+            keywords = [str(k) for k in care]
+        except Exception:
+            pass
+
+        # 1. LightGBM (or no-op when libomp/lightgbm missing)
+        try:
+            from hedwig.engine.ensemble.ltr import fit_lgbm_from_history
+            out["lightgbm"] = fit_lgbm_from_history(
+                criteria_keywords=keywords, lookback_days=lookback_days,
+            )
+        except Exception as e:
+            out["lightgbm"] = {"trained": False, "reason": str(e)}
+
+        # 2. REINFORCE on logistic weights with 28-day lookback
+        try:
+            from hedwig.evolution.rlhf import reinforce_update
+            out["reinforce"] = reinforce_update(
+                criteria_keywords=keywords, days=lookback_days,
+            )
+        except Exception as e:
+            out["reinforce"] = {"updated": False, "reason": str(e)}
+
+        # 3. Interpretation style with monthly signal
+        try:
+            from hedwig.evolution.interpretation import evolve_style_from_signals
+            from hedwig.storage import get_feedback_since
+            from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+            since = _dt.now(tz=_tz.utc) - _td(days=lookback_days)
+            rows = get_feedback_since(since=since) or []
+            up = sum(1 for r in rows if r.get("vote") == "up")
+            down = sum(1 for r in rows if r.get("vote") == "down")
+            ratio = up / (up + down) if (up + down) else 0.5
+            hints = [r.get("natural_language") for r in rows if r.get("natural_language")]
+            out["interpretation"] = evolve_style_from_signals(
+                recent_feedback_ratio=ratio, natural_language_hints=hints,
+            )
+        except Exception as e:
+            out["interpretation"] = {"evolved": False, "reason": str(e)}
+    except Exception as e:
+        out["error"] = str(e)
+    return out
+
+
 def run_meta_cycle(
     n_candidates: int = 3,
     strategies: list[str] | None = None,
     force: bool = False,
+    retrain_models: bool = True,
+    retrain_lookback_days: int = 28,
 ) -> dict:
-    """One cycle of mutate → shadow-evaluate → adopt/reject.
+    """One cycle of mutate → shadow-evaluate → adopt/reject + (optional) retrain SOTA models.
 
     Args:
         n_candidates: how many mutations to generate
         strategies: optional explicit list of strategy names to cycle through
         force: if True, run even when meta_evolution.enabled is false
+        retrain_models: if True (default), retrain LightGBM LTR + REINFORCE-lite
+            logistic + interpretation_style after the structural mutation pass.
+            This closes the "monthly auto-research updates SOTA model parameters"
+            promise: the structure is mutated AND the underlying ML weights
+            are refreshed with 28-day lookback in the same cycle.
+        retrain_lookback_days: days of feedback/behavior to use for retraining.
 
     Returns:
         {
@@ -307,6 +379,26 @@ def run_meta_cycle(
             best = (cand_cfg, used_strat, sandbox["delta"])
             best_delta = sandbox["delta"]
 
+    # Retrain the actual ML model parameters with monthly lookback. Runs
+    # whether or not the structural mutation was adopted — the underlying
+    # weights still benefit from the extra 28 days of feedback/behavior.
+    models_retrained = (
+        _retrain_sota_models(lookback_days=retrain_lookback_days)
+        if retrain_models else None
+    )
+    if models_retrained is not None:
+        _append_audit_log({
+            "event": "retrain_sota_models",
+            "lookback_days": retrain_lookback_days,
+            "lightgbm": models_retrained.get("lightgbm", {}).get("trained")
+                        if isinstance(models_retrained.get("lightgbm"), dict) else None,
+            "reinforce": models_retrained.get("reinforce", {}).get("updated")
+                          if isinstance(models_retrained.get("reinforce"), dict) else None,
+            "interpretation": models_retrained.get("interpretation", {}).get("evolved")
+                              if isinstance(models_retrained.get("interpretation"), dict) else None,
+            "ts": datetime.now(tz=timezone.utc).isoformat(),
+        })
+
     if best and best[2] >= adoption_threshold:
         adopted_cfg = adopt(best[0], reason=f"meta_evolution:{best[1]}", fitness_delta=best[2])
         return {
@@ -315,6 +407,7 @@ def run_meta_cycle(
             "fitness_delta": best[2],
             "new_version": adopted_cfg["version"],
             "candidates": candidates_info,
+            "models_retrained": models_retrained,
         }
 
     _append_audit_log({
@@ -329,4 +422,5 @@ def run_meta_cycle(
         "fitness_delta": best_delta,
         "threshold": adoption_threshold,
         "candidates": candidates_info,
+        "models_retrained": models_retrained,
     }

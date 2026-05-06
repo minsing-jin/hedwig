@@ -314,6 +314,7 @@ HEDWIG_STORAGE=sqlite|supabase
 | 문서 | 무엇이 있나 |
 |---|---|
 | [`docs/VISION_v3.md`](docs/VISION_v3.md) | 9원칙 / 6 차별축 / 전체 아키텍처 |
+| [`docs/HYBRID_ENSEMBLE.md`](docs/HYBRID_ENSEMBLE.md) | 추천 알고리즘 한 페이지 — 2-stage + 6 component + 자기진화 |
 | [`docs/phase_reports/principle_alignment.md`](docs/phase_reports/principle_alignment.md) | 원칙 ↔ 코드 매핑 |
 | [`docs/phase_reports/sns_platform_gap.md`](docs/phase_reports/sns_platform_gap.md) | Personal SNS Platform 전환 분석 |
 | [`docs/phase8_prd.md`](docs/phase8_prd.md) | SOTA 추천 모델 도입 PRD |
