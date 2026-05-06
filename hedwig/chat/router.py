@@ -235,3 +235,186 @@ async def handle_user_message(
     append_chat_message(conversation_id, "assistant", fallback)
     return {"conversation_id": conversation_id, "answer": fallback,
             "tool_calls": tool_log, "max_iterations_exceeded": True}
+
+
+# ---------------------------------------------------------------------------
+# Streaming variant — yields SSE-friendly dict events instead of returning once.
+# ---------------------------------------------------------------------------
+
+async def stream_user_message(
+    conversation_id: str,
+    user_text: str,
+    *,
+    max_iterations: int = 4,
+):
+    """Async generator yielding event dicts for SSE.
+
+    Event shapes (all dicts; the dashboard endpoint serializes to SSE):
+      {"event": "ready", "conversation_id": ...}
+      {"event": "tool_start", "name": ..., "args": ...}
+      {"event": "tool_result", "name": ..., "result_preview": ...}
+      {"event": "token", "delta": "..."}
+      {"event": "done", "answer": "...", "tool_calls": [...]}
+      {"event": "error", "message": "..."}
+    """
+    if not user_text or not user_text.strip():
+        yield {"event": "error", "message": "empty message"}
+        return
+
+    create_conversation(conversation_id)
+    append_chat_message(conversation_id, "user", user_text.strip())
+
+    history_count = len(get_chat_messages(conversation_id, limit=2))
+    if history_count <= 1:
+        update_conversation_title(
+            conversation_id,
+            _maybe_title_from_first_user_message(user_text),
+        )
+    yield {"event": "ready", "conversation_id": conversation_id}
+
+    if not OPENAI_API_KEY:
+        msg = "OpenAI API 키가 설정되지 않아 LLM 응답을 생성할 수 없습니다. .env에 OPENAI_API_KEY 추가 후 다시 시도해주세요."
+        append_chat_message(conversation_id, "assistant", msg)
+        yield {"event": "token", "delta": msg}
+        yield {"event": "done", "answer": msg, "tool_calls": []}
+        return
+
+    try:
+        from openai import AsyncOpenAI
+    except ImportError:
+        msg = "openai 패키지를 import할 수 없습니다."
+        append_chat_message(conversation_id, "assistant", msg)
+        yield {"event": "token", "delta": msg}
+        yield {"event": "done", "answer": msg, "tool_calls": []}
+        return
+
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    tool_log: list[dict] = []
+
+    for iteration in range(max_iterations):
+        messages = _build_history_for_llm(conversation_id)
+        # Tool-call iterations stay non-streaming — the OpenAI tool_calls
+        # delta protocol is finicky and we don't gain UX from streaming
+        # function arguments. We only stream the FINAL natural-language reply.
+        try:
+            resp = await client.chat.completions.create(
+                model=OPENAI_MODEL_FAST,
+                messages=messages,
+                tools=TOOL_SCHEMAS,
+                tool_choice="auto",
+                temperature=0.3,
+                max_tokens=1200,
+            )
+        except Exception as e:
+            err = f"LLM 호출 실패: {e}"
+            append_chat_message(conversation_id, "assistant", err)
+            yield {"event": "error", "message": err}
+            return
+
+        choice = resp.choices[0]
+        message = choice.message
+        tool_calls = getattr(message, "tool_calls", None) or []
+
+        if tool_calls:
+            tc_payload = []
+            for tc in tool_calls:
+                tc_payload.append({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                })
+            append_chat_message(
+                conversation_id, "assistant",
+                content=message.content or "",
+                tool_calls=tc_payload,
+            )
+            for tc in tool_calls:
+                name = tc.function.name
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except Exception:
+                    args = {}
+                yield {"event": "tool_start", "name": name, "args": args}
+                result = await call_tool(name, args)
+                tool_log.append({"name": name, "args": args, "result": result})
+                append_chat_message(
+                    conversation_id, "tool",
+                    content=json.dumps(result, ensure_ascii=False, default=str)[:6000],
+                    tool_name=name,
+                )
+                preview = json.dumps(result, ensure_ascii=False, default=str)[:400]
+                yield {"event": "tool_result", "name": name, "result_preview": preview}
+            continue
+
+        # Final reply — STREAM tokens this time.
+        try:
+            stream = await client.chat.completions.create(
+                model=OPENAI_MODEL_FAST,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=1200,
+                stream=True,
+            )
+        except Exception as e:
+            err = f"LLM 스트리밍 실패: {e}"
+            append_chat_message(conversation_id, "assistant", err)
+            yield {"event": "error", "message": err}
+            return
+
+        buf: list[str] = []
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta
+                piece = getattr(delta, "content", None)
+            except Exception:
+                piece = None
+            if piece:
+                buf.append(piece)
+                yield {"event": "token", "delta": piece}
+
+        final_text = ("".join(buf)).strip()
+
+        if (not final_text or len(final_text) < 12) and tool_log:
+            try:
+                messages2 = _build_history_for_llm(conversation_id) + [
+                    {"role": "user", "content": FORCE_SUMMARY_PROMPT},
+                ]
+                stream2 = await client.chat.completions.create(
+                    model=OPENAI_MODEL_FAST,
+                    messages=messages2,
+                    temperature=0.3,
+                    max_tokens=800,
+                    stream=True,
+                )
+                buf2: list[str] = []
+                async for chunk in stream2:
+                    try:
+                        piece = chunk.choices[0].delta.content
+                    except Exception:
+                        piece = None
+                    if piece:
+                        buf2.append(piece)
+                        yield {"event": "token", "delta": piece}
+                forced = ("".join(buf2)).strip()
+                if forced:
+                    final_text = forced
+            except Exception as e:
+                logger.debug("forced stream summary failed: %s", e)
+
+        if not final_text:
+            final_text = "죄송합니다. 답변을 생성하지 못했습니다. 더 구체적으로 다시 물어봐주세요."
+            yield {"event": "token", "delta": final_text}
+
+        append_chat_message(conversation_id, "assistant", final_text)
+        yield {"event": "done", "answer": final_text, "tool_calls": tool_log}
+        return
+
+    # Max iterations exceeded
+    fallback = "도구 호출이 너무 많아 종료했습니다. 더 구체적으로 다시 물어봐주세요."
+    append_chat_message(conversation_id, "assistant", fallback)
+    yield {"event": "token", "delta": fallback}
+    yield {"event": "done", "answer": fallback, "tool_calls": tool_log,
+           "max_iterations_exceeded": True}

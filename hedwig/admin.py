@@ -20,7 +20,10 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-SIGNAL_TABLES = ("signals", "feedback", "behavior_events", "delivered_signals")
+SIGNAL_TABLES = (
+    "signals", "feedback", "behavior_events", "delivered_signals",
+    "judgments",   # G1 — first-class judgment artifacts
+)
 EVOLUTION_TABLES = (
     "evolution_signal", "evolution_logs", "algorithm_versions",
     "criteria_versions", "interpretation_styles", "briefings",

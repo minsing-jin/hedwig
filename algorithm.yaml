@@ -10,7 +10,7 @@
 # See docs/VISION_v3.md section 8-9 for the full architecture.
 
 version: 1
-updated_at: "2026-04-22"
+updated_at: "2026-05-05"
 origin: initial_default_v3_hybrid
 
 # ---------------------------------------------------------------------------
@@ -73,6 +73,22 @@ ranking:
       weight: 0.10
       strategy: thompson_sampling
       exploration_rate: 0.1
+    sequential:
+      enabled: false          # SASRec-inspired Jaccard over recent dwell sequence
+      weight: 0.10            # needs behavior_events history (1주+ /feed 사용 후 켜기 권장)
+      history_size: 12        # how many recent dwelled signals form the user's "sequence"
+    llm_rec:
+      enabled: false          # LLM-as-recommender (P5/RecLLM pattern). Cost ↑ vs llm_judge alone
+      weight: 0.15
+      model: ${OPENAI_MODEL_FAST}
+      apply_to: top_k
+
+  # IPS (Inverse Propensity Score) debias — corrects for platform exposure bias.
+  # Major platforms naturally dominate the candidate pool; this re-weights by
+  # 1/sqrt(propensity). Opt-in.
+  ips_debias:
+    enabled: false
+    lookback_days: 14
 
 # ---------------------------------------------------------------------------
 # Fitness function — how we measure if an algorithm version is better
@@ -94,6 +110,16 @@ fitness:
     enabled: true
     magnitude: 0.1              # adjustment applied for healthy component mix
   adoption_threshold: 0.05      # +5% required to adopt a mutation
+
+  # Multi-objective fitness (MMOE-lite): composes engagement / retention /
+  # save_rate / share_rate from feedback + behavior_events. Surfaced weekly.
+  multi_task:
+    enabled: true
+    weights:
+      engagement: 0.5
+      retention: 0.25
+      save_rate: 0.15
+      share_rate: 0.10
 
 # ---------------------------------------------------------------------------
 # Meta-Evolution — Karpathy autoresearch pattern on the algorithm itself

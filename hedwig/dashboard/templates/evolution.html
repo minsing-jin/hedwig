@@ -4,7 +4,7 @@
 
 <div class="hero">
   <h1>🧬 Evolution Timeline</h1>
-  <p class="subtitle">How your algorithm has drifted over time — every edit, Q&amp;A, and auto-mutation.</p>
+  <p class="subtitle muted">알고리즘이 시간에 따라 어떻게 진화했나 — 모든 편집/Q&A/자동 변이 + 클릭 시 diff 보기.</p>
 </div>
 
 <div class="section">
@@ -18,7 +18,21 @@
   </div>
 </div>
 
+<!-- Diff modal — shown when a versioned event is clicked -->
+<div id="diff-modal" class="diff-modal" style="display:none;" onclick="closeModal(event)">
+  <div class="diff-modal-inner" onclick="event.stopPropagation()">
+    <header class="diff-modal-head">
+      <h3 id="diff-modal-title">Diff</h3>
+      <button class="btn" onclick="closeModal()">✕</button>
+    </header>
+    <div id="diff-modal-meta" class="muted"></div>
+    <pre id="diff-modal-body" class="diff-pre"></pre>
+  </div>
+</div>
+
 <script>
+let TIMELINE_EVENTS = [];
+
 async function loadTimeline(days) {
   const body = document.getElementById('timeline-body');
   body.innerHTML = '<p class="muted">Loading…</p>';
@@ -26,34 +40,45 @@ async function loadTimeline(days) {
     const r = await fetch(`/evolution/timeline?days=${days}&limit=200`);
     const data = await r.json();
     const events = data.events || [];
+    TIMELINE_EVENTS = events;
     if (!events.length) {
       body.innerHTML = '<p class="muted">No events in this window.</p>';
       return;
     }
-    body.innerHTML = events.map(e => {
+    body.innerHTML = events.map((e, idx) => {
       const at = e.at || '';
       const tag = ({
         'criteria_edit': '📝',
         'qa_accept': '👍',
         'qa_reject': '👎',
         'qa_ask': '❓',
+        'qa_more_like': '➕',
+        'qa_less_like': '➖',
         'algorithm_version': '⚙️',
+        'criteria_version': '📋',
         'evolution_cycle': '🔄',
+        'interpretation_evolve': '🎙',
       })[e.type] || '•';
       const summary = e.payload && e.payload.intent ? e.payload.intent :
                       e.payload && e.payload.question ? e.payload.question :
                       e.analysis_summary || e.origin || '';
-      const extra = e.type === 'algorithm_version'
-        ? `<span class="pill">v${e.version}</span> <span class="muted">(${e.origin || 'manual'})</span>`
+      const extra = e.type === 'algorithm_version' ? `<span class="pill">v${e.version}</span> <span class="muted">${e.origin || 'manual'}</span>` :
+                    e.type === 'criteria_version' ? `<span class="pill pill-c">v${e.version}</span> <span class="muted">${e.origin || 'manual'}</span>` :
+                    '';
+      const hasDiff = (e.diff && e.diff.length > 0) ||
+                      (e.payload && e.payload.diff);
+      const expandable = hasDiff
+        ? `<button class="btn-mini" onclick="showDiff(${idx})">📜 view diff</button>`
         : '';
       return `
-        <div class="timeline-item">
+        <div class="timeline-item ${hasDiff ? 'has-diff' : ''}" ${hasDiff ? `onclick="showDiff(${idx})"` : ''}>
           <div class="timeline-when">${at.slice(0, 19).replace('T', ' ')}</div>
           <div class="timeline-body">
             <span class="timeline-tag">${tag}</span>
             <span class="timeline-kind">${e.type}</span>
             <span class="timeline-channel">${e.channel || ''}</span>
             ${extra}
+            ${expandable}
             <div class="timeline-summary">${(summary || '').toString().slice(0, 240).replace(/</g, '&lt;')}</div>
           </div>
         </div>`;
@@ -63,18 +88,66 @@ async function loadTimeline(days) {
   }
 }
 
+function showDiff(idx) {
+  const e = TIMELINE_EVENTS[idx];
+  if (!e) return;
+  const diff = (e.diff && e.diff.length > 0) ? e.diff :
+               (e.payload && e.payload.diff) ? e.payload.diff : '(no diff stored)';
+  const title = e.type === 'algorithm_version' ? `Algorithm v${e.version} — ${e.origin || 'manual'}` :
+                e.type === 'criteria_version' ? `Criteria v${e.version} — ${e.origin || 'manual'}` :
+                e.type === 'criteria_edit' ? `User criteria edit — ${(e.payload && e.payload.intent) || ''}` :
+                `${e.type} diff`;
+  const meta = `${e.at || ''} · channel=${e.channel || '-'} · fitness=${e.fitness ?? '—'}`;
+  document.getElementById('diff-modal-title').textContent = title;
+  document.getElementById('diff-modal-meta').textContent = meta;
+  document.getElementById('diff-modal-body').textContent = diff;
+  document.getElementById('diff-modal').style.display = 'flex';
+}
+
+function closeModal(ev) {
+  if (ev && ev.target.id !== 'diff-modal' && !ev.target.classList.contains('btn')) return;
+  document.getElementById('diff-modal').style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal({target:{id:'diff-modal'}}); });
+
 loadTimeline(30);
 </script>
 
 <style>
-.timeline-item { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid #eee; }
-.timeline-when { color: #888; font-family: 'SF Mono', Menlo, monospace; font-size: 12px; min-width: 150px; }
+.timeline-item { display: flex; gap: 14px; padding: 10px 12px; border-bottom: 1px solid #f3f4f6;
+                  border-radius: 6px; transition: background .15s; }
+.timeline-item.has-diff { cursor: pointer; }
+.timeline-item.has-diff:hover { background: #f9fafb; }
+.timeline-when { color: #6b7280; font-family: 'SF Mono', Menlo, monospace;
+                  font-size: 12px; min-width: 150px; }
 .timeline-body { flex: 1; }
 .timeline-tag { font-size: 16px; margin-right: 6px; }
-.timeline-kind { font-weight: 600; margin-right: 8px; }
-.timeline-channel { color: #666; font-size: 12px; text-transform: uppercase; margin-right: 8px; }
-.timeline-summary { color: #333; margin-top: 4px; font-size: 13px; line-height: 1.4; }
-.pill { display: inline-block; padding: 1px 7px; background: #eef; border-radius: 10px; font-size: 11px; }
+.timeline-kind { font-weight: 600; margin-right: 8px; color: #111827; }
+.timeline-channel { color: #6b7280; font-size: 11px; text-transform: uppercase;
+                     margin-right: 8px; }
+.timeline-summary { color: #1f2937; margin-top: 4px; font-size: 13px; line-height: 1.5; }
+.pill { display: inline-block; padding: 1px 7px; background: #dbeafe; color: #1e40af;
+        border-radius: 10px; font-size: 11px; font-weight: 600; }
+.pill-c { background: #fce7f3; color: #9d174d; }
+.btn-mini { padding: 2px 8px; font-size: 11px; border: 1px solid #d1d5db;
+            background: white; border-radius: 12px; cursor: pointer;
+            margin-left: 6px; color: #2563eb; }
+
+.diff-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55);
+              display: flex; align-items: center; justify-content: center; z-index: 100; }
+.diff-modal-inner { background: white; max-width: 900px; width: 92%;
+                     max-height: 85vh; overflow: hidden; border-radius: 10px;
+                     display: flex; flex-direction: column;
+                     box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+.diff-modal-head { display: flex; gap: 10px; align-items: center;
+                    padding: 14px 18px; border-bottom: 1px solid #e5e7eb; }
+.diff-modal-head h3 { margin: 0; flex: 1; font-size: 15px; color: #111827; }
+.diff-modal-inner #diff-modal-meta { padding: 8px 18px; font-size: 12px;
+                                       border-bottom: 1px solid #f3f4f6; }
+.diff-pre { background: #111827; color: #e5e7eb; padding: 16px;
+             font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+             line-height: 1.5; overflow: auto; margin: 0;
+             white-space: pre; flex: 1; }
 </style>
 
 {% endblock %}

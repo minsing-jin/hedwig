@@ -146,7 +146,19 @@
   </section>
 
   <section class="form-section">
-    <h2>7. Next Steps</h2>
+    <h2>7. Cron Auto-Install</h2>
+    <p class="muted">Daily(9시 시그널) + Weekly(월 10시 회고) + Critical(@reboot) 3개 작업을 시스템 crontab 에 자동 등록합니다. 재설치는 기존 Hedwig 블록을 안전하게 교체합니다.</p>
+    <div id="cron-status" class="muted">상태 확인 중…</div>
+    <div class="button-row" style="margin-top:8px;">
+      <button type="button" class="btn btn-primary" onclick="installCron()">📅 Install / Refresh Cron</button>
+      <button type="button" class="btn" onclick="checkCron()">🔄 Refresh status</button>
+      <button type="button" class="btn" onclick="uninstallCron()">🗑️ Remove Hedwig cron block</button>
+    </div>
+    <pre id="cron-block" class="cron-pre" style="display:none;"></pre>
+  </section>
+
+  <section class="form-section">
+    <h2>8. Next Steps</h2>
     <div class="next-steps">
       <a href="/onboarding" class="btn btn-primary">🎙️ Start Socratic Onboarding</a>
       <a href="/" class="btn">← Back to Dashboard</a>
@@ -162,6 +174,71 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+async function checkCron() {
+  const out = document.getElementById('cron-status');
+  const blk = document.getElementById('cron-block');
+  try {
+    const r = await fetch('/setup/cron');
+    const data = await r.json();
+    if (!data.crontab_available) {
+      out.innerHTML = "⚠️ <code>crontab</code> 명령어를 찾을 수 없습니다 (Windows 환경?). Task Scheduler 로 수동 등록하세요.";
+      blk.style.display = 'none';
+      return;
+    }
+    if (data.installed) {
+      out.innerHTML = "✅ Hedwig cron 블록이 이미 설치됨";
+      blk.textContent = data.block;
+      blk.style.display = 'block';
+    } else {
+      out.innerHTML = "⏳ 미설치 — 아래 미리보기 블록이 등록됩니다";
+      blk.textContent = data.preview;
+      blk.style.display = 'block';
+    }
+  } catch (e) {
+    out.innerHTML = `<span class='error'>Error: ${e}</span>`;
+  }
+}
+
+async function installCron() {
+  const out = document.getElementById('cron-status');
+  out.textContent = '설치 중…';
+  try {
+    const r = await fetch('/setup/cron/install', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({daily: '0 9 * * *', weekly: '0 10 * * 1', critical: true}),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast('✅ cron 설치/갱신 완료');
+    } else {
+      showToast('❌ ' + (data.error || data.message || 'failed'));
+    }
+    await checkCron();
+  } catch (e) {
+    out.innerHTML = `<span class='error'>Error: ${e}</span>`;
+  }
+}
+
+async function uninstallCron() {
+  if (!confirm('Hedwig cron 블록을 정말 제거하시겠어요?')) return;
+  try {
+    const r = await fetch('/setup/cron/uninstall', {method: 'POST'});
+    const data = await r.json();
+    showToast(data.ok ? '🗑️ 제거 완료' : '❌ ' + (data.error || 'failed'));
+    await checkCron();
+  } catch (e) { showToast('Error: ' + e); }
+}
+
+document.addEventListener('DOMContentLoaded', checkCron);
 </script>
+
+<style>
+.cron-pre { background: #111827; color: #e5e7eb; padding: 10px 14px;
+            font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+            border-radius: 6px; margin-top: 10px; white-space: pre;
+            overflow-x: auto; }
+</style>
 
 {% endblock %}

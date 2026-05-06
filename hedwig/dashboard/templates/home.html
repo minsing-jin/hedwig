@@ -7,6 +7,41 @@
   <p class="subtitle">Self-Evolving Personal AI Signal Radar</p>
 </div>
 
+<div class="today-bar">
+  <a class="today-stat" href="/signals" title="지난 24시간 수집된 시그널">
+    <span class="today-icon">📡</span>
+    <span class="today-num">{{ today.signals_today }}</span>
+    <span class="today-label">signals · 24h</span>
+  </a>
+  <a class="today-stat" href="/feed" title="지난 24시간 내 피드백">
+    <span class="today-icon">👍</span>
+    <span class="today-num">{{ today.feedback_today }}</span>
+    <span class="today-label">votes · 24h</span>
+  </a>
+  <a class="today-stat" href="/evolution" title="지난 24시간 진화 이벤트">
+    <span class="today-icon">🧬</span>
+    <span class="today-num">{{ today.evolution_events_today }}</span>
+    <span class="today-label">evolution · 24h</span>
+  </a>
+  <a class="today-stat" href="/meta" title="활성 algorithm.yaml 버전">
+    <span class="today-icon">🔬</span>
+    <span class="today-num">v{{ today.active_algorithm_version or '?' }}</span>
+    <span class="today-label">algorithm</span>
+  </a>
+</div>
+
+<style>
+.today-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+             gap: 10px; margin: 16px 0 24px; }
+.today-stat { display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+              background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+              text-decoration: none; color: #111827; transition: border-color .15s; }
+.today-stat:hover { border-color: #2563eb; }
+.today-icon { font-size: 22px; }
+.today-num { font-size: 20px; font-weight: 700; color: #111827; }
+.today-label { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+</style>
+
 <div class="grid-4">
   <div class="card stat">
     <div class="stat-label">Sources</div>

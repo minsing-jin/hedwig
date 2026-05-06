@@ -16,7 +16,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -65,6 +71,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         criteria = _load_criteria()
         source_count = _count_sources()
 
+        # Today's stats header — at-a-glance numbers
+        today = _compute_today_stats()
+
         return TEMPLATES.TemplateResponse(
             request,
             "home.html",
@@ -74,6 +83,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
                 "recent_evolution": recent_evolution,
                 "criteria": criteria,
                 "source_count": source_count,
+                "today": today,
             },
         )
 
@@ -148,6 +158,29 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             </details>
             """
         )
+
+    @app.get("/setup/cron")
+    async def setup_cron_status():
+        from hedwig.cron_installer import cron_status
+        return JSONResponse(cron_status())
+
+    @app.post("/setup/cron/install")
+    async def setup_cron_install(request: Request):
+        from hedwig.cron_installer import install_cron
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        daily = body.get("daily", "0 9 * * *")
+        weekly = body.get("weekly", "0 10 * * 1")
+        critical = bool(body.get("critical", True))
+        return JSONResponse(install_cron(daily=daily, weekly=weekly, critical=critical))
+
+    @app.post("/setup/cron/uninstall")
+    async def setup_cron_uninstall():
+        from hedwig.cron_installer import uninstall_cron
+        return JSONResponse(uninstall_cron())
 
     # -----------------------------------------------------------------------
     # Onboarding (Socratic interview)
@@ -465,6 +498,36 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         result = await handle_user_message(conv_id, message)
         return JSONResponse(result)
 
+    @app.post("/chat/stream")
+    async def chat_stream(request: Request):
+        """SSE — token-by-token streaming variant of /chat/message.
+
+        Each event is `data: <json>\\n\\n` where <json> is one of the
+        events emitted by ``stream_user_message``.
+        """
+        from hedwig.chat.router import new_conversation_id, stream_user_message
+
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "expected JSON body"}, status_code=400)
+        message = str(body.get("message", "")).strip()
+        if not message:
+            return JSONResponse({"error": "message required"}, status_code=400)
+        conv_id = str(body.get("conversation_id") or "").strip() or new_conversation_id()
+
+        async def gen():
+            try:
+                async for ev in stream_user_message(conv_id, message):
+                    yield f"data: {json.dumps(ev, ensure_ascii=False, default=str)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'event': 'error', 'message': str(e)})}\n\n"
+            yield "data: {\"event\": \"close\"}\n\n"
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache",
+                                          "X-Accel-Buffering": "no"})
+
     @app.get("/feed", response_class=HTMLResponse)
     async def feed_page(request: Request):
         from hedwig.feeds import list_feeds
@@ -583,6 +646,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     async def status_page(request: Request):
         from hedwig.qa.exit_conditions import (
             compute_exit_progress,
+            compute_retrain_history,
             compute_source_health,
         )
         return TEMPLATES.TemplateResponse(
@@ -590,6 +654,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             {
                 "conditions": compute_exit_progress(),
                 "source_health": compute_source_health(days=1),
+                "retrain_history": compute_retrain_history(),
             },
         )
 
@@ -1316,6 +1381,52 @@ def _load_dashboard_activity_stats(user_id: str | None = None) -> dict:
 
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
+
+
+def _compute_today_stats() -> dict:
+    """Quick at-a-glance numbers for the home page header.
+
+    Counts pulled from the local SQLite store with a 24-hour lookback.
+    Designed to be cheap (single index seek per metric) so it doesn't
+    bloat the home page TTFB.
+    """
+    from datetime import timedelta as _td
+    out = {
+        "signals_today": 0, "feedback_today": 0,
+        "evolution_events_today": 0,
+        "active_algorithm_version": None,
+    }
+    try:
+        from hedwig.config import load_algorithm_config
+        cfg = load_algorithm_config() or {}
+        out["active_algorithm_version"] = cfg.get("version")
+    except Exception:
+        pass
+
+    since = _utcnow() - _td(hours=24)
+    try:
+        from hedwig.storage import (
+            get_evolution_signals,
+            get_feedback_since,
+            get_recent_signals,
+        )
+        sigs = get_recent_signals(days=1) or []
+        out["signals_today"] = len([
+            s for s in sigs if (s.get("collected_at") or "") >= since.isoformat()
+        ])
+    except Exception:
+        pass
+    try:
+        from hedwig.storage import get_feedback_since
+        out["feedback_today"] = len(get_feedback_since(since=since) or [])
+    except Exception:
+        pass
+    try:
+        from hedwig.storage import get_evolution_signals
+        out["evolution_events_today"] = len(get_evolution_signals(since=since, limit=200) or [])
+    except Exception:
+        pass
+    return out
 
 
 def _jsonable(obj):

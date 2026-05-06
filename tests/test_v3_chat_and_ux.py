@@ -64,7 +64,9 @@ def test_chat_page_renders(tmp_env):
     resp = client.get("/chat")
     assert resp.status_code == 200
     assert "chat-shell" in resp.text
-    assert "/chat/message" in resp.text
+    # Chat page now streams via /chat/stream (SSE) — /chat/message remains a
+    # supported fallback endpoint registered server-side.
+    assert "/chat/stream" in resp.text
 
 
 def test_chat_message_endpoint_no_openai_key(tmp_env, monkeypatch):
