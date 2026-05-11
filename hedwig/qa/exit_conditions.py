@@ -81,6 +81,115 @@ def compute_exit_progress() -> list[dict]:
     return conditions
 
 
+def compute_retrain_history() -> dict:
+    """Parse algorithm_log.jsonl to surface the most-recent retrain timestamps.
+
+    Returns:
+        {
+          "last_retrain_at": ISO str | None,
+          "lightgbm_last_trained": bool,
+          "reinforce_last_updated": bool,
+          "interpretation_last_evolved": bool,
+          "next_due_at": ISO str | None,         # last_retrain + cadence_days
+          "cadence_days": int,
+          "events": list of recent retrain events (≤ 5),
+        }
+    """
+    import json as _json
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    from hedwig.config import ALGORITHM_LOG_PATH, load_algorithm_config
+
+    out = {
+        "last_retrain_at": None, "lightgbm_last_trained": None,
+        "reinforce_last_updated": None, "interpretation_last_evolved": None,
+        "next_due_at": None, "cadence_days": None, "events": [],
+    }
+    cfg = load_algorithm_config() or {}
+    cadence = int((cfg.get("meta_evolution", {}) or {}).get("cadence_days", 28))
+    out["cadence_days"] = cadence
+
+    try:
+        if not ALGORITHM_LOG_PATH.exists():
+            return out
+        events: list[dict] = []
+        for line in ALGORITHM_LOG_PATH.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = _json.loads(line)
+            except Exception:
+                continue
+            if row.get("event") == "retrain_sota_models":
+                events.append(row)
+        if not events:
+            return out
+        events.sort(key=lambda e: e.get("ts", ""), reverse=True)
+        latest = events[0]
+        out["last_retrain_at"] = latest.get("ts")
+        out["lightgbm_last_trained"] = latest.get("lightgbm")
+        out["reinforce_last_updated"] = latest.get("reinforce")
+        out["interpretation_last_evolved"] = latest.get("interpretation")
+        try:
+            ts = _dt.fromisoformat(str(latest["ts"]).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=_tz.utc)
+            out["next_due_at"] = (ts + _td(days=cadence)).isoformat()
+        except Exception:
+            pass
+        out["events"] = events[:5]
+    except Exception:
+        pass
+    return out
+
+
+def compute_algorithm_training_status(lookback_days: int = 28) -> dict:
+    """Report whether the owned algorithm is cold-start, locally trained, or SOTA-backed."""
+    from hedwig.config import load_algorithm_config
+
+    cfg = load_algorithm_config() or {}
+    ranking = cfg.get("ranking", {}) or {}
+    components = ranking.get("components", {}) or {}
+    enabled_components = [
+        name for name, spec in components.items()
+        if isinstance(spec, dict) and spec.get("enabled")
+    ]
+
+    try:
+        from hedwig.engine.ensemble.ltr import training_status as ltr_training_status
+        ltr = ltr_training_status(lookback_days=lookback_days)
+    except Exception as e:
+        ltr = {"active_backend": "unknown", "error": str(e)}
+
+    ips = ranking.get("ips_debias", {}) or {}
+    optional_sota = {
+        "bandit": bool((components.get("bandit") or {}).get("enabled")),
+        "sequential": bool((components.get("sequential") or {}).get("enabled")),
+        "llm_rec": bool((components.get("llm_rec") or {}).get("enabled")),
+        "ips_debias": bool(ips.get("enabled")),
+        "meta_evolution": bool((cfg.get("meta_evolution") or {}).get("enabled")),
+    }
+
+    backend = ltr.get("active_backend")
+    if backend == "lightgbm_lambdamart":
+        summary = "LightGBM LambdaMART model is installed and loadable."
+    elif backend == "logistic_sgd":
+        summary = "Serving with user-trained logistic SGD weights; LightGBM is not active."
+    elif backend == "default_priors":
+        summary = "Cold start: serving from algorithm.yaml priors until enough feedback accrues."
+    else:
+        summary = "Algorithm backend status is unavailable."
+
+    return {
+        "summary": summary,
+        "enabled_components": enabled_components,
+        "ltr": ltr,
+        "optional_sota": optional_sota,
+        "algorithm_version": cfg.get("version"),
+        "algorithm_origin": cfg.get("origin"),
+    }
+
+
 def compute_source_health(days: int = 1) -> list[dict]:
     """Per-source health snapshot for the /status panel.
 

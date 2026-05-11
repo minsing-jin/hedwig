@@ -794,7 +794,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.get("/status", response_class=HTMLResponse)
     async def status_page(request: Request):
         from hedwig.qa.exit_conditions import (
+            compute_algorithm_training_status,
             compute_exit_progress,
+            compute_retrain_history,
             compute_source_health,
         )
         return TEMPLATES.TemplateResponse(
@@ -802,6 +804,8 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             {
                 "conditions": compute_exit_progress(),
                 "source_health": compute_source_health(days=1),
+                "retrain_history": compute_retrain_history(),
+                "algorithm_training": compute_algorithm_training_status(),
             },
         )
 

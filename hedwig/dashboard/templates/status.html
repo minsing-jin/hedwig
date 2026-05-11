@@ -25,6 +25,84 @@
 </div>
 
 <div class="section">
+  <h2>🧠 Owned Algorithm Training Status</h2>
+  <p class="muted">
+    Hedwig의 핵심 알고리즘은 먼저 <code>algorithm.yaml</code>의 사용자 소유 prior로 시작하고,
+    피드백/행동 이력이 쌓이면 로컬 LTR 가중치 또는 선택적 SOTA backend로 강화됩니다.
+  </p>
+  <div class="training-grid">
+    <div class="retrain-card">
+      <div class="retrain-label">Active backend</div>
+      <div class="retrain-value">{{ algorithm_training.ltr.active_backend|default('unknown') }}</div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">Feedback</div>
+      <div class="retrain-value">{{ algorithm_training.ltr.feedback_events|default(0) }} events</div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">LightGBM</div>
+      <div class="retrain-value">
+        {% if algorithm_training.ltr.lightgbm.ready %}ready{% elif algorithm_training.ltr.lightgbm.dependency_available %}model missing{% else %}not installed{% endif %}
+      </div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">Logistic SGD</div>
+      <div class="retrain-value">
+        {% if algorithm_training.ltr.logistic.trained %}trained{% else %}default priors{% endif %}
+      </div>
+    </div>
+  </div>
+  <p class="muted status-note">{{ algorithm_training.summary }}</p>
+  <p class="muted status-note">
+    Enabled components:
+    {% for name in algorithm_training.enabled_components %}
+      <code>{{ name }}</code>{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+</div>
+
+<div class="section">
+  <h2>🔬 Monthly Auto-Research — optional SOTA 재학습 이력</h2>
+  <p class="muted">
+    매 monthly meta-cycle 마다 가능한 backend만 LightGBM LTR + REINFORCE-lite + interpretation_style 을 28일 lookback 으로 재학습합니다.
+    LightGBM은 dependency, 모델 파일, 충분한 feedback이 있을 때만 활성화됩니다.
+    <code>algorithm.yaml.meta_evolution.cadence_days</code> = {{ retrain_history.cadence_days }} 일 주기.
+  </p>
+  {% if retrain_history.last_retrain_at %}
+  <div class="retrain-grid">
+    <div class="retrain-card">
+      <div class="retrain-label">⏱ 마지막 재학습</div>
+      <div class="retrain-value">{{ retrain_history.last_retrain_at[:19]|replace('T',' ') }}</div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">📅 다음 예정</div>
+      <div class="retrain-value">{{ (retrain_history.next_due_at or '—')[:19]|replace('T',' ') }}</div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">🌳 LightGBM</div>
+      <div class="retrain-value">
+        {% if retrain_history.lightgbm_last_trained %}✅ trained{% else %}— skipped/failed{% endif %}
+      </div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">🎯 REINFORCE</div>
+      <div class="retrain-value">
+        {% if retrain_history.reinforce_last_updated %}✅ updated{% else %}— skipped/failed{% endif %}
+      </div>
+    </div>
+    <div class="retrain-card">
+      <div class="retrain-label">🎙 Interpretation Style</div>
+      <div class="retrain-value">
+        {% if retrain_history.interpretation_last_evolved %}✅ evolved{% else %}— no change{% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">아직 재학습 이벤트가 없습니다. <code>python -m hedwig --meta-cycle</code> 또는 /meta 페이지에서 강제 실행 가능.</p>
+  {% endif %}
+</div>
+
+<div class="section">
   <h2>📡 Source Health (지난 24시간)</h2>
   <p class="muted">소스별 최근 수집 카운트. 0 이면 (a) 트렌드 부족 or (b) env 키 미설정. 미설정 키는 우측에 경고로 표시.</p>
   <table class="src-health">
@@ -74,6 +152,17 @@
 .src-row-ok td:nth-child(3) { color: #1a7f37; font-weight: 600; }
 .src-warn { color: #b45309; font-size: 12px; }
 .src-ok { color: #1a7f37; }
+
+.retrain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 10px; margin-top: 12px; }
+.training-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                 gap: 10px; margin-top: 12px; }
+.retrain-card { padding: 10px 14px; background: white; border: 1px solid #e5e7eb;
+                border-radius: 8px; }
+.retrain-label { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+.retrain-value { font-size: 14px; color: #111827; font-weight: 600; margin-top: 4px;
+                 font-family: 'SF Mono', Menlo, monospace; }
+.status-note { font-size: 12px; margin-top: 8px; }
 </style>
 
 {% endblock %}
