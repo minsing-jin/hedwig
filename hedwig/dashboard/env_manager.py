@@ -156,6 +156,36 @@ class EnvManager:
             "required": False,
             "secret": False,
         },
+        "HEDWIG_MANUS_ENABLED": {
+            "label": "Advanced: enable Manus integration (0/1)",
+            "help": "Set to 1 to expose external Manus task delegation in Chat. Off by default.",
+            "required": False,
+            "secret": False,
+        },
+        "MANUS_API_KEY": {
+            "label": "Advanced: Manus API Key",
+            "help": "External Manus API v2 key. Used only when HEDWIG_MANUS_ENABLED=1.",
+            "required": False,
+            "secret": True,
+        },
+        "MANUS_API_BASE_URL": {
+            "label": "Advanced: Manus API Base URL",
+            "help": "Defaults to https://api.manus.ai. Override only for tests/proxies.",
+            "required": False,
+            "secret": False,
+        },
+        "MANUS_AGENT_PROFILE": {
+            "label": "Advanced: Manus Agent Profile",
+            "help": "Optional Manus agent profile/model selector, passed through to task.create.",
+            "required": False,
+            "secret": False,
+        },
+        "MANUS_PROJECT_ID": {
+            "label": "Advanced: Manus Project ID",
+            "help": "Optional Manus project_id for delegated tasks.",
+            "required": False,
+            "secret": False,
+        },
     }
 
     def __init__(self, env_path: Optional[Path] = None):

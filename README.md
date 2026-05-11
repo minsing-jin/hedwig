@@ -274,6 +274,11 @@ HEDWIG_BSKY_HANDLES=alice.bsky.social,bob.bsky.social
 # 파이프라인 모드
 HEDWIG_PIPELINE=ensemble           # default. 'single'로 legacy LLM-only
 
+# Advanced external delegation (기본 off, core algorithm 아님)
+HEDWIG_MANUS_ENABLED=0             # 1이면 Chat에서 Manus task delegation 노출
+MANUS_API_KEY=...                  # Manus API v2 x-manus-api-key
+MANUS_API_BASE_URL=https://api.manus.ai
+
 # Delivery (모두 옵션)
 SLACK_WEBHOOK_ALERTS=...   SLACK_WEBHOOK_DAILY=...
 DISCORD_WEBHOOK_ALERTS=... DISCORD_WEBHOOK_DAILY=...

@@ -114,6 +114,16 @@ async def test_smtp(host: str, port: str, username: str, password: str) -> tuple
     )
 
 
+async def test_manus(api_key: str, base_url: str = "") -> tuple[bool, str]:
+    if not api_key:
+        return False, "MANUS_API_KEY required"
+    if len(api_key.strip()) < 8:
+        return False, "Invalid format (too short)"
+    if base_url and not base_url.startswith("https://"):
+        return False, "MANUS_API_BASE_URL should start with https://"
+    return True, "Configured (network test skipped; task creation happens from Chat)"
+
+
 async def test_all(values: dict[str, str]) -> dict[str, tuple[bool, str]]:
     """Test all provided keys. Returns dict of key_name → (ok, message)."""
     results: dict[str, tuple[bool, str]] = {}
@@ -140,6 +150,13 @@ async def test_all(values: dict[str, str]) -> dict[str, tuple[bool, str]]:
             values.get("SMTP_PORT", ""),
             values.get("SMTP_USER", ""),
             values.get("SMTP_PASS", ""),
+        )
+
+    manus_enabled = str(values.get("HEDWIG_MANUS_ENABLED") or "").strip().lower()
+    if manus_enabled in ("1", "true", "yes", "on") or values.get("MANUS_API_KEY"):
+        results["MANUS"] = await test_manus(
+            values.get("MANUS_API_KEY", ""),
+            values.get("MANUS_API_BASE_URL", ""),
         )
 
     return results

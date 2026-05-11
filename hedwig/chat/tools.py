@@ -243,6 +243,19 @@ async def t_live_search(query: str = "", num: int = 5) -> dict:
         return {"error": str(e)}
 
 
+async def t_delegate_to_manus(prompt: str = "", title: str = "") -> dict:
+    """Delegate a bounded task to Manus when the advanced integration is enabled."""
+    if not prompt.strip():
+        return {"ok": False, "error": "prompt required"}
+    from hedwig.integrations.manus import ManusClient, ManusConfig
+
+    cfg = ManusConfig.from_env()
+    if not cfg.ready:
+        return {"ok": False, "error": cfg.readiness_error()}
+    client = ManusClient(config=cfg)
+    return await client.create_task(prompt=prompt, title=title or None)
+
+
 # ---------------------------------------------------------------------------
 # OpenAI-compatible tool schemas
 # ---------------------------------------------------------------------------
@@ -330,6 +343,14 @@ TOOL_SCHEMAS: list[dict] = [
             "num": {"type": "integer", "default": 5},
         }, "required": ["query"]},
     }},
+    {"type": "function", "function": {
+        "name": "delegate_to_manus",
+        "description": "Advanced opt-in: Manus API로 장기/브라우저/리서치 작업을 외부 위임. HEDWIG_MANUS_ENABLED=1과 MANUS_API_KEY가 있을 때만 성공.",
+        "parameters": {"type": "object", "properties": {
+            "prompt": {"type": "string"},
+            "title": {"type": "string"},
+        }, "required": ["prompt"]},
+    }},
 ]
 
 
@@ -345,7 +366,22 @@ HANDLERS: dict[str, Callable[..., Any]] = {
     "get_status": t_get_status,
     "get_evolution_timeline": t_get_evolution_timeline,
     "live_search": t_live_search,
+    "delegate_to_manus": t_delegate_to_manus,
 }
+
+
+def available_tool_schemas() -> list[dict]:
+    """Return tool schemas exposed to the LLM for the current environment."""
+    from hedwig.integrations.manus import ManusConfig
+
+    schemas: list[dict] = []
+    manus_ready = ManusConfig.from_env().ready
+    for schema in TOOL_SCHEMAS:
+        name = schema.get("function", {}).get("name")
+        if name == "delegate_to_manus" and not manus_ready:
+            continue
+        schemas.append(schema)
+    return schemas
 
 
 async def call_tool(name: str, arguments: dict) -> dict:

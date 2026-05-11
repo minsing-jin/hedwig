@@ -15,7 +15,7 @@ import logging
 import uuid
 from typing import Any
 
-from hedwig.chat.tools import HANDLERS, TOOL_SCHEMAS, call_tool
+from hedwig.chat.tools import available_tool_schemas, call_tool
 from hedwig.config import OPENAI_API_KEY, OPENAI_MODEL_FAST
 from hedwig.storage import (
     append_chat_message,
@@ -138,7 +138,7 @@ async def handle_user_message(
             resp = await client.chat.completions.create(
                 model=OPENAI_MODEL_FAST,
                 messages=messages,
-                tools=TOOL_SCHEMAS,
+                tools=available_tool_schemas(),
                 tool_choice="auto",
                 temperature=0.3,
                 max_tokens=1200,
@@ -300,7 +300,7 @@ async def stream_user_message(
             resp = await client.chat.completions.create(
                 model=OPENAI_MODEL_FAST,
                 messages=messages,
-                tools=TOOL_SCHEMAS,
+                tools=available_tool_schemas(),
                 tool_choice="auto",
                 temperature=0.3,
                 max_tokens=1200,
