@@ -489,6 +489,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         """
         import base64
 
+        from hedwig.personal_algorithm import route_items_after_ranking
         from hedwig.storage import get_recent_signals
         stream = request.query_params.get("stream", "default")
         try:
@@ -534,6 +535,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
                 "author": r.get("author"),
                 "feed_position": start_idx + offset,
             })
+        items = route_items_after_ranking(items)
         return JSONResponse({
             "items": items,
             "next_cursor": next_cursor,
@@ -544,7 +546,12 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.post("/events/beacon")
     async def events_beacon(request: Request):
         """Batch endpoint for /feed JS beacon — implicit-passive feedback."""
-        from hedwig.storage import save_behavior_events_batch, save_evolution_signal
+        from hedwig.personal_algorithm import interpret_behavior_event
+        from hedwig.storage import (
+            save_behavior_events_batch,
+            save_behavior_rewards_batch,
+            save_evolution_signal,
+        )
 
         try:
             body = await request.json()
@@ -556,14 +563,26 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             return JSONResponse({"error": "events must be a list"}, status_code=400)
 
         saved = save_behavior_events_batch(events)
+        rewards = [rw for ev in events if (rw := interpret_behavior_event(ev))]
+        saved_rewards = save_behavior_rewards_batch(rewards)
 
         # Promote dwell/skip/share events into the unified evolution_signal
         # stream (channel='implicit', kind='behavior_<type>') so the existing
         # evolution loop sees them without new wiring.
         for ev in events:
             etype = ev.get("event_type")
-            if etype in ("dwell", "skip", "share", "save"):
-                weight = {"dwell": 0.3, "skip": 0.5, "share": 1.0, "save": 1.0}.get(etype, 0.3)
+            if etype in ("dwell", "skip", "share", "save", "open", "not_interested", "swipe_left", "swipe_right", "swipe_next"):
+                weight = {
+                    "dwell": 0.2,
+                    "skip": 0.1,
+                    "swipe_right": 0.1,
+                    "swipe_next": 0.05,
+                    "share": 0.8,
+                    "save": 1.0,
+                    "open": 0.8,
+                    "not_interested": 1.0,
+                    "swipe_left": 0.8,
+                }.get(etype, 0.2)
                 try:
                     save_evolution_signal(
                         channel="implicit",
@@ -572,12 +591,62 @@ def create_app(saas_mode: bool = False) -> FastAPI:
                             "signal_id": ev.get("signal_id"),
                             "dwell_ms": ev.get("dwell_ms"),
                             "feed_id": ev.get("feed_id"),
+                            "feed_mode": ev.get("feed_mode") or ev.get("mode"),
                         },
                         weight=weight,
                     )
                 except Exception:
                     pass
-        return JSONResponse({"ok": True, "saved": saved})
+        return JSONResponse({"ok": True, "saved": saved, "rewards": saved_rewards})
+
+    @app.get("/feed/metrics")
+    async def feed_metrics_endpoint():
+        from hedwig.storage import get_usage_metrics_by_mode
+        return JSONResponse({"modes": get_usage_metrics_by_mode()})
+
+    @app.get("/policy/personal-algorithm")
+    async def personal_algorithm_policy_endpoint():
+        from hedwig.personal_algorithm import get_personal_algorithm_policy
+        return JSONResponse(_jsonable(get_personal_algorithm_policy()))
+
+    @app.post("/policy/natural-language")
+    async def personal_algorithm_nl_endpoint(request: Request):
+        from hedwig.onboarding.nl_algo_editor import confirm_edit, propose_local_policy_edit
+        from hedwig.personal_algorithm import is_risky_policy_change, shadow_test_policy_edit
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        intent = str(body.get("intent", "")).strip()
+        if not intent:
+            return JSONResponse({"ok": False, "error": "intent required"}, status_code=400)
+        proposed = propose_local_policy_edit(intent)
+        changes = proposed.get("changes") or []
+        if is_risky_policy_change(changes) and not body.get("shadow_approved"):
+            proposed["shadow"] = shadow_test_policy_edit(changes, intent)
+            proposed["requires_shadow_test"] = True
+            return JSONResponse(_jsonable(proposed))
+        if body.get("apply"):
+            return JSONResponse(_jsonable(confirm_edit(changes, intent=intent)))
+        return JSONResponse(_jsonable(proposed))
+
+    @app.post("/policy/rollback")
+    async def personal_algorithm_rollback_endpoint(request: Request):
+        from hedwig.onboarding.nl_algo_editor import restore_algorithm_version
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        try:
+            version = int(body.get("version"))
+        except Exception:
+            return JSONResponse({"ok": False, "error": "version required"}, status_code=400)
+        result = restore_algorithm_version(version)
+        return JSONResponse(_jsonable(result), status_code=200 if result.get("ok") else 404)
 
     @app.get("/status", response_class=HTMLResponse)
     async def status_page(request: Request):

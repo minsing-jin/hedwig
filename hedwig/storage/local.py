@@ -177,13 +177,31 @@ def init_db():
             signal_id TEXT NOT NULL,
             event_type TEXT NOT NULL CHECK (event_type IN (
                 'view_start','view_end','dwell','skip','share','save',
-                'expand_source','click_link','open_qa'
+                'expand_source','click_link','open_qa','card_impression',
+                'viewed_card','open','swipe_left','swipe_right','swipe_next',
+                'not_interested'
             )),
             dwell_ms INTEGER,
             position_in_feed INTEGER,
             feed_id TEXT DEFAULT 'default',
+            feed_mode TEXT DEFAULT 'grid',
             device TEXT,
             captured_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- User-owned derived reward interpretations. Raw events remain in
+        -- behavior_events; this table can be recomputed when policy changes.
+        CREATE TABLE IF NOT EXISTS behavior_rewards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signal_id TEXT NOT NULL,
+            raw_event_id INTEGER,
+            event_type TEXT NOT NULL,
+            reward_value REAL NOT NULL,
+            signal_strength TEXT NOT NULL,
+            policy_version INTEGER DEFAULT 1,
+            feed_mode TEXT DEFAULT 'grid',
+            source TEXT DEFAULT 'personal_algorithm',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
         -- v3 Phase 7 G6: delivered_signals — first-class delivery row so
@@ -248,6 +266,9 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_briefings_generated ON briefings(generated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_behavior_signal ON behavior_events(signal_id, captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_behavior_type ON behavior_events(event_type, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_behavior_mode ON behavior_events(feed_mode, captured_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_reward_signal ON behavior_rewards(signal_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_reward_strength ON behavior_rewards(signal_strength, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_delivered_signal ON delivered_signals(signal_id, delivered_at DESC);
         CREATE INDEX IF NOT EXISTS idx_chat_msg_convo ON chat_messages(conversation_id, id);
         CREATE INDEX IF NOT EXISTS idx_chat_convo_last ON chat_conversations(last_message_at DESC);
@@ -295,6 +316,13 @@ def init_db():
             with _conn() as alter_conn:
                 alter_conn.execute(
                     "ALTER TABLE signals ADD COLUMN judgment_id INTEGER DEFAULT NULL"
+                )
+        except Exception:
+            pass
+        try:
+            with _conn() as alter_conn:
+                alter_conn.execute(
+                    "ALTER TABLE behavior_events ADD COLUMN feed_mode TEXT DEFAULT 'grid'"
                 )
         except Exception:
             pass
@@ -1122,6 +1150,7 @@ def save_behavior_event(
     dwell_ms: int | None = None,
     position_in_feed: int | None = None,
     feed_id: str = "default",
+    feed_mode: str = "grid",
     device: str | None = None,
 ) -> bool:
     """Record one /feed UI interaction event."""
@@ -1130,9 +1159,9 @@ def save_behavior_event(
         with _conn() as conn:
             conn.execute(
                 """INSERT INTO behavior_events
-                   (signal_id, event_type, dwell_ms, position_in_feed, feed_id, device)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (str(signal_id), event_type, dwell_ms, position_in_feed, feed_id, device),
+                   (signal_id, event_type, dwell_ms, position_in_feed, feed_id, feed_mode, device)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (str(signal_id), event_type, dwell_ms, position_in_feed, feed_id, feed_mode, device),
             )
         return True
     except Exception as e:
@@ -1146,7 +1175,9 @@ def save_behavior_events_batch(events: list[dict]) -> int:
     saved = 0
     valid_types = {
         "view_start", "view_end", "dwell", "skip", "share", "save",
-        "expand_source", "click_link", "open_qa",
+        "expand_source", "click_link", "open_qa", "card_impression",
+        "viewed_card", "open", "swipe_left", "swipe_right", "swipe_next",
+        "not_interested",
     }
     with _conn() as conn:
         for ev in events:
@@ -1157,12 +1188,13 @@ def save_behavior_events_batch(events: list[dict]) -> int:
             try:
                 conn.execute(
                     """INSERT INTO behavior_events
-                       (signal_id, event_type, dwell_ms, position_in_feed, feed_id, device)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
+                       (signal_id, event_type, dwell_ms, position_in_feed, feed_id, feed_mode, device)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (
                         str(sid), etype,
                         ev.get("dwell_ms"), ev.get("position_in_feed"),
                         str(ev.get("feed_id") or "default"),
+                        str(ev.get("feed_mode") or ev.get("mode") or "grid"),
                         ev.get("device"),
                     ),
                 )
@@ -1175,6 +1207,7 @@ def save_behavior_events_batch(events: list[dict]) -> int:
 def get_behavior_events(
     signal_id: str | None = None,
     event_types: list[str] | None = None,
+    feed_mode: str | None = None,
     limit: int = 200,
 ) -> list[dict]:
     init_db()
@@ -1188,6 +1221,9 @@ def get_behavior_events(
         placeholders = ",".join("?" for _ in event_types)
         conds.append(f"event_type IN ({placeholders})")
         params.extend(event_types)
+    if feed_mode:
+        conds.append("feed_mode = ?")
+        params.append(feed_mode)
     if conds:
         q += " WHERE " + " AND ".join(conds)
     q += " ORDER BY captured_at DESC, id DESC LIMIT ?"
@@ -1195,6 +1231,92 @@ def get_behavior_events(
     with _conn() as conn:
         rows = conn.execute(q, params).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_behavior_reward(reward: dict) -> bool:
+    init_db()
+    try:
+        with _conn() as conn:
+            conn.execute(
+                """INSERT INTO behavior_rewards
+                   (signal_id, raw_event_id, event_type, reward_value,
+                    signal_strength, policy_version, feed_mode, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(reward.get("signal_id")),
+                    reward.get("raw_event_id"),
+                    str(reward.get("event_type")),
+                    float(reward.get("reward_value") or 0),
+                    str(reward.get("signal_strength") or "weak"),
+                    int(reward.get("policy_version") or 1),
+                    str(reward.get("feed_mode") or "grid"),
+                    str(reward.get("source") or "personal_algorithm"),
+                ),
+            )
+        return True
+    except Exception as e:
+        logger.error("save_behavior_reward: %s", e)
+        return False
+
+
+def save_behavior_rewards_batch(rewards: list[dict]) -> int:
+    saved = 0
+    for reward in rewards or []:
+        if save_behavior_reward(reward):
+            saved += 1
+    return saved
+
+
+def get_behavior_rewards(
+    signal_id: str | None = None,
+    signal_strength: str | None = None,
+    feed_mode: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    init_db()
+    q = "SELECT * FROM behavior_rewards"
+    conds = []
+    params: list = []
+    if signal_id:
+        conds.append("signal_id = ?")
+        params.append(str(signal_id))
+    if signal_strength:
+        conds.append("signal_strength = ?")
+        params.append(str(signal_strength))
+    if feed_mode:
+        conds.append("feed_mode = ?")
+        params.append(str(feed_mode))
+    if conds:
+        q += " WHERE " + " AND ".join(conds)
+    q += " ORDER BY created_at DESC, id DESC LIMIT ?"
+    params.append(limit)
+    with _conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_usage_metrics_by_mode(days: int = 7) -> dict:
+    init_db()
+    cutoff = (datetime.now(tz=timezone.utc) - timedelta(days=days)).isoformat()
+    with _conn() as conn:
+        rows = conn.execute(
+            """SELECT feed_mode, event_type, COUNT(*) AS count,
+                      COALESCE(SUM(dwell_ms), 0) AS dwell_ms
+               FROM behavior_events
+               WHERE captured_at >= ?
+               GROUP BY feed_mode, event_type""",
+            (cutoff,),
+        ).fetchall()
+    out: dict[str, dict[str, int]] = {}
+    for row in rows:
+        mode = row["feed_mode"] or "grid"
+        bucket = out.setdefault(mode, {"events": 0, "dwell_ms": 0})
+        bucket[str(row["event_type"])] = int(row["count"] or 0)
+        bucket["events"] += int(row["count"] or 0)
+        bucket["dwell_ms"] += int(row["dwell_ms"] or 0)
+    for mode in ("grid", "detail_swipe", "dense_reader"):
+        out.setdefault(mode, {"events": 0, "dwell_ms": 0})
+    return out
 
 
 def save_delivered_signal(
@@ -1439,10 +1561,18 @@ def get_algorithm_history(limit: int = 50) -> list[dict]:
         # Order by version DESC (tiebreak on id DESC) so newer adoptions beat
         # same-timestamp seed rows that the default CURRENT_TIMESTAMP shares.
         rows = conn.execute(
-            """SELECT version, created_at, created_by, origin, fitness_score,
+            """SELECT version, config, created_at, created_by, origin, fitness_score,
                       diff_from_previous
                FROM algorithm_versions
                ORDER BY version DESC, id DESC LIMIT ?""",
             (limit,),
         ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["config"] = json.loads(item.get("config") or "{}")
+        except Exception:
+            item["config"] = {}
+        out.append(item)
+    return out

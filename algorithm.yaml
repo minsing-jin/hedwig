@@ -111,3 +111,59 @@ meta_evolution:
     duration_days: 7
     parallel_variants: 3
   rollback_if_fitness_drops: true
+
+# ---------------------------------------------------------------------------
+# Personal Algorithm Engine — additive post-ranking policy
+# Preserves the hybrid/SOTA ensemble final_score above; these policies control
+# feed UX, reward interpretation, exploration, media metadata, and delivery
+# after ranking. User-owned and natural-language editable.
+# ---------------------------------------------------------------------------
+personal_algorithm:
+  feed:
+    default_mode: grid
+    available_modes: [grid, detail_swipe, dense_reader]
+  swipe_policy:
+    left:
+      action: save_later
+      reward: 0.8
+      strength: strong_positive
+    right:
+      action: skip
+      reward: -0.1
+      strength: weak_negative
+    next:
+      action: skip
+      reward: 0.0
+      strength: weak_neutral
+    skip_strength: weak
+  reward_weights:
+    save: 1.0
+    open: 0.8
+    not_interested: -1.0
+    dwell: 0.2
+    skip: -0.1
+    swipe: 0.1
+  exploration:
+    enabled: true
+    rate: 0.10
+    min_rate: 0.05
+    max_rate: 0.15
+    labels: [anomaly, contrarian, critical, opposing]
+  media:
+    default_strategy: text_thumbnail_transcript
+    full_understanding_enabled: false
+  delivery:
+    enabled: true
+    surfaces: [critical, daily, weekly, pwa, tray]
+    channels: [dashboard, email, slack, discord, pwa, tray]
+    default_channel: dashboard
+    repeat:
+      enabled: true
+      max_count: 2
+  staged_issues:
+    - Feed UX
+    - Behavior Raw+Reward
+    - NL policy control
+    - Delivery policy
+    - optional Multimodal
+    - Composite Fitness future work

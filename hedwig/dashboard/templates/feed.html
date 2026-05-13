@@ -2,10 +2,17 @@
 {% block title %}Feed — Hedwig{% endblock %}
 {% block content %}
 
-<div class="feed-shell" data-stream="{{ request.query_params.get('stream', 'default') }}">
+<div class="feed-shell" data-stream="{{ request.query_params.get('stream', 'default') }}" data-mode="grid">
   <div class="feed-head">
-    <h1>📱 Feed</h1>
-    <span class="muted">키보드: j 다음 · k 이전 · u 👍 · d 👎 · s save · ? 묻기 · o 원본</span>
+    <div>
+      <h1>Feed</h1>
+      <span class="muted">Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.</span>
+    </div>
+    <div class="mode-switch" role="tablist" aria-label="Feed mode">
+      <button class="mode-btn active" data-mode="grid">Grid</button>
+      <button class="mode-btn" data-mode="detail_swipe">Detail Swipe</button>
+      <button class="mode-btn" data-mode="dense_reader">Dense Reader</button>
+    </div>
   </div>
 
   <div class="feed-tabs">
@@ -15,24 +22,27 @@
     {% endfor %}
   </div>
 
-  <div id="feed-list" class="feed-list" tabindex="0" aria-label="Hedwig feed"></div>
-  <div id="feed-end" class="feed-end muted">스크롤하면 더 불러옵니다…</div>
+  <div id="feed-list" class="feed-list grid-mode" tabindex="0" aria-label="Hedwig feed"></div>
+  <div id="feed-end" class="feed-end muted">Scroll to load more…</div>
 </div>
 
 <script>
 const feedEl = document.getElementById('feed-list');
 const endEl = document.getElementById('feed-end');
-const stream = document.querySelector('.feed-shell').dataset.stream || 'default';
+const shell = document.querySelector('.feed-shell');
+const stream = shell.dataset.stream || 'default';
+let mode = shell.dataset.mode || 'grid';
 let nextCursor = '';
 let loading = false;
 let hasMore = true;
 let focusIdx = -1;
 const eventQueue = [];
-const viewStarts = new Map();      // signalId → ts
+const viewStarts = new Map();
+const sessionViewed = new Set();
 
-// ---- Beacon (S3) -----------------------------------------------------------
 function enqueue(ev) {
   ev.captured_at = Date.now();
+  ev.feed_mode = mode;
   eventQueue.push(ev);
   if (eventQueue.length >= 12) flushBeacon();
 }
@@ -40,82 +50,94 @@ function flushBeacon() {
   if (!eventQueue.length) return;
   const payload = {events: eventQueue.splice(0)};
   if (navigator.sendBeacon) {
-    const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
-    navigator.sendBeacon('/events/beacon', blob);
+    navigator.sendBeacon('/events/beacon', new Blob([JSON.stringify(payload)], {type: 'application/json'}));
   } else {
-    fetch('/events/beacon', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload), keepalive: true,
-    });
+    fetch('/events/beacon', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload), keepalive: true});
   }
 }
 window.addEventListener('pagehide', flushBeacon);
 window.addEventListener('beforeunload', flushBeacon);
 setInterval(flushBeacon, 3000);
 
-// ---- Card builder ----------------------------------------------------------
+function setMode(nextMode, selectedCard = null) {
+  mode = nextMode;
+  shell.dataset.mode = mode;
+  feedEl.className = `feed-list ${mode.replace('_', '-')}-mode`;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (selectedCard) {
+    focusIdx = [...document.querySelectorAll('.feed-card')].indexOf(selectedCard);
+    selectedCard.classList.add('focused');
+    selectedCard.scrollIntoView({block: 'center', behavior: 'smooth'});
+    enqueue({signal_id: selectedCard.dataset.signalId, event_type: 'viewed_card', position_in_feed: selectedCard.dataset.position, feed_id: stream});
+  }
+}
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+
 function makeCard(item) {
   const el = document.createElement('article');
   el.className = 'feed-card';
   el.dataset.signalId = item.id;
   el.dataset.position = item.feed_position;
   el.dataset.url = item.url || '';
-  const platform = (item.platform || '').replace(/[^a-z0-9_]/gi, '');
   const score = (item.score || 0).toFixed(2);
   const urgency = item.urgency || 'digest';
+  const label = item.anomaly_label ? `<span class="anomaly-label">${escapeHtml(item.anomaly_label.type)}: ${escapeHtml(item.anomaly_label.reason)}</span>` : '';
   el.innerHTML = `
     <header class="card-head">
-      <span class="pill plat-${platform}">${item.platform || ''}</span>
+      <span class="pill">${escapeHtml(item.platform || '')}</span>
       <span class="pill urg-${urgency}">${urgency}</span>
-      <span class="muted">score ${score}</span>
+      <span class="muted">ensemble ${score}</span>
+      ${label}
     </header>
-    <h2 class="card-title">
-      <a href="${item.url || '#'}" target="_blank" rel="noopener">${escapeHtml(item.title || '')}</a>
-    </h2>
+    <h2 class="card-title"><a href="${item.url || '#'}" target="_blank" rel="noopener">${escapeHtml(item.title || '')}</a></h2>
     ${item.why_relevant ? `<p class="card-why">${escapeHtml(item.why_relevant)}</p>` : ''}
-    ${item.devils_advocate ? `<p class="card-devil"><em>↩ ${escapeHtml(item.devils_advocate)}</em></p>` : ''}
-    <div class="card-meta muted">${escapeHtml(item.author || '')}</div>
+    ${item.devils_advocate ? `<p class="card-devil"><em>${escapeHtml(item.devils_advocate)}</em></p>` : ''}
+    <div class="card-meta muted">${escapeHtml(item.author || '')} · delivery ${escapeHtml(item.delivery_policy?.surface || 'daily')} via ${escapeHtml(item.delivery_policy?.channel || 'dashboard')}</div>
     <div class="card-actions">
-      <button data-act="up">👍</button>
-      <button data-act="down">👎</button>
-      <button data-act="save">⭐ save</button>
-      <button data-act="share">↗ share</button>
-      <button data-act="qa">? ask</button>
-      <button data-act="open">↗ open</button>
+      <button data-act="save">Left: save/later</button>
+      <button data-act="next">Right/next: skip</button>
+      <button data-act="not_interested">Not interested</button>
+      <button data-act="open">Open</button>
+      <button data-act="dense">Dense</button>
+      <button data-act="qa">Ask</button>
     </div>
   `;
+  el.addEventListener('click', e => {
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    setMode('detail_swipe', el);
+  });
   el.querySelectorAll('button[data-act]').forEach(b => {
     b.addEventListener('click', e => onAction(el, e.currentTarget.dataset.act));
   });
+  enqueue({signal_id: item.id, event_type: 'card_impression', position_in_feed: item.feed_position, feed_id: stream});
   return el;
 }
 function escapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// ---- Page loader -----------------------------------------------------------
 async function loadPage() {
   if (loading || !hasMore) return;
   loading = true;
-  endEl.textContent = '불러오는 중…';
-  const url = `/feed/api?stream=${encodeURIComponent(stream)}&limit=30` +
-              (nextCursor ? `&cursor=${encodeURIComponent(nextCursor)}` : '');
+  endEl.textContent = 'Loading…';
+  const url = `/feed/api?stream=${encodeURIComponent(stream)}&limit=30` + (nextCursor ? `&cursor=${encodeURIComponent(nextCursor)}` : '');
   try {
     const r = await fetch(url);
     const data = await r.json();
     (data.items || []).forEach(it => feedEl.appendChild(makeCard(it)));
     nextCursor = data.next_cursor || '';
     hasMore = !!data.has_more;
-    endEl.textContent = hasMore ? '스크롤하면 더 불러옵니다…' : '— 끝 —';
+    endEl.textContent = hasMore ? 'Scroll to load more…' : 'End';
     bindObserver();
   } catch (e) {
-    endEl.textContent = `로드 실패: ${e}`;
+    endEl.textContent = `Load failed: ${e}`;
   } finally {
     loading = false;
   }
 }
 
-// ---- IntersectionObserver for view_start / view_end (S3) ------------------
 let io;
 function bindObserver() {
   if (!io) {
@@ -126,21 +148,15 @@ function bindObserver() {
         if (en.isIntersecting && en.intersectionRatio >= 0.5) {
           if (!viewStarts.has(sid)) {
             viewStarts.set(sid, Date.now());
-            enqueue({signal_id: sid, event_type: 'view_start',
-                     position_in_feed: pos, feed_id: stream, device: deviceTag()});
+            sessionViewed.add(sid);
+            enqueue({signal_id: sid, event_type: 'view_start', position_in_feed: pos, feed_id: stream, device: deviceTag(), viewed_cards_session: sessionViewed.size});
+            enqueue({signal_id: sid, event_type: 'viewed_card', position_in_feed: pos, feed_id: stream, device: deviceTag(), viewed_cards_session: sessionViewed.size});
           }
         } else if (viewStarts.has(sid)) {
           const dwell = Date.now() - viewStarts.get(sid);
           viewStarts.delete(sid);
-          enqueue({signal_id: sid, event_type: 'view_end', dwell_ms: dwell,
-                   position_in_feed: pos, feed_id: stream, device: deviceTag()});
-          if (dwell >= 2000) {
-            enqueue({signal_id: sid, event_type: 'dwell', dwell_ms: dwell,
-                     position_in_feed: pos, feed_id: stream, device: deviceTag()});
-          } else {
-            enqueue({signal_id: sid, event_type: 'skip', dwell_ms: dwell,
-                     position_in_feed: pos, feed_id: stream, device: deviceTag()});
-          }
+          enqueue({signal_id: sid, event_type: 'view_end', dwell_ms: dwell, position_in_feed: pos, feed_id: stream, device: deviceTag()});
+          enqueue({signal_id: sid, event_type: dwell >= 2000 ? 'dwell' : 'skip', dwell_ms: dwell, position_in_feed: pos, feed_id: stream, device: deviceTag()});
         }
       }
     }, {threshold: [0, 0.5, 1]});
@@ -148,79 +164,84 @@ function bindObserver() {
   document.querySelectorAll('.feed-card').forEach(card => io.observe(card));
 }
 function deviceTag() {
-  const ua = navigator.userAgent || '';
-  if (/Android|iPhone|iPad/i.test(ua)) return 'mobile_web';
-  return 'desktop';
+  return /Android|iPhone|iPad/i.test(navigator.userAgent || '') ? 'mobile_web' : 'desktop';
 }
 
-// ---- Infinite scroll trigger ----------------------------------------------
-const tail = new IntersectionObserver(entries => {
+new IntersectionObserver(entries => {
   if (entries[0].isIntersecting) loadPage();
-}, {rootMargin: '300px'});
-tail.observe(endEl);
+}, {rootMargin: '300px'}).observe(endEl);
 
-// ---- Actions (S2) ----------------------------------------------------------
 async function onAction(card, act) {
   const sid = card.dataset.signalId;
-  if (act === 'up') return doVote(sid, 'up', card);
-  if (act === 'down') return doVote(sid, 'down', card);
-  if (act === 'save') return enqueue({signal_id: sid, event_type: 'save',
-                                      feed_id: stream, device: deviceTag()});
-  if (act === 'share') return enqueue({signal_id: sid, event_type: 'share',
-                                       feed_id: stream, device: deviceTag()});
-  if (act === 'qa') return location.assign('/#qa-section');
-  if (act === 'open') {
-    enqueue({signal_id: sid, event_type: 'click_link',
-             feed_id: stream, device: deviceTag()});
-    if (card.dataset.url) window.open(card.dataset.url, '_blank');
+  const base = {signal_id: sid, position_in_feed: card.dataset.position, feed_id: stream, device: deviceTag()};
+  if (act === 'save') {
+    card.classList.add('voted-up');
+    enqueue({...base, event_type: 'save'});
+    enqueue({...base, event_type: 'swipe_left'});
+    return;
   }
+  if (act === 'next') {
+    card.classList.add('dimmed');
+    enqueue({...base, event_type: 'skip'});
+    enqueue({...base, event_type: 'swipe_right'});
+    focusNext();
+    return;
+  }
+  if (act === 'not_interested') {
+    card.classList.add('voted-down');
+    enqueue({...base, event_type: 'not_interested'});
+    try { await fetch(`/feedback/${encodeURIComponent(sid)}/down`, {method: 'POST'}); } catch (e) {}
+    return;
+  }
+  if (act === 'open') {
+    enqueue({...base, event_type: 'open'});
+    enqueue({...base, event_type: 'click_link'});
+    if (card.dataset.url) window.open(card.dataset.url, '_blank');
+    return;
+  }
+  if (act === 'dense') return setMode('dense_reader', card);
+  if (act === 'qa') return location.assign('/#qa-section');
 }
-async function doVote(sid, vote, card) {
-  card.classList.add(`voted-${vote}`);
-  try {
-    await fetch(`/feedback/${encodeURIComponent(sid)}/${vote}`, {method: 'POST'});
-  } catch (e) { /* swallow */ }
+function focusNext() {
+  const cards = [...document.querySelectorAll('.feed-card')];
+  focusIdx = Math.min(focusIdx + 1, cards.length - 1);
+  cards[focusIdx]?.scrollIntoView({block: 'center', behavior: 'smooth'});
+  cards.forEach((c, i) => c.classList.toggle('focused', i === focusIdx));
 }
 
-// ---- Keyboard (S2) ---------------------------------------------------------
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   const cards = [...document.querySelectorAll('.feed-card')];
   if (!cards.length) return;
-  if (e.key === 'j') {
-    focusIdx = Math.min(focusIdx + 1, cards.length - 1);
-    cards[focusIdx]?.scrollIntoView({block: 'center', behavior: 'smooth'});
-    cards.forEach((c, i) => c.classList.toggle('focused', i === focusIdx));
-    e.preventDefault();
-  } else if (e.key === 'k') {
+  if (e.key === 'j') { focusNext(); e.preventDefault(); }
+  else if (e.key === 'k') {
     focusIdx = Math.max(focusIdx - 1, 0);
     cards[focusIdx]?.scrollIntoView({block: 'center', behavior: 'smooth'});
     cards.forEach((c, i) => c.classList.toggle('focused', i === focusIdx));
     e.preventDefault();
   } else if (focusIdx >= 0 && focusIdx < cards.length) {
     const card = cards[focusIdx];
-    if (e.key === 'u') onAction(card, 'up');
-    else if (e.key === 'd') onAction(card, 'down');
-    else if (e.key === 's') onAction(card, 'save');
+    if (e.key === 's' || e.key === 'ArrowLeft') onAction(card, 'save');
+    else if (e.key === 'ArrowRight' || e.key === 'n') onAction(card, 'next');
+    else if (e.key === 'd') onAction(card, 'not_interested');
     else if (e.key === 'o') onAction(card, 'open');
     else if (e.key === '?') onAction(card, 'qa');
   }
 });
 
-// ---- Touch swipe (S2) ------------------------------------------------------
 let touchStart = null;
 feedEl.addEventListener('touchstart', e => {
-  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY,
-                target: e.target.closest('.feed-card')};
+  touchStart = {x: e.touches[0].clientX, y: e.touches[0].clientY, target: e.target.closest('.feed-card')};
 }, {passive: true});
 feedEl.addEventListener('touchend', e => {
   if (!touchStart || !touchStart.target) return;
   const dx = e.changedTouches[0].clientX - touchStart.x;
   const dy = e.changedTouches[0].clientY - touchStart.y;
   if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-    onAction(touchStart.target, dx > 0 ? 'up' : 'down');
+    onAction(touchStart.target, dx < 0 ? 'save' : 'next');
   } else if (dy < -80 && Math.abs(dy) > Math.abs(dx)) {
-    onAction(touchStart.target, 'save');
+    enqueue({signal_id: touchStart.target.dataset.signalId, event_type: 'swipe_next', position_in_feed: touchStart.target.dataset.position, feed_id: stream, device: deviceTag()});
+    onAction(touchStart.target, 'next');
   }
   touchStart = null;
 }, {passive: true});
@@ -229,32 +250,39 @@ loadPage();
 </script>
 
 <style>
-.feed-shell { max-width: 720px; margin: 0 auto; }
-.feed-head h1 { margin: 4px 0; }
-.feed-list { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
-.feed-card { padding: 14px; border: 1px solid #e5e7eb; border-radius: 10px;
-              background: white; transition: box-shadow .15s, border-color .15s; }
-.feed-card.focused { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+.feed-shell { max-width: 1120px; margin: 0 auto; }
+.feed-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
+.feed-head h1 { margin: 4px 0; letter-spacing: -.03em; }
+.mode-switch { display: flex; gap: 8px; flex-wrap: wrap; }
+.mode-btn { border: 1px solid #d1d5db; border-radius: 999px; background: #fff; padding: 7px 12px; cursor: pointer; }
+.mode-btn.active { background: #111827; color: #fff; border-color: #111827; }
+.feed-list { margin-top: 16px; }
+.grid-mode { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.detail-swipe-mode { display: flex; overflow-x: auto; gap: 18px; scroll-snap-type: x mandatory; padding-bottom: 20px; }
+.detail-swipe-mode .feed-card { min-width: min(680px, 88vw); scroll-snap-align: center; }
+.dense-reader-mode { display: flex; flex-direction: column; gap: 6px; }
+.dense-reader-mode .feed-card { padding: 10px 12px; }
+.feed-card { padding: 14px; border: 1px solid #e5e7eb; border-radius: 14px; background: white; transition: box-shadow .15s, border-color .15s, transform .15s; cursor: pointer; }
+.feed-card:hover, .feed-card.focused { border-color: #111827; box-shadow: 0 10px 30px rgba(17,24,39,.08); }
 .feed-card.voted-up { background: #ecfdf5; }
-.feed-card.voted-down { background: #fef2f2; opacity: .7; }
-.card-head { display: flex; gap: 8px; align-items: center; font-size: 11px; }
-.card-title { font-size: 16px; margin: 8px 0 6px; line-height: 1.4; }
+.feed-card.voted-down { background: #fef2f2; opacity: .75; }
+.feed-card.dimmed { opacity: .62; }
+.card-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px; }
+.card-title { font-size: 17px; margin: 10px 0 6px; line-height: 1.35; }
 .card-title a { color: #111827; text-decoration: none; }
-.card-title a:hover { text-decoration: underline; }
-.card-why { color: #1f2937; font-size: 13px; line-height: 1.5; margin: 4px 0; }
-.card-devil { color: #7c2d12; font-size: 12px; line-height: 1.5; margin: 4px 0; }
+.card-why { color: #1f2937; font-size: 13px; line-height: 1.5; }
+.card-devil { color: #7c2d12; font-size: 12px; line-height: 1.5; }
 .card-meta { font-size: 11px; }
 .card-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-.card-actions button { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
-                       background: white; cursor: pointer; font-size: 12px; }
-.card-actions button:hover { background: #f3f4f6; }
-.pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px;
-        text-transform: lowercase; }
-.pill[class*="urg-alert"] { background: #fee2e2; color: #991b1b; }
-.pill[class*="urg-digest"] { background: #dbeafe; color: #1e40af; }
-.pill[class*="plat-"] { background: #f3f4f6; color: #374151; }
+.card-actions button { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 8px; background: white; cursor: pointer; font-size: 12px; }
+.pill, .anomaly-label { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #f3f4f6; color: #374151; }
+.anomaly-label { background: #fffbeb; color: #92400e; }
 .feed-end { padding: 24px; text-align: center; }
 .muted { color: #6b7280; }
+@media (max-width: 720px) {
+  .feed-head { display: block; }
+  .grid-mode { grid-template-columns: 1fr; }
+}
 </style>
 
 {% endblock %}
