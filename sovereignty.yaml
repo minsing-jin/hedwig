@@ -37,6 +37,7 @@ algorithm:
     - fitness.adoption_threshold
     - meta_evolution.enabled
     - meta_evolution.cadence_days
+    - personal_algorithm.*
   system_mutable:
     - retrieval.components.*.weight
     - ranking.components.*.enabled

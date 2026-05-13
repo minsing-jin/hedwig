@@ -529,6 +529,9 @@ def create_app(saas_mode: bool = False) -> FastAPI:
                 "url": r.get("url"),
                 "platform": r.get("platform"),
                 "score": r.get("relevance_score") or 0,
+                "ensemble_score": r.get("relevance_score") or 0,
+                "final_score": r.get("relevance_score") or 0,
+                "ensemble_rank": start_idx + offset + 1,
                 "urgency": r.get("urgency"),
                 "why_relevant": r.get("why_relevant"),
                 "devils_advocate": r.get("devils_advocate"),
@@ -612,7 +615,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.post("/policy/natural-language")
     async def personal_algorithm_nl_endpoint(request: Request):
         from hedwig.onboarding.nl_algo_editor import confirm_edit, propose_local_policy_edit
-        from hedwig.personal_algorithm import is_risky_policy_change, shadow_test_policy_edit
+        from hedwig.personal_algorithm import classify_policy_edit, shadow_test_policy_edit
 
         try:
             body = await request.json()
@@ -624,12 +627,17 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             return JSONResponse({"ok": False, "error": "intent required"}, status_code=400)
         proposed = propose_local_policy_edit(intent)
         changes = proposed.get("changes") or []
-        if is_risky_policy_change(changes) and not body.get("shadow_approved"):
+        classification = classify_policy_edit(changes, intent)
+        proposed["classification"] = classification
+        proposed["risk_class"] = classification["risk_class"]
+        if classification["risk_class"] == "future_ranking_experimental" and body.get("apply"):
+            return JSONResponse(_jsonable(confirm_edit(changes, intent=intent)))
+        if classification["risk_class"] == "risky_post_ranking" and not body.get("shadow_approved"):
             proposed["shadow"] = shadow_test_policy_edit(changes, intent)
             proposed["requires_shadow_test"] = True
             return JSONResponse(_jsonable(proposed))
         if body.get("apply"):
-            return JSONResponse(_jsonable(confirm_edit(changes, intent=intent)))
+            return JSONResponse(_jsonable(confirm_edit(changes, intent=intent, shadow_approved=bool(body.get("shadow_approved")))))
         return JSONResponse(_jsonable(proposed))
 
     @app.post("/policy/rollback")

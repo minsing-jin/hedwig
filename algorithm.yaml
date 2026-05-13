@@ -119,10 +119,29 @@ meta_evolution:
 # after ranking. User-owned and natural-language editable.
 # ---------------------------------------------------------------------------
 personal_algorithm:
+  ranking_boundary:
+    canonical_pre_layer_score: final_score
+    immutable_fields: [ensemble_score, final_score]
+    post_ranking_layers: [feed, exploration, media, delivery, reward]
+    contract: Post-ranking layers may annotate, reserve slots, route, and measure; they must not overwrite ensemble_score/final_score.
   feed:
     default_mode: grid
     available_modes: [grid, detail_swipe, dense_reader]
   swipe_policy:
+    immutable_defaults:
+      left:
+        action: save_later
+        reward: 0.8
+        strength: strong_positive
+      right:
+        action: skip
+        reward: -0.1
+        strength: weak_negative
+      next:
+        action: skip
+        reward: 0.0
+        strength: weak_neutral
+    user_overrides: {}
     left:
       action: save_later
       reward: 0.8
@@ -136,6 +155,7 @@ personal_algorithm:
       reward: 0.0
       strength: weak_neutral
     skip_strength: weak
+    shadow_test_required_for_semantic_change: true
   reward_weights:
     save: 1.0
     open: 0.8
@@ -151,6 +171,17 @@ personal_algorithm:
     labels: [anomaly, contrarian, critical, opposing]
   media:
     default_strategy: text_thumbnail_transcript
+    default_media_mode:
+      active_mode: Text+Thumbnail+Transcript
+      text: true
+      thumbnail: true
+      transcript: true
+    advanced_media_capability:
+      name: Full Media Understanding
+      enabled: false
+      required_env_flag: HEDWIG_FULL_MEDIA_UNDERSTANDING
+      policy_enabled: false
+      extracted_features: []
     full_understanding_enabled: false
   delivery:
     enabled: true
@@ -160,6 +191,14 @@ personal_algorithm:
     repeat:
       enabled: true
       max_count: 2
+  active_post_ranking_policy: {}
+  safe_preferences: {}
+  risky_pending_policy: []
+  future_ranking_experiments: []
+  composite_fitness:
+    optimization_enabled: false
+    current_generation_role: shadow_test_evaluation_metric_only
+    future_experiment_link: Composite Fitness future work
   staged_issues:
     - Feed UX
     - Behavior Raw+Reward
@@ -167,3 +206,4 @@ personal_algorithm:
     - Delivery policy
     - optional Multimodal
     - Composite Fitness future work
+    - Ranking Experimentation future work

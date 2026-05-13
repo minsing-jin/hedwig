@@ -84,11 +84,12 @@ function makeCard(item) {
   const score = (item.score || 0).toFixed(2);
   const urgency = item.urgency || 'digest';
   const label = item.anomaly_label ? `<span class="anomaly-label">${escapeHtml(item.anomaly_label.type)}: ${escapeHtml(item.anomaly_label.reason)}</span>` : '';
+  const preLayerScore = item.pre_layer_ranking?.final_score ?? item.final_score ?? item.ensemble_score ?? item.score ?? 0;
   el.innerHTML = `
     <header class="card-head">
       <span class="pill">${escapeHtml(item.platform || '')}</span>
       <span class="pill urg-${urgency}">${urgency}</span>
-      <span class="muted">ensemble ${score}</span>
+      <span class="muted">ensemble ${Number(preLayerScore || score).toFixed(2)}</span>
       ${label}
     </header>
     <h2 class="card-title"><a href="${item.url || '#'}" target="_blank" rel="noopener">${escapeHtml(item.title || '')}</a></h2>
@@ -104,6 +105,9 @@ function makeCard(item) {
       <button data-act="qa">Ask</button>
     </div>
   `;
+  if (item.delivery_decision?.emitted_event) {
+    enqueue({...item.delivery_decision.emitted_event, position_in_feed: item.feed_position, feed_mode: mode});
+  }
   el.addEventListener('click', e => {
     if (e.target.closest('button') || e.target.closest('a')) return;
     setMode('detail_swipe', el);

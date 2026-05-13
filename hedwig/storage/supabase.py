@@ -529,6 +529,29 @@ def get_usage_metrics_by_mode(days: int = 7) -> dict:
         bucket["dwell_ms"] += int(ev.get("dwell_ms") or 0)
     for mode in ("grid", "detail_swipe", "dense_reader"):
         out.setdefault(mode, {"events": 0, "dwell_ms": 0})
+    for mode, bucket in out.items():
+        impressions = max(1, int(bucket.get("card_impression", 0)))
+        sessions = max(1, int(bucket.get("session_start", 0)) or 1)
+        viewed = max(1, int(bucket.get("viewed_card", 0)))
+        raw_counts = {k: v for k, v in bucket.items() if isinstance(v, int)}
+        bucket["raw_counts"] = raw_counts
+        bucket["normalized_rates"] = {
+            key: {
+                "per_impression_rate": round(value / impressions, 6),
+                "per_session_rate": round(value / sessions, 6),
+                "per_viewed_card_rate": round(value / viewed, 6),
+            }
+            for key, value in raw_counts.items()
+        }
+        bucket["usage_metric"] = {
+            "session_id": "aggregate",
+            "feed_mode": mode,
+            "time_window_days": days,
+            "raw_count": int(bucket.get("events", 0)),
+            "per_impression_rate": round(int(bucket.get("events", 0)) / impressions, 6),
+            "per_session_rate": round(int(bucket.get("events", 0)) / sessions, 6),
+            "per_viewed_card_rate": round(int(bucket.get("events", 0)) / viewed, 6),
+        }
     return out
 
 

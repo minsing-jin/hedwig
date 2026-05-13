@@ -29,13 +29,17 @@ def test_raw_events_and_rewards_are_separate(tmp_env):
     assert {row["event_type"] for row in get_behavior_events(signal_id="1")} == {"save", "dwell", "not_interested"}
     rewards = get_behavior_rewards(signal_id="1")
     assert {row["signal_strength"] for row in rewards} >= {"strong_positive", "weak_positive", "strong_negative"}
+    assert all(row["derivation_rule_version"] == "personal_algorithm_reward_v1" for row in rewards)
+    assert any(row["source_event_ids"] for row in rewards)
+    assert {row["polarity"] for row in rewards} >= {"positive", "negative"}
 
 
 def test_swipe_defaults_and_policy_parser(tmp_env):
     from hedwig.onboarding.nl_algo_editor import propose_local_policy_edit
-    from hedwig.personal_algorithm import get_personal_algorithm_policy, interpret_behavior_event
+    from hedwig.personal_algorithm import classify_policy_edit, get_personal_algorithm_policy, interpret_behavior_event
 
     policy = get_personal_algorithm_policy()
+    assert policy["swipe_policy"]["immutable_defaults"]["left"]["action"] == "save_later"
     assert policy["swipe_policy"]["left"]["action"] == "save_later"
     assert policy["swipe_policy"]["left"]["reward"] > 0
     assert policy["swipe_policy"]["right"]["action"] == "skip"
@@ -46,6 +50,11 @@ def test_swipe_defaults_and_policy_parser(tmp_env):
     paths = {change["path"] for change in proposed["changes"]}
     assert "personal_algorithm.swipe_policy.right.reward" in paths
     assert any("preferences" in path for path in paths)
+    assert proposed["risk_class"] == "risky_post_ranking"
+    safe = classify_policy_edit([{"op": "set", "path": "personal_algorithm.feed.default_mode", "value": "grid"}], "use grid")
+    assert safe["risk_class"] == "safe"
+    future = propose_local_policy_edit("use composite fitness optimization to replace ranking")
+    assert future["risk_class"] == "future_ranking_experimental"
 
 
 def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
@@ -65,7 +74,10 @@ def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
     data = client.get("/feed/api?limit=20").json()
     assert data["items"]
     assert all("ensemble_score" in item for item in data["items"])
+    assert all("final_score" in item for item in data["items"])
+    assert all(item["pre_layer_ranking"]["immutable"] for item in data["items"])
     assert all("delivery_policy" in item for item in data["items"])
+    assert all(item["delivery_policy"]["does_not_mutate_ensemble"] for item in data["items"])
     assert all("media_profile" in item for item in data["items"])
     explored = [item for item in data["items"] if item.get("is_exploration")]
     assert explored
@@ -80,6 +92,7 @@ def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
     assert metrics["grid"]["card_impression"] == 1
     assert metrics["detail_swipe"]["viewed_card"] == 1
     assert metrics["dense_reader"]["open"] == 1
+    assert metrics["grid"]["normalized_rates"]["card_impression"]["per_impression_rate"] == 1.0
     assert client.get("/feed/metrics").json()["modes"]["grid"]["events"] >= 1
 
 
@@ -88,7 +101,7 @@ def test_shadow_fitness_media_and_rollback(tmp_env, monkeypatch):
 
     import hedwig.config as cfg
     import hedwig.onboarding.nl_algo_editor as nl_algo
-    from hedwig.onboarding.nl_algo_editor import confirm_edit, restore_algorithm_version
+    from hedwig.onboarding.nl_algo_editor import confirm_edit, propose_local_policy_edit, restore_algorithm_version
     from hedwig.personal_algorithm import (
         composite_fitness,
         get_personal_algorithm_policy,
@@ -112,7 +125,8 @@ def test_shadow_fitness_media_and_rollback(tmp_env, monkeypatch):
 
     assert media_profile_for_item({"title": "x"})["strategy"] == "text_thumbnail_transcript"
     monkeypatch.setenv("HEDWIG_FULL_MEDIA_UNDERSTANDING", "1")
-    assert get_personal_algorithm_policy()["media"]["full_understanding_enabled"] is True
+    assert get_personal_algorithm_policy()["media"]["full_understanding_enabled"] is False
+    assert media_profile_for_item({"title": "x"})["default_media_mode"]["active_mode"] == "Text+Thumbnail+Transcript"
 
     temp_algorithm = tmp_env / "algorithm.yaml"
     shutil.copy2(cfg.ALGORITHM_PATH, temp_algorithm)
@@ -122,5 +136,10 @@ def test_shadow_fitness_media_and_rollback(tmp_env, monkeypatch):
 
     applied = confirm_edit([{"op": "set", "path": "personal_algorithm.feed.default_mode", "value": "dense_reader"}], intent="dense")
     assert applied["ok"]
+    risky = confirm_edit([{"op": "set", "path": "personal_algorithm.exploration.rate", "value": 0.15}], intent="more exploration")
+    assert risky["requires_shadow_test"]
+    future = confirm_edit(propose_local_policy_edit("replace ranking with composite fitness optimization")["changes"], intent="replace ranking")
+    assert future["ok"]
+    assert "future_ranking_experiments" in future["diff"]
     restored = restore_algorithm_version(1)
     assert restored["ok"]

@@ -179,7 +179,7 @@ def init_db():
                 'view_start','view_end','dwell','skip','share','save',
                 'expand_source','click_link','open_qa','card_impression',
                 'viewed_card','open','swipe_left','swipe_right','swipe_next',
-                'not_interested'
+                'not_interested','delivery_decision'
             )),
             dwell_ms INTEGER,
             position_in_feed INTEGER,
@@ -198,6 +198,12 @@ def init_db():
             event_type TEXT NOT NULL,
             reward_value REAL NOT NULL,
             signal_strength TEXT NOT NULL,
+            polarity TEXT DEFAULT 'neutral',
+            strength_class TEXT DEFAULT 'weak',
+            confidence REAL DEFAULT 0.0,
+            uncertainty_reason TEXT DEFAULT '',
+            derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1',
+            source_event_ids TEXT DEFAULT '[]',
             policy_version INTEGER DEFAULT 1,
             feed_mode TEXT DEFAULT 'grid',
             source TEXT DEFAULT 'personal_algorithm',
@@ -326,6 +332,19 @@ def init_db():
                 )
         except Exception:
             pass
+        for stmt in (
+            "ALTER TABLE behavior_rewards ADD COLUMN polarity TEXT DEFAULT 'neutral'",
+            "ALTER TABLE behavior_rewards ADD COLUMN strength_class TEXT DEFAULT 'weak'",
+            "ALTER TABLE behavior_rewards ADD COLUMN confidence REAL DEFAULT 0.0",
+            "ALTER TABLE behavior_rewards ADD COLUMN uncertainty_reason TEXT DEFAULT ''",
+            "ALTER TABLE behavior_rewards ADD COLUMN derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1'",
+            "ALTER TABLE behavior_rewards ADD COLUMN source_event_ids TEXT DEFAULT '[]'",
+        ):
+            try:
+                with _conn() as alter_conn:
+                    alter_conn.execute(stmt)
+            except Exception:
+                pass
 
 
 def _now() -> str:
@@ -1177,7 +1196,7 @@ def save_behavior_events_batch(events: list[dict]) -> int:
         "view_start", "view_end", "dwell", "skip", "share", "save",
         "expand_source", "click_link", "open_qa", "card_impression",
         "viewed_card", "open", "swipe_left", "swipe_right", "swipe_next",
-        "not_interested",
+        "not_interested", "delivery_decision",
     }
     with _conn() as conn:
         for ev in events:
@@ -1186,7 +1205,7 @@ def save_behavior_events_batch(events: list[dict]) -> int:
             if etype not in valid_types or not sid:
                 continue
             try:
-                conn.execute(
+                cur = conn.execute(
                     """INSERT INTO behavior_events
                        (signal_id, event_type, dwell_ms, position_in_feed, feed_id, feed_mode, device)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -1198,6 +1217,7 @@ def save_behavior_events_batch(events: list[dict]) -> int:
                         ev.get("device"),
                     ),
                 )
+                ev["id"] = cur.lastrowid
                 saved += 1
             except Exception as e:
                 logger.warning("behavior batch row failed: %s", e)
@@ -1230,7 +1250,15 @@ def get_behavior_events(
     params.append(limit)
     with _conn() as conn:
         rows = conn.execute(q, params).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["source_event_ids"] = json.loads(item.get("source_event_ids") or "[]")
+        except Exception:
+            item["source_event_ids"] = []
+        out.append(item)
+    return out
 
 
 def save_behavior_reward(reward: dict) -> bool:
@@ -1240,14 +1268,22 @@ def save_behavior_reward(reward: dict) -> bool:
             conn.execute(
                 """INSERT INTO behavior_rewards
                    (signal_id, raw_event_id, event_type, reward_value,
-                    signal_strength, policy_version, feed_mode, source)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    signal_strength, polarity, strength_class, confidence,
+                    uncertainty_reason, derivation_rule_version, source_event_ids,
+                    policy_version, feed_mode, source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     str(reward.get("signal_id")),
                     reward.get("raw_event_id"),
                     str(reward.get("event_type")),
                     float(reward.get("reward_value") or 0),
                     str(reward.get("signal_strength") or "weak"),
+                    str(reward.get("polarity") or "neutral"),
+                    str(reward.get("strength_class") or reward.get("signal_strength") or "weak"),
+                    float(reward.get("confidence") or 0),
+                    str(reward.get("uncertainty_reason") or ""),
+                    str(reward.get("derivation_rule_version") or "personal_algorithm_reward_v1"),
+                    json.dumps(list(reward.get("source_event_ids") or []), ensure_ascii=False),
                     int(reward.get("policy_version") or 1),
                     str(reward.get("feed_mode") or "grid"),
                     str(reward.get("source") or "personal_algorithm"),
@@ -1292,7 +1328,15 @@ def get_behavior_rewards(
     params.append(limit)
     with _conn() as conn:
         rows = conn.execute(q, params).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["source_event_ids"] = json.loads(item.get("source_event_ids") or "[]")
+        except Exception:
+            item["source_event_ids"] = []
+        out.append(item)
+    return out
 
 
 def get_usage_metrics_by_mode(days: int = 7) -> dict:
@@ -1316,6 +1360,29 @@ def get_usage_metrics_by_mode(days: int = 7) -> dict:
         bucket["dwell_ms"] += int(row["dwell_ms"] or 0)
     for mode in ("grid", "detail_swipe", "dense_reader"):
         out.setdefault(mode, {"events": 0, "dwell_ms": 0})
+    for mode, bucket in out.items():
+        impressions = max(1, int(bucket.get("card_impression", 0)))
+        sessions = max(1, int(bucket.get("session_start", 0)) or 1)
+        viewed = max(1, int(bucket.get("viewed_card", 0)))
+        raw_counts = {k: v for k, v in bucket.items() if isinstance(v, int)}
+        bucket["raw_counts"] = raw_counts
+        bucket["normalized_rates"] = {
+            key: {
+                "per_impression_rate": round(value / impressions, 6),
+                "per_session_rate": round(value / sessions, 6),
+                "per_viewed_card_rate": round(value / viewed, 6),
+            }
+            for key, value in raw_counts.items()
+        }
+        bucket["usage_metric"] = {
+            "session_id": "aggregate",
+            "feed_mode": mode,
+            "time_window_days": days,
+            "raw_count": int(bucket.get("events", 0)),
+            "per_impression_rate": round(int(bucket.get("events", 0)) / impressions, 6),
+            "per_session_rate": round(int(bucket.get("events", 0)) / sessions, 6),
+            "per_viewed_card_rate": round(int(bucket.get("events", 0)) / viewed, 6),
+        }
     return out
 
 
