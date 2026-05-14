@@ -625,7 +625,16 @@ def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
     assert "Detail Swipe" in html
     assert "Dense Reader" in html
     assert "card_impression" in html
+    assert "session_id" in html
+    assert "feed_id: stream" in html
+    assert "position_in_feed: item.feed_position" in html
     assert "swipe_left" in html
+    assert "item.thumbnail_url ?" in html
+    assert "item.transcript_excerpt ?" in html
+    assert "data-act=\"save\"" in html
+    assert "data-act=\"not_interested\"" in html
+    assert "data-act=\"open\"" in html
+    assert "data-act=\"dense\"" in html
     dense_html = client.get("/feed?mode=dense_reader&stream=morning_deep").text
     assert 'data-mode="dense_reader"' in dense_html
     assert 'class="feed-list dense-reader-mode"' in dense_html
@@ -662,6 +671,39 @@ def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
     assert metrics["dense_reader"]["open"] == 1
     assert metrics["grid"]["normalized_rates"]["card_impression"]["per_impression_rate"] == 1.0
     assert client.get("/feed/metrics").json()["modes"]["grid"]["events"] >= 1
+
+
+def test_grid_item_contract_preserves_optional_media_metadata():
+    from hedwig.dashboard.app import _ranked_feed_item_from_signal_row
+    from hedwig.personal_algorithm import media_profile_for_item, route_items_after_ranking
+
+    item = _ranked_feed_item_from_signal_row(
+        {
+            "id": "media-1",
+            "title": "Media rich signal",
+            "url": "https://example.com/media",
+            "content": "Body text " * 40,
+            "platform": "video",
+            "relevance_score": 0.91,
+            "urgency": "digest",
+            "why_relevant": "Matches current project.",
+            "extra": '{"thumbnail_url":"https://cdn.example.com/thumb.jpg","transcript":"Transcript text for the card."}',
+        },
+        input_order=3,
+    )
+
+    assert item["feed_position"] == 3
+    assert item["thumbnail_url"] == "https://cdn.example.com/thumb.jpg"
+    assert item["transcript_excerpt"] == "Transcript text for the card."
+    assert item["content_excerpt"].startswith("Body text")
+    profile = media_profile_for_item(item)
+    assert profile["strategy"] == "text_thumbnail_transcript"
+    assert profile["has_text"] is True
+    assert profile["has_thumbnail"] is True
+    assert profile["has_transcript"] is True
+    routed = route_items_after_ranking([item])[0]
+    assert routed["pre_layer_ranking"]["immutable"] is True
+    assert routed["final_score"] == item["final_score"]
 
 
 def test_delivery_decision_metadata_is_post_ranking_schema(tmp_env):

@@ -1532,13 +1532,28 @@ def _ranked_feed_item_from_signal_row(row: dict, input_order: int) -> dict:
     Ambient surfaces and the manual feed share this adapter so delivery stays
     downstream of ranking instead of inventing a separate ordering path.
     """
+    import json
+
+    extra = row.get("extra") or {}
+    if isinstance(extra, str):
+        try:
+            extra = json.loads(extra)
+        except Exception:
+            extra = {}
+    if not isinstance(extra, dict):
+        extra = {}
     ensemble_score = _coalesce_score(row, "ensemble_score", "relevance_score")
     final_score = _coalesce_score(row, "final_score", "relevance_score", "ensemble_score")
     input_rank = row.get("ensemble_rank") or row.get("rank") or row.get("rank_position") or input_order + 1
+    content = str(row.get("content") or "")
+    transcript = str(extra.get("transcript") or "")
     item = {
         "id": row.get("id"),
         "title": row.get("title"),
         "url": row.get("url"),
+        "content_excerpt": content[:220],
+        "thumbnail_url": extra.get("thumbnail_url") or extra.get("thumbnail"),
+        "transcript_excerpt": transcript[:220],
         "platform": row.get("platform"),
         "score": row.get("relevance_score") if row.get("relevance_score") is not None else final_score,
         "ensemble_score": ensemble_score,
