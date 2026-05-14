@@ -12,6 +12,12 @@
 
 ## 한눈에
 
+> 현재 구현의 정확한 cold-start truth:
+> Hedwig는 처음부터 외부 pretrained/SOTA 모델을 필수로 가져와 쓰지 않습니다.
+> 기본은 사용자가 소유한 `algorithm.yaml` prior + 로컬 logistic LTR이며,
+> feedback/history가 충분하고 dependency/model 파일이 준비된 경우에만 LightGBM
+> LambdaMART 같은 optional SOTA backend가 active backend가 됩니다.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  20개 소스 (병렬 asyncio.gather, ~30초)                          │
@@ -30,7 +36,7 @@
 │  STAGE B — RANKING ENSEMBLE (algorithm.yaml 로 사용자 제어)      │
 │                                                                  │
 │  ┌─ Cheap pass (전체 200개에 적용) ──────────────────────┐       │
-│  │  🌳 LTR        LightGBM LambdaMART / logistic SGD     │       │
+│  │  🌳 LTR        priors → logistic SGD → LightGBM       │       │
 │  │  🔡 content    OpenAI embedding cosine / Jaccard      │       │
 │  │  📈 popularity authority × recency                     │       │
 │  │  🎰 bandit     Thompson sampling per platform          │       │
@@ -61,7 +67,7 @@
 
 | 혼합 차원 | 무엇과 무엇이 섞이나 |
 |---|---|
-| **모델 유형** | Tree-based (LightGBM) + Linear (logistic) + Embedding (cosine) + Bayesian (bandit) + Heuristic (popularity) + LLM |
+| **모델 유형** | Default priors + Linear (logistic) + optional Tree-based (LightGBM) + Embedding (cosine) + Bayesian (bandit) + Heuristic (popularity) + LLM |
 | **비용 / 정확도** | 저렴한 cheap-everything 패스 + 비싼 top_k 재랭킹 패스 |
 | **신호 종류** | Behavior(LTR feature) + Semantic(embedding) + Temporal(recency) + Exploration(bandit) + Sequence(SASRec) + Reasoning(LLM) |
 | **소유권** | 사용자 yaml 으로 제어 + 시스템이 진화 |
@@ -73,7 +79,7 @@
 | 컴포넌트 | 무엇을 잡나 | 모델 유형 | 학습 방식 | 비용 |
 |---|---|---|---|---|
 | 🧠 **llm_judge** | 의미적 적합성 + 반대 관점 | GPT-4o-mini | 프롬프트 (학습 없음) | 높음 (top_k 만) |
-| 🌳 **ltr** | 과거 피드백 패턴 (8 feature) | LambdaMART / logistic | weekly REINFORCE + monthly LightGBM 재학습 | 낮음 |
+| 🌳 **ltr** | 과거 피드백 패턴 (8 feature) | 기본 prior / logistic / optional LambdaMART | feedback SGD + monthly LightGBM 재학습(가능 시) | 낮음 |
 | 🔡 **content_based** | criteria ↔ post 의미 거리 | OpenAI embedding cosine | 학습 없음 (인스턴스 caching) | 중간 (1회 cache) |
 | 📈 **popularity_prior** | 권위 × 최신성 | 수식 | 없음 (decay 파라미터) | 거의 없음 |
 | 🎰 **bandit** | 탐험 / 미지의 플랫폼 발견 | Thompson sampling | 자동 (Beta 사후분포) | 거의 없음 |
@@ -86,14 +92,14 @@
 | 패턴 | 산업 표준 | Hedwig |
 |---|---|---|
 | 2-stage retrieval → ranking | YouTube · Twitter · Instagram | ✅ 동일 구조 |
-| LambdaMART (LTR) | LinkedIn · Microsoft | ✅ LightGBM |
+| LambdaMART (LTR) | LinkedIn · Microsoft | ⚙️ optional LightGBM, dependency/model 필요 |
 | Two-tower DSSM | Pinterest | ⚠️ embedding cosine 으로 lite 대체 |
 | MMOE multi-task | YouTube ranker | ✅ multi_task fitness (lite) |
 | Sequential transformer | TikTok · SASRec · BERT4Rec | ⚠️ Jaccard sequential lite |
-| Contextual bandit | Yahoo · Spotify | ✅ Thompson sampling |
-| LLM-as-recommender | P5 · RecLLM (학계) | ✅ llm_rec 컴포넌트 |
+| Contextual bandit | Yahoo · Spotify | ⚙️ Thompson sampling, 기본 off |
+| LLM-as-recommender | P5 · RecLLM (학계) | ⚙️ llm_rec 컴포넌트, 기본 off |
 | RLHF for personalization | 새로 등장 중 | ✅ REINFORCE-lite |
-| IPS debias | Schnabel et al | ✅ opt-in |
+| IPS debias | Schnabel et al | ⚙️ opt-in |
 
 ---
 
@@ -111,6 +117,8 @@
 ```
 
 → **Hybrid는 정적이 아님**. 매 사이클마다 컴포넌트 가중치, feature 목록, 구조 자체가 진화.
+→ `/status`의 **Owned Algorithm Training Status**가 현재 active backend, LightGBM readiness,
+feedback count, logistic weight 파일 존재 여부를 보여준다.
 
 ---
 

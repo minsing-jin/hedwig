@@ -90,7 +90,7 @@ python -m hedwig --quickstart
 | 5️⃣ | **Absorption Gradient** | L1 API → L2 OSS 코드 체화 → L3 패턴 추출. 신규 Novelty는 최후 |
 | 6️⃣ | **Web = Engine 계기판** | dogfooding + sandbox. 상업 껍데기 금지 |
 | 7️⃣ | **Cognitive Augmentation** | 주의 · 편향 · 작업기억 · 메타인지 4한계 매핑 |
-| 8️⃣ | **Hybrid Ensemble** | LLM + LightGBM LTR + content + popularity + bandit + sequential. 가중치·feature 자체가 진화 대상 |
+| 8️⃣ | **Hybrid Ensemble** | 기본 prior + 로컬 LTR에서 시작해, 충분한 feedback/dependency/model이 있을 때 LightGBM·bandit·sequential 등 선택적 SOTA backend로 확장. 가중치·feature 자체가 진화 대상 |
 | 9️⃣ | **Personal SNS Platform** | 소비 UX 자체가 알고리즘 표면 + 행동신호 입력. 브리프=pull, Feed=push |
 
 📖 전체 비전: [`docs/VISION_v3.md`](docs/VISION_v3.md)
@@ -138,7 +138,7 @@ python -m hedwig --quickstart
 | 컴포넌트 | 역할 |
 |---|---|
 | 🧠 **llm_judge** | top_k 만 (deep qualitative + Devil's Advocate) |
-| 🌳 **ltr** | LightGBM LambdaMART (libomp 시) / pure-Python logistic SGD fallback |
+| 🌳 **ltr** | 기본 prior → pure-Python logistic SGD → LightGBM LambdaMART 순으로 승급. LightGBM은 dependency + 학습된 모델 파일이 있을 때만 active |
 | 🔡 **content_based** | OpenAI embedding cosine / Jaccard fallback |
 | 📈 **popularity_prior** | authority × recency |
 | 🎰 **bandit** | Thompson sampling per platform |
@@ -152,6 +152,7 @@ python -m hedwig --quickstart
   - 4 strategies: weight_perturb / feature_toggle / structural / **feature_suggest_from_papers**
 
 > 🔍 모든 변화는 [`/evolution`](http://127.0.0.1:8765/evolution) 타임라인에 audit 가능.
+> 🧠 실제 backend 상태는 [`/status`](http://127.0.0.1:8765/status)의 **Owned Algorithm Training Status**에서 확인 가능.
 
 ---
 

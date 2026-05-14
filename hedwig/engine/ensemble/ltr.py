@@ -86,6 +86,41 @@ def _save_lgbm_model(booster) -> None:
     except Exception as e:
         logger.warning("lgbm save failed: %s", e)
 
+
+def _call_feedback_since(days: int) -> list[dict]:
+    """Call storage feedback APIs across local/supabase signature variants."""
+    try:
+        from hedwig.storage import get_feedback_since
+    except ImportError:
+        return []
+
+    since = datetime.now(tz=timezone.utc) - timedelta(days=days)
+    try:
+        return get_feedback_since(since=since) or []
+    except TypeError:
+        try:
+            return get_feedback_since(days=days) or []
+        except Exception:
+            return []
+    except Exception:
+        return []
+
+
+def _call_recent_signals(days: int) -> list[dict]:
+    try:
+        from hedwig.storage import get_recent_signals
+        return get_recent_signals(days=days) or []
+    except Exception:
+        return []
+
+
+def _call_behavior_events(limit: int = 2000) -> list[dict]:
+    try:
+        from hedwig.storage import get_behavior_events
+        return get_behavior_events(limit=limit) or []
+    except Exception:
+        return []
+
 DEFAULT_FEATURES = [
     "text_relevance",
     "source_authority",
@@ -275,26 +310,13 @@ class LTRRanker:
 
 
 def _load_feedback_token_sets(days: int = 28) -> tuple[set[str], set[str]]:
-    since = datetime.now(tz=timezone.utc) - timedelta(days=days)
     pos_tokens: set[str] = set()
     neg_tokens: set[str] = set()
 
-    try:
-        from hedwig.storage import get_feedback_since, get_recent_signals
-    except ImportError:
-        return pos_tokens, neg_tokens
-
-    try:
-        rows = get_feedback_since(since=since) or []
-    except Exception:
-        rows = []
-
+    rows = _call_feedback_since(days)
     up_ids = {str(r["signal_id"]) for r in rows if r.get("vote") == "up"}
     down_ids = {str(r["signal_id"]) for r in rows if r.get("vote") == "down"}
-    try:
-        signals = get_recent_signals(days=days) or []
-    except Exception:
-        signals = []
+    signals = _call_recent_signals(days)
 
     for s in signals:
         sid = str(s.get("id", ""))
@@ -304,6 +326,54 @@ def _load_feedback_token_sets(days: int = 28) -> tuple[set[str], set[str]]:
         if sid in down_ids:
             neg_tokens |= tokens
     return pos_tokens, neg_tokens
+
+
+def training_status(lookback_days: int = 28) -> dict:
+    """Truthful runtime status for the owned LTR learning path.
+
+    Hedwig always has a user-owned ``algorithm.yaml`` and deterministic priors.
+    It only uses the SOTA-ish LightGBM LambdaMART backend when the dependency
+    and a trained model file are both present; otherwise it serves through the
+    local logistic ranker, optionally trained from the user's feedback file.
+    """
+    feedback_rows = _call_feedback_since(lookback_days)
+    signals = _call_recent_signals(lookback_days)
+    behavior_events = _call_behavior_events(limit=2000)
+    lightgbm_available = _has_lightgbm()
+    lgbm_model_exists = LGBM_MODEL_PATH.exists()
+    lgbm_loadable = bool(_load_lgbm_model()) if lightgbm_available and lgbm_model_exists else False
+    logistic_weights_exist = WEIGHTS_PATH.exists()
+
+    if lgbm_loadable:
+        active_backend = "lightgbm_lambdamart"
+    elif logistic_weights_exist:
+        active_backend = "logistic_sgd"
+    else:
+        active_backend = "default_priors"
+
+    return {
+        "active_backend": active_backend,
+        "lookback_days": lookback_days,
+        "feedback_events": len(feedback_rows),
+        "recent_signals": len(signals),
+        "behavior_events": len(behavior_events),
+        "features": _active_features(),
+        "lightgbm": {
+            "dependency_available": lightgbm_available,
+            "model_path": str(LGBM_MODEL_PATH),
+            "model_exists": lgbm_model_exists,
+            "model_loadable": lgbm_loadable,
+            "ready": lgbm_loadable,
+            "enough_feedback": len(feedback_rows) >= 8,
+        },
+        "logistic": {
+            "weights_path": str(WEIGHTS_PATH),
+            "weights_exist": logistic_weights_exist,
+            "trained": logistic_weights_exist,
+            "enough_feedback": len(feedback_rows) >= 5,
+        },
+        "cold_start": len(feedback_rows) < 5,
+    }
 
 
 def fit_lgbm_from_history(
@@ -327,18 +397,17 @@ def fit_lgbm_from_history(
     except Exception as e:
         return {"trained": False, "reason": f"numpy/lightgbm import failed: {e}"}
 
-    since = datetime.now(tz=timezone.utc) - timedelta(days=lookback_days)
     try:
-        from hedwig.storage import get_feedback_since, get_recent_signals, get_behavior_events
+        from hedwig.storage import get_recent_signals
     except ImportError:
         return {"trained": False, "reason": "storage not available"}
 
-    feedback_rows = get_feedback_since(since=since) or []
+    feedback_rows = _call_feedback_since(lookback_days)
     if len(feedback_rows) < 8:
         return {"trained": False, "reason": "not enough feedback events (<8)"}
 
     signals = get_recent_signals(days=lookback_days) or []
-    behavior_events = get_behavior_events(limit=2000) or []
+    behavior_events = _call_behavior_events(limit=2000)
 
     features = _active_features()
     pos_tokens, neg_tokens = _load_feedback_token_sets(days=lookback_days)
@@ -423,17 +492,12 @@ def fit_from_history(
     epochs: int = 10,
 ) -> dict:
     """One-pass SGD over stored feedback. Safe to call any time."""
-    since = datetime.now(tz=timezone.utc) - timedelta(days=lookback_days)
-
     try:
-        from hedwig.storage import get_feedback_since, get_recent_signals
+        from hedwig.storage import get_recent_signals
     except ImportError:
         return {"trained": False, "reason": "storage not available"}
 
-    try:
-        rows = get_feedback_since(since=since) or []
-    except Exception:
-        rows = []
+    rows = _call_feedback_since(lookback_days)
 
     if len(rows) < 5:
         return {"trained": False, "reason": "not enough feedback events (<5)"}
