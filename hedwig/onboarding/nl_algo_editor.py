@@ -141,6 +141,41 @@ def propose_local_policy_edit(user_intent: str) -> dict:
     changes: list[dict] = []
     summary = "personal algorithm policy edit"
 
+    if any(token in text for token in (
+        "delivery",
+        "deliver",
+        "digest",
+        "quiet",
+        "do not disturb",
+        "dnd",
+        "notification",
+        "notify",
+        "snooze",
+        "repeat",
+        "tray",
+        "native",
+        "pwa",
+    )):
+        from hedwig.delivery.ambient import propose_delivery_policy_steering
+
+        delivery_proposal = propose_delivery_policy_steering(user_intent)
+        if delivery_proposal.get("ok"):
+            current = load_algorithm_config() or {}
+            after = apply_changes(current, delivery_proposal["changes"])
+            return {
+                "ok": True,
+                "summary": delivery_proposal["summary"],
+                "rationale": "Mapped natural-language delivery steering onto delivery_policy_config.v1 without adding ranking inputs.",
+                "changes": delivery_proposal["changes"],
+                "classification": delivery_proposal["classification"],
+                "risk_class": delivery_proposal["risk_class"],
+                "classification_reason": delivery_proposal["classification_reason"],
+                "matched_intents": delivery_proposal["matched_intents"],
+                "unsupported_intents": delivery_proposal["unsupported_intents"],
+                "ranking_boundary": delivery_proposal["ranking_boundary"],
+                "preview": {"before": current, "after": after, "diff": yaml_diff(current, after)},
+            }
+
     if "left" in text and ("save" in text or "later" in text):
         changes.append({"op": "set", "path": "personal_algorithm.swipe_policy.left.action", "value": "save_later"})
         changes.append({"op": "set", "path": "personal_algorithm.swipe_policy.left.reward", "value": 0.8})

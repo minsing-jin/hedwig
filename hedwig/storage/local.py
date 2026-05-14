@@ -170,8 +170,9 @@ def init_db():
             UNIQUE(signal_id, criteria_version, interpretation_style_id)
         );
 
-        -- v3 Phase 7: behavior_events — implicit-passive feedback channel
-        -- (dwell, skip, share, save) captured by the /feed page beacon.
+        -- v3 Phase 7: behavior_events — implicit-passive feedback channel.
+        -- Ambient delivery surfaces reuse this raw-event schema downstream of
+        -- ranking; rewards remain derived separately in behavior_rewards.
         CREATE TABLE IF NOT EXISTS behavior_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             signal_id TEXT NOT NULL,
@@ -179,7 +180,8 @@ def init_db():
                 'view_start','view_end','dwell','skip','share','save',
                 'expand_source','click_link','open_qa','card_impression',
                 'viewed_card','open','swipe_left','swipe_right','swipe_next',
-                'not_interested','delivery_decision'
+                'not_interested','delivery_decision',
+                'delivered','opened','dismissed','snoozed','saved','clicked'
             )),
             dwell_ms INTEGER,
             position_in_feed INTEGER,
@@ -339,6 +341,9 @@ def init_db():
             "ALTER TABLE behavior_rewards ADD COLUMN uncertainty_reason TEXT DEFAULT ''",
             "ALTER TABLE behavior_rewards ADD COLUMN derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1'",
             "ALTER TABLE behavior_rewards ADD COLUMN source_event_ids TEXT DEFAULT '[]'",
+            "ALTER TABLE behavior_rewards ADD COLUMN policy_version INTEGER DEFAULT 1",
+            "ALTER TABLE behavior_rewards ADD COLUMN feed_mode TEXT DEFAULT 'grid'",
+            "ALTER TABLE behavior_rewards ADD COLUMN source TEXT DEFAULT 'personal_algorithm'",
         ):
             try:
                 with _conn() as alter_conn:
@@ -1197,6 +1202,7 @@ def save_behavior_events_batch(events: list[dict]) -> int:
         "expand_source", "click_link", "open_qa", "card_impression",
         "viewed_card", "open", "swipe_left", "swipe_right", "swipe_next",
         "not_interested", "delivery_decision",
+        "delivered", "opened", "dismissed", "snoozed", "saved", "clicked",
     }
     with _conn() as conn:
         for ev in events:

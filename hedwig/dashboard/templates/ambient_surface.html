@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Ambient {{ surface|title }} · Hedwig{% endblock %}
+
+{% block content %}
+<section class="hero" style="background: radial-gradient(circle at top left, rgba(20,184,166,0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #172554 54%, #111827 100%); color: #f8fafc;">
+  <div class="badge">Ambient delivery · post-ranking</div>
+  <h1>{{ payload.entry_point.label if payload else "Ambient surface" }}</h1>
+  <p class="muted" style="color: #cbd5e1; max-width: 760px;">
+    A compact set of algorithm-selected items surfaced outside the manual feed.
+    Delivery metadata is layered after ranking; the visible reason is display-only copy.
+  </p>
+  {% if payload %}
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Surface</span>
+        <strong>{{ payload.surface }}</strong>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Items</span>
+        <strong>{{ payload.count }} / {{ payload.limit }}</strong>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Contract</span>
+        <strong>{{ payload.schema_version }}</strong>
+      </div>
+    </div>
+  {% endif %}
+</section>
+
+{% if error %}
+  <section class="card">
+    <h2>Surface unavailable</h2>
+    <p>{{ error }}</p>
+  </section>
+{% elif items %}
+  <section class="ambient-list" aria-label="Ambient {{ surface }} items">
+    {% for item in items %}
+      {% set display_reason = item.reason or "Selected by the post-ranking delivery policy." %}
+      <article class="ambient-card"
+               data-signal-id="{{ item.id }}"
+               data-surface="{{ item.delivery_decision.surface }}"
+               data-reason="{{ display_reason }}"
+               data-position="{{ loop.index0 }}"
+               data-feed-id="ambient:{{ payload.surface }}">
+        <header class="ambient-card-header">
+          <div>
+            <div class="ambient-kicker">
+              <span class="badge">{{ item.delivery_decision.surface }}</span>
+              <span class="badge">{{ item.delivery_timing }}</span>
+              <span class="badge">{{ item.delivery_channel }}</span>
+            </div>
+            <h2><a href="{{ item.url or '#' }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2>
+          </div>
+          <div class="ambient-status" aria-label="Delivery boundary">
+            <span>boundary</span>
+            <strong>display-only</strong>
+          </div>
+        </header>
+
+        <div class="ambient-reason" aria-label="Display-only reason">
+          <span>Why this surfaced</span>
+          <p>{{ display_reason }}</p>
+        </div>
+
+        <dl class="ambient-metadata">
+          <div>
+            <dt>Source</dt>
+            <dd>{{ item.platform or "unknown" }}{% if item.author %} · {{ item.author }}{% endif %}</dd>
+          </div>
+          <div>
+            <dt>Delivery rule</dt>
+            <dd>{{ item.delivery_decision.reason }}</dd>
+          </div>
+          <div>
+            <dt>Boundary</dt>
+            <dd>
+              post-ranking metadata · reason display-only
+            </dd>
+          </div>
+        </dl>
+
+        <div class="ambient-actions" aria-label="Ambient item actions">
+          <a class="btn btn-primary"
+             href="{{ item.url or '#' }}"
+             target="_blank"
+             rel="noopener noreferrer"
+             data-ambient-action="open"
+             data-event-type="opened"
+             data-reward-derived="false">Open</a>
+          <button type="button"
+                  class="btn"
+                  data-ambient-action="save"
+                  data-event-type="saved"
+                  data-reward-derived="false">Save later</button>
+          <button type="button"
+                  class="btn"
+                  data-ambient-action="snooze"
+                  data-event-type="snoozed"
+                  data-reward-derived="false">Snooze</button>
+          <button type="button"
+                  class="btn"
+                  data-ambient-action="dismiss"
+                  data-event-type="dismissed"
+                  data-reward-derived="false">Dismiss</button>
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="card">
+    <h2>No ambient items yet</h2>
+    <p class="muted">Run collection and ranking first; this surface only displays completed post-ranking selections.</p>
+  </section>
+{% endif %}
+
+<script>
+(() => {
+  const surface = {{ (payload.surface if payload else surface)|tojson }};
+  const cards = [...document.querySelectorAll('.ambient-card[data-signal-id]')];
+
+  function deviceTag() {
+    return /Android|iPhone|iPad/i.test(navigator.userAgent || '') ? 'mobile_web' : 'desktop';
+  }
+
+  function emitAmbientEvent(card, eventType, extra = {}) {
+    if (!card || !eventType) return;
+    const payload = {
+      events: [{
+        signal_id: card.dataset.signalId,
+        event_type: eventType,
+        position_in_feed: Number(card.dataset.position || 0),
+        feed_id: card.dataset.feedId || `ambient:${surface}`,
+        feed_mode: `ambient_${surface}`,
+        device: deviceTag(),
+        ambient_surface: surface,
+        delivery_surface: card.dataset.surface || surface,
+        raw_delivery_event: true,
+        reward_derived: false,
+        captured_at: Date.now(),
+      }],
+    };
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/events/beacon', new Blob([body], {type: 'application/json'}));
+      return;
+    }
+    fetch('/events/beacon', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  cards.forEach(card => emitAmbientEvent(card, 'delivered'));
+
+  document.querySelectorAll('[data-ambient-action][data-event-type]').forEach(control => {
+    control.addEventListener('click', () => {
+      const card = control.closest('.ambient-card');
+      emitAmbientEvent(card, control.dataset.eventType);
+      if (control.dataset.ambientAction === 'open') {
+        emitAmbientEvent(card, 'clicked');
+      }
+    });
+  });
+})();
+</script>
+
+<style>
+.ambient-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.ambient-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  padding: 1rem;
+}
+
+.ambient-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.ambient-kicker,
+.ambient-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ambient-card h2 {
+  font-size: 1.25rem;
+  line-height: 1.25;
+  margin: 0.65rem 0 0;
+}
+
+.ambient-card h2 a {
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.ambient-status {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  min-width: 128px;
+  padding: 0.65rem;
+  text-align: center;
+}
+
+.ambient-status span {
+  color: #64748b;
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-status strong {
+  color: #0f172a;
+  display: block;
+  font-size: 0.95rem;
+}
+
+.ambient-explanation {
+  color: #334155;
+  line-height: 1.55;
+  margin: 1rem 0;
+}
+
+.ambient-reason {
+  background: linear-gradient(135deg, #ecfeff 0%, #f8fafc 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 14px;
+  color: #334155;
+  line-height: 1.55;
+  margin: 1rem 0;
+  padding: 0.85rem;
+}
+
+.ambient-reason span {
+  color: #0369a1;
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.ambient-reason p {
+  margin: 0;
+}
+
+.ambient-metadata {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 1rem;
+}
+
+.ambient-metadata div {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 0.75rem;
+}
+
+.ambient-metadata dt {
+  color: #64748b;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ambient-metadata dd {
+  color: #111827;
+  margin: 0.25rem 0 0;
+}
+
+@media (max-width: 720px) {
+  .ambient-card-header {
+    display: block;
+  }
+
+  .ambient-status {
+    margin-top: 0.75rem;
+    text-align: left;
+  }
+
+  .ambient-metadata {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+{% endblock %}
