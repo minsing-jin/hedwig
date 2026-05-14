@@ -448,6 +448,9 @@ def save_behavior_events_batch(events: list[dict]) -> int:
         return 0
     try:
         result = _get_client().table("behavior_events").insert(rows).execute()
+        for event, stored in zip(events or [], result.data or []):
+            if isinstance(stored, dict) and stored.get("id") is not None:
+                event["id"] = stored.get("id")
         return len(result.data) if result.data else len(rows)
     except Exception as e:
         logger.error(f"Failed to save behavior event batch: {e}")

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +61,32 @@ class FetchMethod(str, Enum):
     BROWSER = "browser"
 
 
+class AmbientSurface(str, Enum):
+    """Post-ranking surfaces that can expose selected items ambiently."""
+    CRITICAL = "critical"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    PWA = "pwa"
+    TRAY = "tray"
+    NATIVE = "native"
+
+
+class DeliveryTiming(str, Enum):
+    NOW = "now"
+    NEXT_DIGEST = "next_digest"
+    WEEKLY_DIGEST = "weekly_digest"
+
+
+class DeliveryChannel(str, Enum):
+    DASHBOARD = "dashboard"
+    EMAIL = "email"
+    SLACK = "slack"
+    DISCORD = "discord"
+    PWA = "pwa"
+    TRAY = "tray"
+    NATIVE = "native"
+
+
 # ---------------------------------------------------------------------------
 # Core data models
 # ---------------------------------------------------------------------------
@@ -89,6 +115,303 @@ class ScoredSignal(BaseModel):
     devils_advocate: str = ""
     opportunity_note: str = ""
     exploration_tags: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Ambient delivery — post-ranking metadata, not ranking input/output
+# ---------------------------------------------------------------------------
+
+def _normalize_ambient_surface_value(value: object) -> str:
+    normalized = str(value or "").strip().lower().replace("-", "_")
+    return {
+        "native": "tray",
+        "native_notification": "tray",
+        "notification": "critical",
+        "digest": "daily",
+    }.get(normalized, normalized)
+
+
+def _validate_hhmm(value: str) -> str:
+    text = str(value or "").strip()
+    parts = text.split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise ValueError("time must use HH:MM format")
+    hour, minute = (int(parts[0]), int(parts[1]))
+    if hour > 23 or minute > 59:
+        raise ValueError("time must use HH:MM format")
+    return f"{hour:02d}:{minute:02d}"
+
+
+VALID_WEEKLY_DIGEST_DAYS = {
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+}
+
+
+class DeliveryPolicyTimingConfig(BaseModel):
+    """Steerable timing defaults for post-ranking ambient delivery."""
+    model_config = ConfigDict(extra="forbid")
+
+    critical_timing: DeliveryTiming = DeliveryTiming.NOW
+    daily_digest_time: str = "09:00"
+    weekly_digest_day: str = "monday"
+    weekly_digest_time: str = "09:00"
+    timezone: str = "local"
+    defer_to_quiet_hours: bool = True
+
+    @field_validator("daily_digest_time", "weekly_digest_time")
+    @classmethod
+    def validate_digest_time(cls, value: str) -> str:
+        return _validate_hhmm(value)
+
+    @field_validator("weekly_digest_day")
+    @classmethod
+    def validate_weekly_digest_day(cls, value: str) -> str:
+        day = str(value or "").strip().lower()
+        if day not in VALID_WEEKLY_DIGEST_DAYS:
+            raise ValueError("weekly_digest_day must be a weekday name")
+        return day
+
+
+class DeliveryPolicyRepeatConfig(BaseModel):
+    """Bounded repeat policy for ambient surfaces."""
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    max_count: int = Field(default=2, ge=0, le=10)
+    min_interval_minutes: int = Field(default=240, ge=0, le=10080)
+    snooze_minutes: int = Field(default=60, ge=0, le=10080)
+
+
+class DeliveryPolicyQuietHoursConfig(BaseModel):
+    """Quiet-hours steering that gates delivery exposure, not ranking."""
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    start: str = "22:00"
+    end: str = "07:00"
+    timezone: str = "local"
+    allow_critical_override: bool = True
+
+    @field_validator("start", "end")
+    @classmethod
+    def validate_quiet_hour(cls, value: str) -> str:
+        return _validate_hhmm(value)
+
+    @model_validator(mode="after")
+    def validate_quiet_hour_range(self) -> "DeliveryPolicyQuietHoursConfig":
+        if self.enabled and self.start == self.end:
+            raise ValueError("quiet_hours start and end must define a non-empty range")
+        return self
+
+
+class DeliveryPolicyUrgencyConfig(BaseModel):
+    """Urgency routing thresholds consumed only after ranking is complete."""
+    model_config = ConfigDict(extra="forbid")
+
+    critical_urgencies: list[UrgencyLevel] = Field(default_factory=lambda: [UrgencyLevel.ALERT])
+    critical_score_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+    daily_score_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    exploration_surface: AmbientSurface = AmbientSurface.PWA
+
+    @model_validator(mode="after")
+    def enforce_threshold_order(self) -> "DeliveryPolicyUrgencyConfig":
+        if self.critical_score_threshold < self.daily_score_threshold:
+            raise ValueError("critical_score_threshold must be greater than or equal to daily_score_threshold")
+        return self
+
+
+class DeliveryPolicyConfig(BaseModel):
+    """Versioned schema for steerable ambient delivery policy config."""
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
+
+    schema_version: str = "delivery_policy_config.v1"
+    enabled: bool = True
+    surfaces: list[AmbientSurface] = Field(
+        default_factory=lambda: [
+            AmbientSurface.CRITICAL,
+            AmbientSurface.DAILY,
+            AmbientSurface.WEEKLY,
+            AmbientSurface.PWA,
+            AmbientSurface.TRAY,
+        ]
+    )
+    preferred_surfaces: list[AmbientSurface] = Field(default_factory=lambda: [AmbientSurface.DAILY])
+    channels: list[DeliveryChannel] = Field(
+        default_factory=lambda: [
+            DeliveryChannel.DASHBOARD,
+            DeliveryChannel.EMAIL,
+            DeliveryChannel.SLACK,
+            DeliveryChannel.DISCORD,
+            DeliveryChannel.PWA,
+            DeliveryChannel.TRAY,
+        ]
+    )
+    default_channel: DeliveryChannel = DeliveryChannel.DASHBOARD
+    timing: DeliveryPolicyTimingConfig = Field(default_factory=DeliveryPolicyTimingConfig)
+    repeat: DeliveryPolicyRepeatConfig = Field(default_factory=DeliveryPolicyRepeatConfig)
+    quiet_hours: DeliveryPolicyQuietHoursConfig = Field(default_factory=DeliveryPolicyQuietHoursConfig)
+    urgency: DeliveryPolicyUrgencyConfig = Field(default_factory=DeliveryPolicyUrgencyConfig)
+    policy_layer: str = "post_ranking_delivery"
+    post_ranking_only: bool = True
+    ranking_input: bool = False
+    mutates_scores: bool = False
+    mutates_rank_identity: bool = False
+
+    @field_validator("surfaces", "preferred_surfaces", mode="before")
+    @classmethod
+    def normalize_surfaces(cls, value: object) -> list[str]:
+        values = value if isinstance(value, list) else [value]
+        normalized: list[str] = []
+        for item in values:
+            surface = _normalize_ambient_surface_value(item)
+            if surface and surface not in normalized:
+                normalized.append(surface)
+        return normalized
+
+    @model_validator(mode="after")
+    def enforce_post_ranking_policy_boundary(self) -> "DeliveryPolicyConfig":
+        if not self.post_ranking_only or self.ranking_input:
+            raise ValueError("delivery policy config must remain post-ranking metadata")
+        if self.mutates_scores or self.mutates_rank_identity:
+            raise ValueError("delivery policy config cannot mutate ranking scores or rank identity")
+        if self.default_channel not in self.channels:
+            raise ValueError("default_channel must be included in channels")
+        surface_values = {str(surface) for surface in self.surfaces}
+        preferred_values = {str(surface) for surface in self.preferred_surfaces}
+        if not preferred_values.issubset(surface_values):
+            raise ValueError("preferred_surfaces must be enabled in surfaces")
+        return self
+
+class DeliveryRankingSnapshot(BaseModel):
+    """Immutable score/rank values observed before delivery routing."""
+    input_ensemble_rank: Optional[int] = None
+    input_order: Optional[int] = None
+    rank_identifiers: dict = Field(default_factory=dict)
+    input_ensemble_score: float = 0.0
+    input_final_score: float = 0.0
+    immutable: bool = True
+
+
+class DeliveryExplanationMetadata(BaseModel):
+    """Display-only delivery explanation with no score-like authority."""
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = ""
+    display_only: bool = True
+    ranking_input: bool = False
+    score_like_authority: bool = False
+
+
+class DeliveryDecisionMetadata(BaseModel):
+    """Post-ranking delivery routing metadata for an already-ranked item."""
+    signal_id: str = ""
+    surface: AmbientSurface
+    canonical_surface: str = ""
+    eligible_surfaces: list[AmbientSurface] = Field(default_factory=list)
+    preferred_surfaces: list[AmbientSurface] = Field(default_factory=list)
+    surface_preference: dict = Field(default_factory=dict)
+    channel: DeliveryChannel = DeliveryChannel.DASHBOARD
+    timing: DeliveryTiming
+    urgency: str = ""
+    scheduling_priority: dict = Field(default_factory=dict)
+    repeat: bool = True
+    repeat_rule: dict = Field(default_factory=dict)
+    ranking_snapshot: DeliveryRankingSnapshot = Field(default_factory=DeliveryRankingSnapshot)
+    explanation: DeliveryExplanationMetadata = Field(default_factory=DeliveryExplanationMetadata)
+    delivery_schedule: dict = Field(default_factory=dict)
+    eligible_now: bool = True
+    defer_reason: str = ""
+    reason: str = "post-ranking delivery policy v1"
+    emitted_event: dict = Field(default_factory=dict)
+    decision_layer: str = "post_ranking_delivery"
+    post_ranking: bool = True
+    does_not_mutate_ensemble: bool = True
+    ranking_input: bool = False
+    ranking_output: bool = False
+
+
+class AmbientPreLayerRankingSnapshot(BaseModel):
+    """Immutable rank identity copied from the ranking layer for display."""
+    ensemble_score: float = 0.0
+    final_score: float = 0.0
+    input_rank: Optional[int] = None
+    input_order: Optional[int] = None
+    rank_identifiers: dict = Field(default_factory=dict)
+    immutable: bool = True
+
+
+class AmbientDeliveryItem(BaseModel):
+    """Small, surface-safe item shape consumed by ambient delivery clients."""
+    id: str
+    title: str = ""
+    url: str = ""
+    reason: str = ""
+    platform: Optional[str] = None
+    author: Optional[str] = None
+    surface: AmbientSurface
+    delivery_timing: DeliveryTiming
+    delivery_channel: DeliveryChannel
+    ensemble_score: float = 0.0
+    final_score: float = 0.0
+    pre_layer_ranking: AmbientPreLayerRankingSnapshot
+    delivery_decision: DeliveryDecisionMetadata
+    explanation: DeliveryExplanationMetadata = Field(default_factory=DeliveryExplanationMetadata)
+    why_relevant: str = ""
+    post_ranking_boundary: dict = Field(default_factory=lambda: {
+        "layer": "ambient_delivery",
+        "delivery_decisions_are_metadata": True,
+        "mutates_scores": False,
+        "mutates_rank_identity": False,
+        "explanation_is_display_only": True,
+    })
+
+    @model_validator(mode="after")
+    def enforce_display_only_explanation(self) -> "AmbientDeliveryItem":
+        if (
+            not self.explanation.display_only
+            or self.explanation.ranking_input
+            or self.explanation.score_like_authority
+        ):
+            raise ValueError("ambient explanations must remain display-only metadata")
+        if self.delivery_decision.ranking_input or self.delivery_decision.ranking_output:
+            raise ValueError("ambient delivery decisions cannot be ranking inputs or outputs")
+        if not self.pre_layer_ranking.immutable:
+            raise ValueError("ambient items require immutable pre-layer rank identity")
+        return self
+
+
+class AmbientDeliveryItemSet(BaseModel):
+    """Versioned contract for small algorithm-selected ambient item batches."""
+    schema_version: str = "ambient_delivery_item_set.v1"
+    surface: AmbientSurface
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    limit: int
+    count: int
+    items: list[AmbientDeliveryItem] = Field(default_factory=list)
+    post_ranking_boundary: dict = Field(default_factory=lambda: {
+        "layer": "ambient_delivery",
+        "delivery_decisions_are_metadata": True,
+        "mutates_scores": False,
+        "mutates_rank_identity": False,
+        "immutable_fields": ["ensemble_score", "final_score", "pre_layer_ranking"],
+        "explanation_is_display_only": True,
+    })
+
+    @model_validator(mode="after")
+    def enforce_small_bounded_item_set(self) -> "AmbientDeliveryItemSet":
+        if self.limit < 1 or self.limit > 50:
+            raise ValueError("ambient item-set limit must be between 1 and 50")
+        if self.count != len(self.items):
+            raise ValueError("ambient item-set count must match items length")
+        if len(self.items) > self.limit:
+            raise ValueError("ambient item-set cannot exceed its limit")
+        return self
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,9 @@ const SHELL_FILES = [
   '/',
   '/chat',
   '/feed',
+  '/ambient/surfaces',
+  '/ambient/pwa',
+  '/ambient/pwa/api',
   '/brief',
   '/static/style.css',
   '/static/v3.css',
@@ -53,13 +56,24 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try { data = event.data.json(); } catch (_) {}
   }
+  const reason = data.reason || data.body || '';
   event.waitUntil(self.registration.showNotification(
     data.title || 'Hedwig',
-    {body: data.body || '', icon: '/assets/hedwig-icon.svg', tag: 'critical'},
+    {
+      body: reason,
+      icon: '/assets/hedwig-icon.svg',
+      tag: data.tag || data.surface || 'critical',
+      data: {
+        reason,
+        surface: data.surface || 'critical',
+        url: data.url || '/ambient/critical',
+      },
+    },
   ));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow('/feed?stream=critical_only'));
+  const target = event.notification.data?.url || '/ambient/critical';
+  event.waitUntil(self.clients.openWindow(target));
 });

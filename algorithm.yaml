@@ -184,13 +184,40 @@ personal_algorithm:
       extracted_features: []
     full_understanding_enabled: false
   delivery:
+    schema_version: delivery_policy_config.v1
     enabled: true
     surfaces: [critical, daily, weekly, pwa, tray]
+    preferred_surfaces: [daily]
     channels: [dashboard, email, slack, discord, pwa, tray]
     default_channel: dashboard
+    timing:
+      critical_timing: now
+      daily_digest_time: "09:00"
+      weekly_digest_day: monday
+      weekly_digest_time: "09:00"
+      timezone: local
+      defer_to_quiet_hours: true
     repeat:
       enabled: true
       max_count: 2
+      min_interval_minutes: 240
+      snooze_minutes: 60
+    quiet_hours:
+      enabled: false
+      start: "22:00"
+      end: "07:00"
+      timezone: local
+      allow_critical_override: true
+    urgency:
+      critical_urgencies: [alert]
+      critical_score_threshold: 0.85
+      daily_score_threshold: 0.65
+      exploration_surface: pwa
+    policy_layer: post_ranking_delivery
+    post_ranking_only: true
+    ranking_input: false
+    mutates_scores: false
+    mutates_rank_identity: false
   active_post_ranking_policy: {}
   safe_preferences: {}
   risky_pending_policy: []

@@ -1,0 +1,80 @@
+goal: >
+  Implement Hedwig issue #20 ambient delivery surfaces so the personal
+  algorithm can expose high-value items in daily life without requiring users
+  to manually open the web feed, while preserving PR #18 / Gen 9 ranking
+  boundaries.
+
+constraints:
+  - Work only on Hedwig issue #20 ambient delivery UX.
+  - Base implementation on PR #18 / Gen 9 commit 471e9e6 and do not incorporate rejected Gen 10-13 output.
+  - Do not add Manus integration.
+  - Do not add LiteLLM or route through LiteLLM.
+  - Do not train new models in this issue.
+  - Do not add VLM or new media-understanding model work beyond existing metadata.
+  - Keep Composite Fitness production optimization out of scope for this issue.
+  - "Preserve existing ranking boundaries: do not mutate ensemble_score, final_score, or pre-layer ranking identity."
+  - Ambient delivery decisions must be post-ranking metadata layered after the existing ranking core.
+  - Explanation metadata is display-only and must not become score-like authority or a ranking input.
+  - Keep raw delivery behavior events separate from derived reward signals.
+  - Follow the repository issue-first PR workflow and prepare a PR that closes #20.
+  - Keep changes scoped and tested; existing PR #18 personal algorithm behavior must keep passing.
+
+acceptance_criteria:
+  - "Ambient delivery surfaces render a small set of algorithm-selected items without requiring manual feed entry."
+  - "Critical, daily, weekly, PWA, and tray/native delivery surfaces have clear routing semantics and tests."
+  - "Delivery decisions remain post-ranking metadata and preserve ensemble_score, final_score, and pre-layer ranking identity."
+  - "Users can steer delivery policy with natural language or config for timing, repeat, quiet hours, urgency, and preferred surfaces."
+  - "Delivery policy changes are classified as safe, risky_post_ranking, or future_ranking_experimental according to exposure impact."
+  - "Delivery events produce raw behavior events and derived rewards separately, reusing the PR #18 event/reward separation model."
+  - "Ambient delivery explanations show why an item appeared without creating score-like authority."
+  - "Existing feed behavior and PR #18 personal algorithm tests still pass."
+  - "The implementation includes focused tests for ambient delivery routing, policy steering, score preservation, event/reward separation, and explanation authority denial."
+  - "PR summary includes Closes #20 and references issue #7 and PR #18."
+
+ontology_schema:
+  name: HedwigAmbientDeliveryUX
+  description: Post-ranking ambient delivery layer for making user-owned algorithm outputs visible in daily life.
+  fields:
+    - name: ambient_surface
+      type: object
+      description: A delivery surface such as critical, daily, weekly, PWA, tray, or native notification.
+    - name: delivery_policy
+      type: object
+      description: Timing, repeat, quiet-hours, urgency, and preferred-surface steering state.
+    - name: delivery_decision
+      type: object
+      description: Post-ranking routing metadata that never mutates ranking scores or rank identity.
+    - name: delivery_event
+      type: object
+      description: Raw observed behavior such as delivered, opened, dismissed, snoozed, saved, or clicked.
+    - name: delivery_reward
+      type: object
+      description: Derived reward signal computed separately from raw events for later learning loops.
+    - name: explanation_boundary
+      type: object
+      description: Display-only explanation metadata that cannot become a score-like authority.
+
+evaluation_principles:
+  - name: ambient_visibility
+    description: The user can see selected items without manually opening the web feed.
+    weight: 0.25
+  - name: ranking_boundary_preservation
+    description: Ranking scores and pre-layer identity are unchanged by ambient delivery.
+    weight: 0.25
+  - name: steering_safety
+    description: Delivery steering is classified and bounded by exposure-impact risk.
+    weight: 0.20
+  - name: test_coverage
+    description: Focused tests prove routing, steering, score preservation, event/reward separation, and explanation boundaries.
+    weight: 0.20
+  - name: issue_workflow
+    description: Output is ready for a scoped PR closing #20 and referencing #7 and PR #18.
+    weight: 0.10
+
+metadata:
+  version: "1.0.0"
+  project_name: "hedwig-issue20-ambient-delivery"
+  issue: 20
+  base_commit: "471e9e6"
+  base_pr: 18
+  parent_issue: 7

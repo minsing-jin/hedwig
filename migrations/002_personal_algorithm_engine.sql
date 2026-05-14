@@ -12,7 +12,8 @@ ALTER TABLE behavior_events
         'view_start','view_end','dwell','skip','share','save',
         'expand_source','click_link','open_qa','card_impression',
         'viewed_card','open','swipe_left','swipe_right','swipe_next',
-        'not_interested','delivery_decision'
+        'not_interested','delivery_decision',
+        'delivered','opened','dismissed','snoozed','saved','clicked'
     ));
 
 CREATE TABLE IF NOT EXISTS behavior_rewards (
@@ -44,3 +45,6 @@ ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS confidence FLOAT DEFAULT 0
 ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS uncertainty_reason TEXT DEFAULT '';
 ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1';
 ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS source_event_ids JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS policy_version INTEGER DEFAULT 1;
+ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS feed_mode TEXT DEFAULT 'grid';
+ALTER TABLE behavior_rewards ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'personal_algorithm';
