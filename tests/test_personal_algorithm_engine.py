@@ -96,6 +96,46 @@ def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
     assert client.get("/feed/metrics").json()["modes"]["grid"]["events"] >= 1
 
 
+def test_delivery_decision_metadata_is_post_ranking_schema(tmp_env):
+    from hedwig.models import DeliveryDecisionMetadata, RawPost, ScoredSignal
+    from hedwig.personal_algorithm import route_items_after_ranking
+
+    assert "delivery_decision" not in RawPost.model_fields
+    assert "delivery_decision" not in ScoredSignal.model_fields
+    assert "delivery_policy" not in ScoredSignal.model_fields
+
+    ranked = [{
+        "id": "sig-1",
+        "title": "Important item",
+        "ensemble_score": 0.91,
+        "final_score": 0.88,
+        "ensemble_rank": 3,
+        "urgency": "alert",
+    }]
+    routed = route_items_after_ranking(ranked)
+    item = routed[0]
+    decision = item["delivery_decision"]
+
+    DeliveryDecisionMetadata.model_validate(decision)
+    assert item["ensemble_score"] == 0.91
+    assert item["final_score"] == 0.88
+    assert item["pre_layer_ranking"]["input_rank"] == 3
+    assert decision["decision_layer"] == "post_ranking_delivery"
+    assert decision["post_ranking"] is True
+    assert decision["ranking_input"] is False
+    assert decision["ranking_output"] is False
+    assert decision["does_not_mutate_ensemble"] is True
+    assert decision["ranking_snapshot"] == {
+        "input_ensemble_rank": 3,
+        "input_ensemble_score": 0.91,
+        "input_final_score": 0.88,
+        "immutable": True,
+    }
+    assert decision["explanation"]["display_only"] is True
+    assert decision["explanation"]["ranking_input"] is False
+    assert decision["explanation"]["score_like_authority"] is False
+
+
 def test_shadow_fitness_media_and_rollback(tmp_env, monkeypatch):
     import shutil
 

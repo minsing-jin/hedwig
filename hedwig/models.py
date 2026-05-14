@@ -61,6 +61,32 @@ class FetchMethod(str, Enum):
     BROWSER = "browser"
 
 
+class AmbientSurface(str, Enum):
+    """Post-ranking surfaces that can expose selected items ambiently."""
+    CRITICAL = "critical"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    PWA = "pwa"
+    TRAY = "tray"
+    NATIVE = "native"
+
+
+class DeliveryTiming(str, Enum):
+    NOW = "now"
+    NEXT_DIGEST = "next_digest"
+    WEEKLY_DIGEST = "weekly_digest"
+
+
+class DeliveryChannel(str, Enum):
+    DASHBOARD = "dashboard"
+    EMAIL = "email"
+    SLACK = "slack"
+    DISCORD = "discord"
+    PWA = "pwa"
+    TRAY = "tray"
+    NATIVE = "native"
+
+
 # ---------------------------------------------------------------------------
 # Core data models
 # ---------------------------------------------------------------------------
@@ -89,6 +115,45 @@ class ScoredSignal(BaseModel):
     devils_advocate: str = ""
     opportunity_note: str = ""
     exploration_tags: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Ambient delivery — post-ranking metadata, not ranking input/output
+# ---------------------------------------------------------------------------
+
+class DeliveryRankingSnapshot(BaseModel):
+    """Immutable score/rank values observed before delivery routing."""
+    input_ensemble_rank: Optional[int] = None
+    input_ensemble_score: float = 0.0
+    input_final_score: float = 0.0
+    immutable: bool = True
+
+
+class DeliveryExplanationMetadata(BaseModel):
+    """Display-only delivery explanation with no score-like authority."""
+    text: str = ""
+    display_only: bool = True
+    ranking_input: bool = False
+    score_like_authority: bool = False
+
+
+class DeliveryDecisionMetadata(BaseModel):
+    """Post-ranking delivery routing metadata for an already-ranked item."""
+    signal_id: str = ""
+    surface: AmbientSurface
+    channel: DeliveryChannel = DeliveryChannel.DASHBOARD
+    timing: DeliveryTiming
+    repeat: bool = True
+    repeat_rule: dict = Field(default_factory=dict)
+    ranking_snapshot: DeliveryRankingSnapshot = Field(default_factory=DeliveryRankingSnapshot)
+    explanation: DeliveryExplanationMetadata = Field(default_factory=DeliveryExplanationMetadata)
+    reason: str = "post-ranking delivery policy v1"
+    emitted_event: dict = Field(default_factory=dict)
+    decision_layer: str = "post_ranking_delivery"
+    post_ranking: bool = True
+    does_not_mutate_ensemble: bool = True
+    ranking_input: bool = False
+    ranking_output: bool = False
 
 
 # ---------------------------------------------------------------------------

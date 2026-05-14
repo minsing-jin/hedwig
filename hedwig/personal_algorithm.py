@@ -318,36 +318,63 @@ def apply_exploration_layer(items: list[dict], policy: dict | None = None) -> li
 
 
 def choose_delivery(item: dict, policy: dict | None = None) -> dict:
+    from hedwig.models import (
+        AmbientSurface,
+        DeliveryChannel,
+        DeliveryDecisionMetadata,
+        DeliveryExplanationMetadata,
+        DeliveryRankingSnapshot,
+        DeliveryTiming,
+    )
+
     p = policy or get_personal_algorithm_policy()
     score = float(item.get("ensemble_score", item.get("final_score", item.get("score", item.get("relevance_score", 0)))) or 0)
+    final_score = float(item.get("final_score", score) or 0)
     urgency = str(item.get("urgency") or "")
     if urgency == "alert" or score >= 0.85:
-        surface, timing = "critical", "now"
+        surface, timing = AmbientSurface.CRITICAL, DeliveryTiming.NOW
     elif score >= 0.65:
-        surface, timing = "daily", "next_digest"
+        surface, timing = AmbientSurface.DAILY, DeliveryTiming.NEXT_DIGEST
     else:
-        surface, timing = "weekly", "weekly_digest"
+        surface, timing = AmbientSurface.WEEKLY, DeliveryTiming.WEEKLY_DIGEST
     if item.get("is_exploration"):
-        surface = "pwa"
+        surface = AmbientSurface.PWA
     signal_id = str(item.get("id") or item.get("signal_id") or "")
-    return {
-        "signal_id": signal_id,
-        "input_ensemble_rank": item.get("pre_layer_ranking", {}).get("input_rank"),
-        "input_ensemble_score": score,
-        "surface": surface,
-        "channel": (p.get("delivery") or {}).get("default_channel", "dashboard"),
-        "timing": timing,
-        "repeat": bool(((p.get("delivery") or {}).get("repeat") or {}).get("enabled", True)),
-        "repeat_rule": (p.get("delivery") or {}).get("repeat") or {"enabled": True, "max_count": 2},
-        "reason": "post-ranking delivery policy v1",
-        "emitted_event": {
+    delivery_cfg = p.get("delivery") or {}
+    channel = str(delivery_cfg.get("default_channel", "dashboard"))
+    try:
+        delivery_channel = DeliveryChannel(channel)
+    except ValueError:
+        delivery_channel = DeliveryChannel.DASHBOARD
+
+    decision = DeliveryDecisionMetadata(
+        signal_id=signal_id,
+        surface=surface,
+        channel=delivery_channel,
+        timing=timing,
+        repeat=bool((delivery_cfg.get("repeat") or {}).get("enabled", True)),
+        repeat_rule=delivery_cfg.get("repeat") or {"enabled": True, "max_count": 2},
+        ranking_snapshot=DeliveryRankingSnapshot(
+            input_ensemble_rank=item.get("pre_layer_ranking", {}).get("input_rank"),
+            input_ensemble_score=score,
+            input_final_score=final_score,
+            immutable=True,
+        ),
+        explanation=DeliveryExplanationMetadata(
+            text="Routed by post-ranking delivery policy after ranking completed.",
+        ),
+        emitted_event={
             "signal_id": signal_id,
             "event_type": "delivery_decision",
             "feed_id": "delivery_policy_v1",
         },
-        "post_ranking": True,
-        "does_not_mutate_ensemble": True,
-    }
+    )
+    metadata = decision.model_dump(mode="json")
+    # Backward-compatible aliases for existing feed consumers; the canonical
+    # boundary-preserving values live under ranking_snapshot.
+    metadata["input_ensemble_rank"] = metadata["ranking_snapshot"]["input_ensemble_rank"]
+    metadata["input_ensemble_score"] = metadata["ranking_snapshot"]["input_ensemble_score"]
+    return metadata
 
 
 def route_items_after_ranking(items: list[dict], policy: dict | None = None) -> list[dict]:
