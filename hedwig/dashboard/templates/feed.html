@@ -39,10 +39,12 @@ let focusIdx = -1;
 const eventQueue = [];
 const viewStarts = new Map();
 const sessionViewed = new Set();
+const sessionId = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`;
 
 function enqueue(ev) {
   ev.captured_at = Date.now();
   ev.feed_mode = mode;
+  ev.session_id = ev.session_id || sessionId;
   eventQueue.push(ev);
   if (eventQueue.length >= 12) flushBeacon();
 }
@@ -85,6 +87,15 @@ function makeCard(item) {
   const urgency = item.urgency || 'digest';
   const label = item.anomaly_label ? `<span class="anomaly-label">${escapeHtml(item.anomaly_label.type)}: ${escapeHtml(item.anomaly_label.reason)}</span>` : '';
   const preLayerScore = item.pre_layer_ranking?.final_score ?? item.final_score ?? item.ensemble_score ?? item.score ?? 0;
+  const mediaProfile = item.media_profile || {};
+  const mediaChips = [
+    mediaProfile.has_text ? 'text' : '',
+    mediaProfile.has_thumbnail ? 'thumbnail' : '',
+    mediaProfile.has_transcript ? 'transcript' : ''
+  ].filter(Boolean).map(kind => `<span class="media-chip">${kind}</span>`).join('');
+  const thumbnail = item.thumbnail_url ? `<img class="media-thumbnail" src="${escapeAttr(item.thumbnail_url)}" alt="" loading="lazy">` : '';
+  const contentExcerpt = item.content_excerpt ? `<p class="card-excerpt">${escapeHtml(item.content_excerpt)}</p>` : '';
+  const transcriptExcerpt = item.transcript_excerpt ? `<p class="card-transcript">Transcript: ${escapeHtml(item.transcript_excerpt)}</p>` : '';
   el.innerHTML = `
     <header class="card-head">
       <span class="pill">${escapeHtml(item.platform || '')}</span>
@@ -92,8 +103,12 @@ function makeCard(item) {
       <span class="muted">ensemble ${Number(preLayerScore || score).toFixed(2)}</span>
       ${label}
     </header>
+    ${thumbnail}
     <h2 class="card-title"><a href="${item.url || '#'}" target="_blank" rel="noopener">${escapeHtml(item.title || '')}</a></h2>
     ${item.why_relevant ? `<p class="card-why">${escapeHtml(item.why_relevant)}</p>` : ''}
+    ${contentExcerpt}
+    ${transcriptExcerpt}
+    ${mediaChips ? `<div class="media-profile" aria-label="Media profile">${mediaChips}</div>` : ''}
     ${item.devils_advocate ? `<p class="card-devil"><em>${escapeHtml(item.devils_advocate)}</em></p>` : ''}
     <div class="card-meta muted">${escapeHtml(item.author || '')} · delivery ${escapeHtml(item.delivery_policy?.surface || 'daily')} via ${escapeHtml(item.delivery_policy?.channel || 'dashboard')}</div>
     <div class="card-actions">
@@ -120,6 +135,9 @@ function makeCard(item) {
 }
 function escapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, '&quot;');
 }
 
 async function loadPage() {
@@ -275,8 +293,12 @@ loadPage();
 .card-title { font-size: 17px; margin: 10px 0 6px; line-height: 1.35; }
 .card-title a { color: #111827; text-decoration: none; }
 .card-why { color: #1f2937; font-size: 13px; line-height: 1.5; }
+.card-excerpt, .card-transcript { color: #4b5563; font-size: 12px; line-height: 1.45; }
 .card-devil { color: #7c2d12; font-size: 12px; line-height: 1.5; }
 .card-meta { font-size: 11px; }
+.media-thumbnail { width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-top: 10px; background: #f3f4f6; }
+.media-profile { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.media-chip { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #475569; background: #f1f5f9; border-radius: 999px; padding: 3px 7px; }
 .card-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .card-actions button { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 8px; background: white; cursor: pointer; font-size: 12px; }
 .pill, .anomaly-label { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #f3f4f6; color: #374151; }

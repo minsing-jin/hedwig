@@ -190,6 +190,7 @@ def _deep_merge(base: dict, overlay: dict) -> dict:
 
 def _normalize_delivery_surface(value: object) -> str:
     normalized = str(value or "").strip().lower().replace("-", "_")
+    extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
     return {
         "native": "tray",
         "native_notification": "tray",
@@ -261,6 +262,7 @@ def media_profile_for_item(item: dict, policy: dict | None = None) -> dict:
     media = p.get("media") or {}
     default_mode = media.get("default_media_mode") or {}
     advanced = media.get("advanced_media_capability") or {}
+    extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
     return {
         "strategy": media.get("default_strategy", "text_thumbnail_transcript"),
         "default_media_mode": {
@@ -270,8 +272,8 @@ def media_profile_for_item(item: dict, policy: dict | None = None) -> dict:
             "transcript": bool(default_mode.get("transcript", True)),
         },
         "has_text": bool(item.get("content") or item.get("title")),
-        "has_thumbnail": bool((item.get("extra") or {}).get("thumbnail_url")) if isinstance(item.get("extra"), dict) else False,
-        "has_transcript": bool((item.get("extra") or {}).get("transcript")) if isinstance(item.get("extra"), dict) else False,
+        "has_thumbnail": bool(extra.get("thumbnail_url") or extra.get("thumbnail") or item.get("thumbnail_url")),
+        "has_transcript": bool(extra.get("transcript") or item.get("transcript_excerpt")),
         "full_understanding_enabled": bool(media.get("full_understanding_enabled", False)),
         "advanced_media_capability": {
             "name": advanced.get("name", "Full Media Understanding"),
