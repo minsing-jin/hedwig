@@ -468,9 +468,16 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.get("/feed", response_class=HTMLResponse)
     async def feed_page(request: Request):
         from hedwig.feeds import list_feeds
+        allowed_modes = {"grid", "detail_swipe", "dense_reader"}
+        requested_mode = str(request.query_params.get("mode") or "grid")
+        feed_mode = requested_mode if requested_mode in allowed_modes else "grid"
         return TEMPLATES.TemplateResponse(
             request, "feed.html",
-            {"feeds_list": list_feeds()},
+            {
+                "feed_mode": feed_mode,
+                "feed_mode_class": feed_mode.replace("_", "-"),
+                "feeds_list": list_feeds(),
+            },
         )
 
     @app.get("/feed/list")
