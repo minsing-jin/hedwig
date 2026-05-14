@@ -626,8 +626,20 @@ def test_feed_modes_exploration_delivery_and_metrics(tmp_env):
     assert "Dense Reader" in html
     assert "card_impression" in html
     assert "swipe_left" in html
+    dense_html = client.get("/feed?mode=dense_reader&stream=morning_deep").text
+    assert 'data-mode="dense_reader"' in dense_html
+    assert 'class="feed-list dense-reader-mode"' in dense_html
+    assert "stream=default&mode=dense_reader" in dense_html
+    assert "Scroll to load more" in dense_html
+    assert "data-act=\"save\"" in dense_html
+    assert "data-act=\"not_interested\"" in dense_html
+    invalid_html = client.get("/feed?mode=rerank_everything").text
+    assert 'data-mode="grid"' in invalid_html
 
     data = client.get("/feed/api?limit=20").json()
+    dense_data = client.get("/feed/api?limit=20&mode=dense_reader").json()
+    assert [item["id"] for item in dense_data["items"]] == [item["id"] for item in data["items"]]
+    assert [item["final_score"] for item in dense_data["items"]] == [item["final_score"] for item in data["items"]]
     assert data["items"]
     assert all("ensemble_score" in item for item in data["items"])
     assert all("final_score" in item for item in data["items"])

@@ -2,27 +2,27 @@
 {% block title %}Feed — Hedwig{% endblock %}
 {% block content %}
 
-<div class="feed-shell" data-stream="{{ request.query_params.get('stream', 'default') }}" data-mode="grid">
+<div class="feed-shell" data-stream="{{ request.query_params.get('stream', 'default') }}" data-mode="{{ feed_mode }}">
   <div class="feed-head">
     <div>
       <h1>Feed</h1>
       <span class="muted">Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.</span>
     </div>
     <div class="mode-switch" role="tablist" aria-label="Feed mode">
-      <button class="mode-btn active" data-mode="grid">Grid</button>
-      <button class="mode-btn" data-mode="detail_swipe">Detail Swipe</button>
-      <button class="mode-btn" data-mode="dense_reader">Dense Reader</button>
+      <button class="mode-btn{% if feed_mode == 'grid' %} active{% endif %}" data-mode="grid">Grid</button>
+      <button class="mode-btn{% if feed_mode == 'detail_swipe' %} active{% endif %}" data-mode="detail_swipe">Detail Swipe</button>
+      <button class="mode-btn{% if feed_mode == 'dense_reader' %} active{% endif %}" data-mode="dense_reader">Dense Reader</button>
     </div>
   </div>
 
   <div class="feed-tabs">
     {% for f in feeds_list %}
     <a class="feed-tab{% if f.id == request.query_params.get('stream', 'default') %} active{% endif %}"
-       href="/feed?stream={{ f.id }}" title="{{ f.description or '' }}">{{ f.name }}</a>
+       href="/feed?stream={{ f.id }}&mode={{ feed_mode }}" title="{{ f.description or '' }}">{{ f.name }}</a>
     {% endfor %}
   </div>
 
-  <div id="feed-list" class="feed-list grid-mode" tabindex="0" aria-label="Hedwig feed"></div>
+  <div id="feed-list" class="feed-list {{ feed_mode_class }}-mode" tabindex="0" aria-label="Hedwig feed"></div>
   <div id="feed-end" class="feed-end muted">Scroll to load more…</div>
 </div>
 
