@@ -190,7 +190,6 @@ def _deep_merge(base: dict, overlay: dict) -> dict:
 
 def _normalize_delivery_surface(value: object) -> str:
     normalized = str(value or "").strip().lower().replace("-", "_")
-    extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
     return {
         "native": "tray",
         "native_notification": "tray",
