@@ -59,6 +59,7 @@ def run_tray():
                 "Run Dry (collect only)",
                 "Run Weekly",
                 None,  # separator
+                "Ambient Glance",
                 "Socratic Onboarding",
                 "View Signals",
                 "Edit Criteria",
@@ -84,6 +85,10 @@ def run_tray():
         def run_weekly(self, _):
             subprocess.Popen([sys.executable, "-m", "hedwig", "--weekly"], cwd=str(Path.cwd()))
             rumps.notification("Hedwig", "Weekly Pipeline", "Started")
+
+        @rumps.clicked("Ambient Glance")
+        def ambient_glance(self, _):
+            webbrowser.open(f"{DASHBOARD_URL}/ambient/tray")
 
         @rumps.clicked("Socratic Onboarding")
         def onboarding(self, _):

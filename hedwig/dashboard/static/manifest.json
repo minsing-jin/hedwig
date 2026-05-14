@@ -19,6 +19,7 @@
   "shortcuts": [
     {"name": "Chat", "url": "/chat", "icons": [{"src": "/assets/hedwig-icon.svg", "sizes": "any"}]},
     {"name": "Feed", "url": "/feed", "icons": [{"src": "/assets/hedwig-icon.svg", "sizes": "any"}]},
+    {"name": "Ambient", "url": "/ambient/pwa", "icons": [{"src": "/assets/hedwig-icon.svg", "sizes": "any"}]},
     {"name": "Brief", "url": "/brief", "icons": [{"src": "/assets/hedwig-icon.svg", "sizes": "any"}]}
   ]
 }

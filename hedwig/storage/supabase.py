@@ -405,6 +405,159 @@ def get_feedback_since(days: int = 1) -> list[dict]:
         return []
 
 
+def save_behavior_event(
+    signal_id: str,
+    event_type: str,
+    dwell_ms: int | None = None,
+    position_in_feed: int | None = None,
+    feed_id: str = "default",
+    feed_mode: str = "grid",
+    device: str | None = None,
+) -> bool:
+    row = {
+        "signal_id": str(signal_id),
+        "event_type": event_type,
+        "dwell_ms": dwell_ms,
+        "position_in_feed": position_in_feed,
+        "feed_id": feed_id,
+        "feed_mode": feed_mode,
+        "device": device,
+    }
+    try:
+        _get_client().table("behavior_events").insert(row).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save behavior event: {e}")
+        return False
+
+
+def save_behavior_events_batch(events: list[dict]) -> int:
+    rows = []
+    for ev in events or []:
+        if ev.get("signal_id") and ev.get("event_type"):
+            rows.append({
+                "signal_id": str(ev.get("signal_id")),
+                "event_type": str(ev.get("event_type")),
+                "dwell_ms": ev.get("dwell_ms"),
+                "position_in_feed": ev.get("position_in_feed"),
+                "feed_id": str(ev.get("feed_id") or "default"),
+                "feed_mode": str(ev.get("feed_mode") or ev.get("mode") or "grid"),
+                "device": ev.get("device"),
+            })
+    if not rows:
+        return 0
+    try:
+        result = _get_client().table("behavior_events").insert(rows).execute()
+        for event, stored in zip(events or [], result.data or []):
+            if isinstance(stored, dict) and stored.get("id") is not None:
+                event["id"] = stored.get("id")
+        return len(result.data) if result.data else len(rows)
+    except Exception as e:
+        logger.error(f"Failed to save behavior event batch: {e}")
+        return 0
+
+
+def get_behavior_events(
+    signal_id: str | None = None,
+    event_types: list[str] | None = None,
+    feed_mode: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    try:
+        query = _get_client().table("behavior_events").select("*")
+        if signal_id:
+            query = query.eq("signal_id", str(signal_id))
+        if event_types:
+            query = query.in_("event_type", event_types)
+        if feed_mode:
+            query = query.eq("feed_mode", str(feed_mode))
+        result = query.order("captured_at", desc=True).limit(limit).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to get behavior events: {e}")
+        return []
+
+
+def save_behavior_reward(reward: dict) -> bool:
+    try:
+        _get_client().table("behavior_rewards").insert(reward).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save behavior reward: {e}")
+        return False
+
+
+def save_behavior_rewards_batch(rewards: list[dict]) -> int:
+    rows = list(rewards or [])
+    if not rows:
+        return 0
+    try:
+        result = _get_client().table("behavior_rewards").insert(rows).execute()
+        return len(result.data) if result.data else len(rows)
+    except Exception as e:
+        logger.error(f"Failed to save behavior rewards: {e}")
+        return 0
+
+
+def get_behavior_rewards(
+    signal_id: str | None = None,
+    signal_strength: str | None = None,
+    feed_mode: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    try:
+        query = _get_client().table("behavior_rewards").select("*")
+        if signal_id:
+            query = query.eq("signal_id", str(signal_id))
+        if signal_strength:
+            query = query.eq("signal_strength", str(signal_strength))
+        if feed_mode:
+            query = query.eq("feed_mode", str(feed_mode))
+        result = query.order("created_at", desc=True).limit(limit).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error(f"Failed to get behavior rewards: {e}")
+        return []
+
+
+def get_usage_metrics_by_mode(days: int = 7) -> dict:
+    events = get_behavior_events(limit=5000)
+    out: dict[str, dict[str, int]] = {}
+    for ev in events:
+        mode = str(ev.get("feed_mode") or "grid")
+        bucket = out.setdefault(mode, {"events": 0, "dwell_ms": 0})
+        etype = str(ev.get("event_type") or "")
+        bucket[etype] = bucket.get(etype, 0) + 1
+        bucket["events"] += 1
+        bucket["dwell_ms"] += int(ev.get("dwell_ms") or 0)
+    for mode in ("grid", "detail_swipe", "dense_reader"):
+        out.setdefault(mode, {"events": 0, "dwell_ms": 0})
+    for mode, bucket in out.items():
+        impressions = max(1, int(bucket.get("card_impression", 0)))
+        sessions = max(1, int(bucket.get("session_start", 0)) or 1)
+        viewed = max(1, int(bucket.get("viewed_card", 0)))
+        raw_counts = {k: v for k, v in bucket.items() if isinstance(v, int)}
+        bucket["raw_counts"] = raw_counts
+        bucket["normalized_rates"] = {
+            key: {
+                "per_impression_rate": round(value / impressions, 6),
+                "per_session_rate": round(value / sessions, 6),
+                "per_viewed_card_rate": round(value / viewed, 6),
+            }
+            for key, value in raw_counts.items()
+        }
+        bucket["usage_metric"] = {
+            "session_id": "aggregate",
+            "feed_mode": mode,
+            "time_window_days": days,
+            "raw_count": int(bucket.get("events", 0)),
+            "per_impression_rate": round(int(bucket.get("events", 0)) / impressions, 6),
+            "per_session_rate": round(int(bucket.get("events", 0)) / sessions, 6),
+            "per_viewed_card_rate": round(int(bucket.get("events", 0)) / viewed, 6),
+        }
+    return out
+
+
 def _coerce_utc_date(value: object) -> date | None:
     if value is None:
         return None

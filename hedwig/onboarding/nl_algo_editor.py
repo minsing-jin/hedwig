@@ -15,8 +15,8 @@ Flow:
      - bumps algorithm_versions (origin='user_nl_editor')
      - logs evolution_signal(channel='explicit', kind='algorithm_edit')
 
-The key difference from meta-evolution: meta uses shadow-mode fitness to
-decide adoption; this path is user-authored and trusted — no shadow test.
+Risky edits are now gated by the dashboard route with a shadow test before
+``confirm_edit`` writes algorithm.yaml.
 """
 from __future__ import annotations
 
@@ -24,11 +24,13 @@ import copy
 import difflib
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import yaml
 
 from hedwig.config import ALGORITHM_PATH, OPENAI_API_KEY, OPENAI_MODEL_FAST, load_algorithm_config
+from hedwig.personal_algorithm import classify_policy_edit, shadow_test_policy_edit
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,117 @@ def apply_changes(base: dict, changes: list[dict]) -> dict:
     return result
 
 
+def propose_local_policy_edit(user_intent: str) -> dict:
+    """Rule-based fallback for user-owned personal_algorithm policy edits.
+
+    Covers swipe policy, feed modes, reward weights, algorithm policy, macro
+    category preferences, and micro preferences without requiring an LLM key.
+    The OpenAI-backed ``propose_edit`` remains available for broader edits.
+    """
+    text = (user_intent or "").strip().lower()
+    if not text:
+        return {"ok": False, "error": "empty intent", "changes": []}
+    changes: list[dict] = []
+    summary = "personal algorithm policy edit"
+
+    if any(token in text for token in (
+        "delivery",
+        "deliver",
+        "digest",
+        "quiet",
+        "do not disturb",
+        "dnd",
+        "notification",
+        "notify",
+        "snooze",
+        "repeat",
+        "tray",
+        "native",
+        "pwa",
+    )):
+        from hedwig.delivery.ambient import propose_delivery_policy_steering
+
+        delivery_proposal = propose_delivery_policy_steering(user_intent)
+        if delivery_proposal.get("ok"):
+            current = load_algorithm_config() or {}
+            after = apply_changes(current, delivery_proposal["changes"])
+            return {
+                "ok": True,
+                "summary": delivery_proposal["summary"],
+                "rationale": "Mapped natural-language delivery steering onto delivery_policy_config.v1 without adding ranking inputs.",
+                "changes": delivery_proposal["changes"],
+                "classification": delivery_proposal["classification"],
+                "risk_class": delivery_proposal["risk_class"],
+                "classification_reason": delivery_proposal["classification_reason"],
+                "matched_intents": delivery_proposal["matched_intents"],
+                "unsupported_intents": delivery_proposal["unsupported_intents"],
+                "ranking_boundary": delivery_proposal["ranking_boundary"],
+                "preview": {"before": current, "after": after, "diff": yaml_diff(current, after)},
+            }
+
+    if "left" in text and ("save" in text or "later" in text):
+        changes.append({"op": "set", "path": "personal_algorithm.swipe_policy.left.action", "value": "save_later"})
+        changes.append({"op": "set", "path": "personal_algorithm.swipe_policy.left.reward", "value": 0.8})
+    if "right" in text or "next" in text or "skip" in text:
+        if "neutral" in text:
+            value, strength = 0.0, "weak_neutral"
+        elif "strong" in text:
+            value, strength = -0.6, "strong_negative"
+        else:
+            value, strength = -0.1, "weak_negative"
+        for direction in ("right", "next"):
+            if direction in text or "skip" in text:
+                changes.append({"op": "set", "path": f"personal_algorithm.swipe_policy.{direction}.reward", "value": value})
+                changes.append({"op": "set", "path": f"personal_algorithm.swipe_policy.{direction}.strength", "value": strength})
+    if "dense" in text:
+        changes.append({"op": "set", "path": "personal_algorithm.feed.default_mode", "value": "dense_reader"})
+    if "grid" in text:
+        changes.append({"op": "set", "path": "personal_algorithm.feed.default_mode", "value": "grid"})
+    if "detail" in text or "swipe view" in text:
+        changes.append({"op": "set", "path": "personal_algorithm.feed.default_mode", "value": "detail_swipe"})
+    if "exploration" in text or "anomaly" in text or "contrarian" in text:
+        rate = 0.10
+        if "15" in text:
+            rate = 0.15
+        elif "5" in text:
+            rate = 0.05
+        changes.append({"op": "set", "path": "personal_algorithm.exploration.rate", "value": rate})
+    if "full media" in text or "multimodal" in text:
+        changes.append({"op": "set", "path": "personal_algorithm.media.advanced_media_capability.policy_enabled", "value": True})
+    if "composite fitness" in text or "ranking" in text or "ensemble" in text:
+        changes.append({
+            "op": "add",
+            "path": "personal_algorithm.future_ranking_experiments",
+            "value": {
+                "intent": user_intent,
+                "status": "recorded_future_experimental",
+                "production_ensemble_applied": False,
+            },
+        })
+    if "less" in text:
+        changes.append({"op": "add", "path": "personal_algorithm.preferences.micro.less", "value": user_intent})
+    if "more" in text:
+        changes.append({"op": "add", "path": "personal_algorithm.preferences.macro.more", "value": user_intent})
+
+    if not changes:
+        changes.append({"op": "add", "path": "personal_algorithm.preferences.micro.notes", "value": user_intent})
+        summary = "stored natural-language micro preference"
+
+    current = load_algorithm_config() or {}
+    after = apply_changes(current, changes)
+    classification = classify_policy_edit(changes, user_intent)
+    return {
+        "ok": True,
+        "summary": summary,
+        "rationale": "Generated by local policy parser for user-owned natural-language control.",
+        "changes": changes,
+        "classification": classification,
+        "risk_class": classification["risk_class"],
+        "classification_reason": classification["reason"],
+        "preview": {"before": current, "after": after, "diff": yaml_diff(current, after)},
+    }
+
+
 def yaml_diff(before: dict, after: dict) -> str:
     a = yaml.safe_dump(before, allow_unicode=True, sort_keys=False).splitlines()
     b = yaml.safe_dump(after, allow_unicode=True, sort_keys=False).splitlines()
@@ -184,9 +297,38 @@ async def propose_edit(user_intent: str) -> dict:
     }
 
 
-def confirm_edit(changes: list[dict], intent: str = "") -> dict:
+def confirm_edit(changes: list[dict], intent: str = "", shadow_approved: bool = False) -> dict:
     """Apply changes to algorithm.yaml, bump algorithm_versions, log event."""
     current = load_algorithm_config() or {}
+    classification = classify_policy_edit(changes, intent)
+    if classification["risk_class"] == "future_ranking_experimental":
+        existing = list(((current.get("personal_algorithm") or {}).get("future_ranking_experiments") or []))
+        experiment = {
+            "intent": intent,
+            "changes": changes,
+            "classification": classification,
+            "status": "recorded_future_experimental",
+            "production_ensemble_applied": False,
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+        existing.append(experiment)
+        changes = [{
+            "op": "set",
+            "path": "personal_algorithm.future_ranking_experiments",
+            "value": existing,
+        }]
+    elif classification["risk_class"] == "risky_post_ranking" and not shadow_approved:
+        # Direct callers must make the shadow gate explicit. The dashboard
+        # endpoint passes shadow_approved after a user reviews shadow output.
+        shadow = shadow_test_policy_edit(changes, intent)
+        return {
+            "ok": False,
+            "requires_shadow_test": True,
+            "classification": classification,
+            "shadow": shadow,
+            "error": "risky post-ranking policy edits require shadow approval before apply",
+        }
+
     try:
         from hedwig.sovereignty import filter_allowed_changes
         allowed, rejected = filter_allowed_changes("algorithm", changes, actor="user")
@@ -197,7 +339,6 @@ def confirm_edit(changes: list[dict], intent: str = "") -> dict:
 
     # bump version inside the yaml itself so load_algorithm_config reflects it
     after["version"] = int(current.get("version", 0)) + 1
-    from datetime import datetime, timezone
     after["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
     after["origin"] = "user_nl_editor"
 
@@ -227,6 +368,7 @@ def confirm_edit(changes: list[dict], intent: str = "") -> dict:
             payload={
                 "intent": intent,
                 "changes": changes,
+                "classification": classification,
                 "diff": diff,
                 "algorithm_version": after["version"],
             },
@@ -240,6 +382,36 @@ def confirm_edit(changes: list[dict], intent: str = "") -> dict:
         "path": str(ALGORITHM_PATH),
         "version": after["version"],
         "diff": diff,
+        "classification": classification,
         "applied_changes": allowed,
         "rejected_changes": rejected,
     }
+
+
+def restore_algorithm_version(version: int) -> dict:
+    """Restore algorithm.yaml from a persisted version snapshot."""
+    from hedwig.storage import get_algorithm_history, save_algorithm_version
+
+    history = get_algorithm_history(limit=500)
+    match = next((row for row in history if int(row.get("version") or -1) == int(version)), None)
+    if not match:
+        return {"ok": False, "error": f"algorithm version {version} not found"}
+    config = match.get("config") or {}
+    if isinstance(config, str):
+        config = yaml.safe_load(config) or {}
+    current = load_algorithm_config() or {}
+    restored = copy.deepcopy(config)
+    restored["version"] = int(current.get("version", version)) + 1
+    restored["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
+    restored["origin"] = "rollback"
+    diff = yaml_diff(current, restored)
+    with open(ALGORITHM_PATH, "w") as f:
+        yaml.safe_dump(restored, f, allow_unicode=True, sort_keys=False)
+    save_algorithm_version(
+        version=restored["version"],
+        config=restored,
+        created_by="rollback",
+        origin="rollback",
+        diff_from_previous=diff,
+    )
+    return {"ok": True, "restored_from": version, "version": restored["version"], "diff": diff}

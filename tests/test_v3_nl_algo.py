@@ -50,7 +50,7 @@ def test_apply_changes_creates_missing_paths():
     assert after == {"ranking": {"top_k": 50}}
 
 
-def test_confirm_edit_writes_yaml_and_versions(tmp_env):
+def test_confirm_edit_records_ranking_edits_as_future_experiments(tmp_env):
     from hedwig.onboarding.nl_algo_editor import confirm_edit
     from hedwig.storage import get_algorithm_history, get_evolution_signals
 
@@ -61,11 +61,14 @@ def test_confirm_edit_writes_yaml_and_versions(tmp_env):
     )
     assert r["ok"]
     assert r["version"] == 2
+    assert r["classification"]["risk_class"] == "future_ranking_experimental"
 
     tmp_algo = tmp_env / "algorithm.yaml"
     reloaded = yaml.safe_load(tmp_algo.read_text())
-    assert reloaded["ranking"]["components"]["bandit"]["weight"] == 0.3
-    assert reloaded["ranking"]["components"]["bandit"]["enabled"] is True
+    assert reloaded["ranking"]["components"]["bandit"]["weight"] == 0.1
+    assert reloaded["ranking"]["components"]["bandit"]["enabled"] is False
+    assert reloaded["personal_algorithm"]["future_ranking_experiments"]
+    assert reloaded["personal_algorithm"]["future_ranking_experiments"][0]["production_ensemble_applied"] is False
     assert reloaded["version"] == 2
     assert reloaded["origin"] == "user_nl_editor"
 
@@ -96,6 +99,7 @@ def test_endpoint_apply_versioning(tmp_env):
     data = resp.json()
     assert data["ok"]
     assert data["version"] == 2
+    assert data["classification"]["risk_class"] == "future_ranking_experimental"
 
     history = get_algorithm_history()
     assert any(a["version"] == 2 for a in history)

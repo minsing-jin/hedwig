@@ -489,6 +489,7 @@ def create_app(saas_mode: bool = False) -> FastAPI:
         """
         import base64
 
+        from hedwig.personal_algorithm import route_items_after_ranking
         from hedwig.storage import get_recent_signals
         stream = request.query_params.get("stream", "default")
         try:
@@ -520,20 +521,11 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             tok = f"{last.get('id')}|{last.get('collected_at') or ''}"
             next_cursor = base64.urlsafe_b64encode(tok.encode()).decode()
 
-        items = []
-        for offset, r in enumerate(page):
-            items.append({
-                "id": r.get("id"),
-                "title": r.get("title"),
-                "url": r.get("url"),
-                "platform": r.get("platform"),
-                "score": r.get("relevance_score") or 0,
-                "urgency": r.get("urgency"),
-                "why_relevant": r.get("why_relevant"),
-                "devils_advocate": r.get("devils_advocate"),
-                "author": r.get("author"),
-                "feed_position": start_idx + offset,
-            })
+        items = [
+            _ranked_feed_item_from_signal_row(r, input_order=start_idx + offset)
+            for offset, r in enumerate(page)
+        ]
+        items = route_items_after_ranking(items)
         return JSONResponse({
             "items": items,
             "next_cursor": next_cursor,
@@ -544,7 +536,16 @@ def create_app(saas_mode: bool = False) -> FastAPI:
     @app.post("/events/beacon")
     async def events_beacon(request: Request):
         """Batch endpoint for /feed JS beacon — implicit-passive feedback."""
-        from hedwig.storage import save_behavior_events_batch, save_evolution_signal
+        from hedwig.delivery.ambient import (
+            interpret_ambient_delivery_event,
+            is_ambient_delivery_event,
+        )
+        from hedwig.personal_algorithm import interpret_behavior_event
+        from hedwig.storage import (
+            save_behavior_events_batch,
+            save_behavior_rewards_batch,
+            save_evolution_signal,
+        )
 
         try:
             body = await request.json()
@@ -556,14 +557,39 @@ def create_app(saas_mode: bool = False) -> FastAPI:
             return JSONResponse({"error": "events must be a list"}, status_code=400)
 
         saved = save_behavior_events_batch(events)
+        reward_candidate_events = [
+            ev for ev in events
+            if not is_ambient_delivery_event(ev)
+        ]
+        delivery_reward_candidate_events = [
+            ev for ev in events
+            if is_ambient_delivery_event(ev)
+        ]
+        feed_rewards = [rw for ev in reward_candidate_events if (rw := interpret_behavior_event(ev))]
+        delivery_rewards = [
+            rw for ev in delivery_reward_candidate_events
+            if (rw := interpret_ambient_delivery_event(ev))
+        ]
+        rewards = feed_rewards + delivery_rewards
+        saved_rewards = save_behavior_rewards_batch(rewards) if rewards else 0
 
         # Promote dwell/skip/share events into the unified evolution_signal
         # stream (channel='implicit', kind='behavior_<type>') so the existing
         # evolution loop sees them without new wiring.
-        for ev in events:
+        for ev in reward_candidate_events:
             etype = ev.get("event_type")
-            if etype in ("dwell", "skip", "share", "save"):
-                weight = {"dwell": 0.3, "skip": 0.5, "share": 1.0, "save": 1.0}.get(etype, 0.3)
+            if etype in ("dwell", "skip", "share", "save", "open", "not_interested", "swipe_left", "swipe_right", "swipe_next"):
+                weight = {
+                    "dwell": 0.2,
+                    "skip": 0.1,
+                    "swipe_right": 0.1,
+                    "swipe_next": 0.05,
+                    "share": 0.8,
+                    "save": 1.0,
+                    "open": 0.8,
+                    "not_interested": 1.0,
+                    "swipe_left": 0.8,
+                }.get(etype, 0.2)
                 try:
                     save_evolution_signal(
                         channel="implicit",
@@ -572,12 +598,198 @@ def create_app(saas_mode: bool = False) -> FastAPI:
                             "signal_id": ev.get("signal_id"),
                             "dwell_ms": ev.get("dwell_ms"),
                             "feed_id": ev.get("feed_id"),
+                            "feed_mode": ev.get("feed_mode") or ev.get("mode"),
                         },
                         weight=weight,
                     )
                 except Exception:
                     pass
-        return JSONResponse({"ok": True, "saved": saved})
+        return JSONResponse({
+            "ok": True,
+            "saved": saved,
+            "rewards": saved_rewards,
+            "feed_rewards": len(feed_rewards),
+            "delivery_rewards": len(delivery_rewards),
+        })
+
+    @app.get("/feed/metrics")
+    async def feed_metrics_endpoint():
+        from hedwig.storage import get_usage_metrics_by_mode
+        return JSONResponse({"modes": get_usage_metrics_by_mode()})
+
+    @app.get("/ambient/surfaces")
+    async def ambient_surfaces_endpoint():
+        from hedwig.delivery.ambient import ambient_surface_entry_points
+        return JSONResponse({"surfaces": ambient_surface_entry_points()})
+
+    @app.get("/ambient/{surface}", response_class=HTMLResponse)
+    async def ambient_surface_page(request: Request, surface: str):
+        from hedwig.delivery.ambient import select_ambient_items
+
+        try:
+            limit = int(request.query_params.get("limit", 0) or 0) or None
+        except ValueError:
+            limit = None
+        client_context = {
+            key: request.query_params.get(key)
+            for key in (
+                "display_mode",
+                "display",
+                "installed",
+                "is_installed",
+                "standalone",
+                "unsupported_browser",
+                "supports_service_worker",
+                "supports_manifest",
+                "native_available",
+                "supports_native",
+                "native_bridge_available",
+                "notification_permission",
+                "native_notification_permission",
+                "enforce_delivery_schedule",
+                "scheduler",
+                "now",
+                "current_datetime",
+                "schedule_at",
+                "current_time",
+                "local_time",
+                "weekday",
+            )
+            if key in request.query_params
+        }
+        try:
+            from hedwig.storage import get_behavior_events
+            client_context["ambient_delivery_events"] = get_behavior_events(
+                event_types=["delivered", "snoozed"],
+                limit=500,
+            )
+        except Exception:
+            client_context["ambient_delivery_events"] = []
+
+        try:
+            selected = select_ambient_items(
+                _load_ranked_feed_items(days=14),
+                surface,
+                limit=limit,
+                client_context=client_context,
+            )
+        except ValueError:
+            return TEMPLATES.TemplateResponse(
+                request,
+                "ambient_surface.html",
+                {"surface": surface, "payload": None, "items": [], "error": f"Unknown ambient surface: {surface}"},
+                status_code=404,
+            )
+        return TEMPLATES.TemplateResponse(
+            request,
+            "ambient_surface.html",
+            {"surface": selected["surface"], "payload": selected, "items": selected["items"], "error": None},
+        )
+
+    @app.get("/ambient/{surface}/api")
+    async def ambient_surface_items_endpoint(request: Request, surface: str):
+        from hedwig.delivery.ambient import record_ambient_delivery_events, select_ambient_items
+
+        try:
+            limit = int(request.query_params.get("limit", 0) or 0) or None
+        except ValueError:
+            limit = None
+        client_context = {
+            key: request.query_params.get(key)
+            for key in (
+                "display_mode",
+                "display",
+                "installed",
+                "is_installed",
+                "standalone",
+                "unsupported_browser",
+                "supports_service_worker",
+                "supports_manifest",
+                "native_available",
+                "supports_native",
+                "native_bridge_available",
+                "notification_permission",
+                "native_notification_permission",
+                "enforce_delivery_schedule",
+                "scheduler",
+                "now",
+                "current_datetime",
+                "schedule_at",
+                "current_time",
+                "local_time",
+                "weekday",
+            )
+            if key in request.query_params
+        }
+        try:
+            from hedwig.storage import get_behavior_events
+            client_context["ambient_delivery_events"] = get_behavior_events(
+                event_types=["delivered", "snoozed"],
+                limit=500,
+            )
+        except Exception:
+            client_context["ambient_delivery_events"] = []
+
+        try:
+            selected = select_ambient_items(
+                _load_ranked_feed_items(days=14),
+                surface,
+                limit=limit,
+                client_context=client_context,
+            )
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        record_ambient_delivery_events(selected, event_type="delivered", device="server_api")
+        return JSONResponse(selected)
+
+    @app.get("/policy/personal-algorithm")
+    async def personal_algorithm_policy_endpoint():
+        from hedwig.personal_algorithm import get_personal_algorithm_policy
+        return JSONResponse(_jsonable(get_personal_algorithm_policy()))
+
+    @app.post("/policy/natural-language")
+    async def personal_algorithm_nl_endpoint(request: Request):
+        from hedwig.onboarding.nl_algo_editor import confirm_edit, propose_local_policy_edit
+        from hedwig.personal_algorithm import classify_policy_edit, shadow_test_policy_edit
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        intent = str(body.get("intent", "")).strip()
+        if not intent:
+            return JSONResponse({"ok": False, "error": "intent required"}, status_code=400)
+        proposed = propose_local_policy_edit(intent)
+        changes = proposed.get("changes") or []
+        classification = classify_policy_edit(changes, intent)
+        proposed["classification"] = classification
+        proposed["risk_class"] = classification["risk_class"]
+        if classification["risk_class"] == "future_ranking_experimental" and body.get("apply"):
+            return JSONResponse(_jsonable(confirm_edit(changes, intent=intent)))
+        if classification["risk_class"] == "risky_post_ranking" and not body.get("shadow_approved"):
+            proposed["shadow"] = shadow_test_policy_edit(changes, intent)
+            proposed["requires_shadow_test"] = True
+            return JSONResponse(_jsonable(proposed))
+        if body.get("apply"):
+            return JSONResponse(_jsonable(confirm_edit(changes, intent=intent, shadow_approved=bool(body.get("shadow_approved")))))
+        return JSONResponse(_jsonable(proposed))
+
+    @app.post("/policy/rollback")
+    async def personal_algorithm_rollback_endpoint(request: Request):
+        from hedwig.onboarding.nl_algo_editor import restore_algorithm_version
+
+        try:
+            body = await request.json()
+        except Exception:
+            form = await request.form()
+            body = dict(form)
+        try:
+            version = int(body.get("version"))
+        except Exception:
+            return JSONResponse({"ok": False, "error": "version required"}, status_code=400)
+        result = restore_algorithm_version(version)
+        return JSONResponse(_jsonable(result), status_code=200 if result.get("ok") else 404)
 
     @app.get("/status", response_class=HTMLResponse)
     async def status_page(request: Request):
@@ -1280,6 +1492,66 @@ def _load_recent_signals(limit: int = 20) -> list[dict]:
         return get_recent_signals(days=3)[:limit]
     except Exception:
         return []
+
+
+def _load_ranked_feed_items(days: int = 14) -> list[dict]:
+    try:
+        from hedwig.storage import get_recent_signals
+        rows = get_recent_signals(days=days) or []
+    except Exception:
+        rows = []
+
+    items = []
+    for offset, r in enumerate(rows):
+        items.append(_ranked_feed_item_from_signal_row(r, input_order=offset))
+    return items
+
+
+def _coalesce_score(row: dict, *fields: str) -> float:
+    for field in fields:
+        value = row.get(field)
+        if value is not None:
+            return float(value)
+    return 0.0
+
+
+def _ranked_feed_item_from_signal_row(row: dict, input_order: int) -> dict:
+    """Adapt stored ranking output into the post-ranking item contract.
+
+    Ambient surfaces and the manual feed share this adapter so delivery stays
+    downstream of ranking instead of inventing a separate ordering path.
+    """
+    ensemble_score = _coalesce_score(row, "ensemble_score", "relevance_score")
+    final_score = _coalesce_score(row, "final_score", "relevance_score", "ensemble_score")
+    input_rank = row.get("ensemble_rank") or row.get("rank") or row.get("rank_position") or input_order + 1
+    item = {
+        "id": row.get("id"),
+        "title": row.get("title"),
+        "url": row.get("url"),
+        "platform": row.get("platform"),
+        "score": row.get("relevance_score") if row.get("relevance_score") is not None else final_score,
+        "ensemble_score": ensemble_score,
+        "final_score": final_score,
+        "ensemble_rank": input_rank,
+        "urgency": row.get("urgency"),
+        "why_relevant": row.get("why_relevant"),
+        "devils_advocate": row.get("devils_advocate"),
+        "author": row.get("author"),
+        "feed_position": input_order,
+        "pre_layer_ranking": {
+            "ensemble_score": ensemble_score,
+            "final_score": final_score,
+            "input_rank": input_rank,
+            "input_order": input_order,
+            "rank_identifiers": {
+                "id": row.get("id"),
+                "ensemble_rank": input_rank,
+                "feed_position": input_order,
+            },
+            "immutable": True,
+        },
+    }
+    return item
 
 
 def _load_latest_signals(limit: int = 100) -> list[dict]:
