@@ -75,6 +75,95 @@ def test_feed_html_renders(tmp_env):
     assert "IntersectionObserver" in body
 
 
+def test_post_setup_feed_links_to_primary_surfaces(tmp_env):
+    from hedwig.dashboard.app import create_app
+
+    client = TestClient(create_app())
+    resp = client.get("/feed")
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'aria-label="Post-setup feed navigation"' in body
+    assert "data-post-setup-feed-nav" in body
+    assert 'href="/chat" data-feed-nav-target="chat"' in body
+    assert 'href="/profile" data-feed-nav-target="profile"' in body
+    assert 'href="/status" data-feed-nav-target="status"' in body
+    assert "Steer Hedwig in natural language." in body
+    assert "Review preferences and export surfaces." in body
+    assert "Check readiness and runtime health." in body
+
+
+def test_post_setup_feed_preserves_feed_level_actions_filters_and_navigation(tmp_env):
+    from hedwig.dashboard.app import create_app
+
+    client = TestClient(create_app())
+    resp = client.get("/feed?stream=morning_deep&mode=dense_reader")
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert 'aria-label="Feed actions"' in body
+    assert "data-post-setup-feed-actions" in body
+    assert 'action="/run/daily" method="post" data-feed-action="refresh-sync"' in body
+    assert "Refresh / sync now" in body
+    assert 'href="/feed?stream=morning_deep&mode=dense_reader" data-feed-action="reload"' in body
+    assert 'href="/feed?stream=morning_deep&mode=grid" data-feed-filter="mode-grid"' in body
+    assert 'href="/feed?stream=morning_deep&mode=detail_swipe" data-feed-filter="mode-detail-swipe"' in body
+    assert 'href="/feed?stream=morning_deep&mode=dense_reader" data-feed-filter="mode-dense-reader"' in body
+    assert 'data-feed-filter="stream-default"' in body
+    assert 'data-feed-filter="stream-morning_deep"' in body
+    assert 'aria-label="Post-setup feed navigation"' in body
+    assert 'href="/chat" data-feed-nav-target="chat"' in body
+
+
+def test_post_setup_feed_preserves_item_level_actions(tmp_env):
+    from hedwig.dashboard.app import create_app
+
+    client = TestClient(create_app())
+    resp = client.get("/feed")
+
+    assert resp.status_code == 200
+    body = resp.text
+    expected_actions = {
+        "open": "Open",
+        "read-state": "Mark read",
+        "save": "Left: save/later",
+        "dismiss": "Dismiss",
+    }
+    for action, label in expected_actions.items():
+        assert f'data-feed-item-action="{action}"' in body
+        assert label in body
+
+    assert 'data-act="open"' in body
+    assert 'data-act="read"' in body
+    assert 'data-act="save"' in body
+    assert 'data-act="dismiss"' in body
+    assert "event_type: 'open'" in body
+    assert "event_type: 'viewed_card'" in body
+    assert "event_type: 'view_end'" in body
+    assert "event_type: 'save'" in body
+    assert "event_type: 'dismissed'" in body
+    assert "event_type: 'skip'" in body
+    assert "else if (e.key === 'r') onAction(card, 'read')" in body
+    assert "else if (e.key === 'x') onAction(card, 'dismiss')" in body
+
+
+def test_feed_does_not_block_on_manual_source_selection_when_defaults_available(tmp_env):
+    from hedwig.dashboard.app import create_app
+
+    client = TestClient(create_app())
+    resp = client.get("/feed")
+
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Default sources ready" in body
+    assert "enabled registry/source_settings sources are available" in body
+    assert "No manual source selection is required before using /feed." in body
+    assert "source selection is optional" in body
+    assert 'data-default-sources-available="true"' in body
+    assert "Select sources to continue" not in body
+    assert "Choose sources before using /feed" not in body
+
+
 def test_events_beacon_endpoint(tmp_env):
     from hedwig.dashboard.app import create_app
     from hedwig.storage import get_behavior_events, get_evolution_signals

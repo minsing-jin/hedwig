@@ -1,11 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Hedwig Settings{% endblock %}
 {% block content %}
+{% macro env_field(key, meta) -%}
+  <label class="field">
+    <span>{{ meta.label }}</span>
+    <input
+      type="{{ 'password' if meta.secret else 'text' }}"
+      name="{{ key }}"
+      value="{{ values.get(key, '') }}"
+      placeholder="{{ key }}"
+      autocomplete="off"
+    >
+    <small>{{ meta.help }}</small>
+  </label>
+{%- endmacro %}
 
 <div class="hero">
   <h1>Source Settings</h1>
   <p class="subtitle">
     Choose which source plugins Hedwig should run. {{ settings_destination }}
+  </p>
+  <p class="muted" data-settings-source-toggle-surface>
+    Detailed source toggles remain available here outside the one-shot /setup flow.
   </p>
 </div>
 
@@ -37,5 +53,28 @@
     <button class="btn btn-primary" type="submit">Save settings</button>
   </div>
 </form>
+
+<details
+  id="model-backend-settings"
+  class="card"
+  style="margin-top: 1.5rem;"
+  data-settings-model-backend-surface
+>
+  <summary><strong>Model/backend settings</strong></summary>
+  <p class="muted">
+    Advanced controls for OpenAI model IDs, pipeline mode, and embedding fallback.
+    These are the same model/backend knobs surfaced from one-shot /setup, kept here
+    so power-user controls remain reachable after onboarding.
+  </p>
+  <form action="/settings/model-backend/save" method="post">
+    {% for key, meta in model_backend_keys.items() %}
+      {{ env_field(key, meta) }}
+    {% endfor %}
+    <div class="button-row" style="margin-top: 1.5rem;">
+      <button class="btn btn-primary" type="submit">Save model/backend settings</button>
+      <a href="/status" class="btn">Open backend health status</a>
+    </div>
+  </form>
+</details>
 
 {% endblock %}

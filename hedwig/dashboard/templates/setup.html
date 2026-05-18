@@ -2,166 +2,3231 @@
 {% block title %}Hedwig — Setup{% endblock %}
 {% block content %}
 
-<div class="hero">
-  <h1>⚙️ Setup Wizard</h1>
-  <p class="subtitle">Configure Hedwig in your browser — no .env editing required.</p>
-</div>
-
-{% if not status.ready %}
-<div class="alert">
-  ⚠️ Hedwig is not yet configured. Fill in the required fields below.
-</div>
-{% else %}
-<div class="alert success">
-  ✅ Hedwig is configured and ready. You can update any field below.
-</div>
-{% endif %}
-
-<form id="setup-form" class="form">
-  <section class="form-section">
-    <h2>1. Required Keys</h2>
-    <p class="muted">LLM + Storage — minimum required for Hedwig to run.</p>
-
-    {% for key, meta in required_keys.items() %}
-    <div class="field">
-      <label for="{{ key }}">{{ meta.label }}</label>
-      <input
-        type="{% if meta.secret %}password{% else %}text{% endif %}"
-        id="{{ key }}"
-        name="{{ key }}"
-        value="{{ values.get(key, '') }}"
-        placeholder="{{ meta.help }}"
-      >
-      <small class="help">{{ meta.help }}</small>
-    </div>
-    {% endfor %}
-  </section>
-
-  <section class="form-section">
-    <h2>2. Delivery Channels</h2>
-    <p class="muted">At least one delivery channel (Slack, Discord, or SMTP email) is required.</p>
-
-    <h3>Slack</h3>
-    {% for key, meta in delivery_keys.items() %}
-    {% if meta.group == "slack" %}
-    <div class="field">
-      <label for="{{ key }}">{{ meta.label }}</label>
-      <input
-        type="{% if meta.secret %}password{% else %}text{% endif %}"
-        id="{{ key }}"
-        name="{{ key }}"
-        value="{{ values.get(key, '') }}"
-        placeholder="{{ meta.help }}"
-      >
-    </div>
+{% macro env_field(key, meta) -%}
+<div class="field">
+  <label for="{{ key }}">
+    {{ meta.label }}
+    {% if meta.required %}
+    <span class="setup-required-badge">Required</span>
+    {% elif key in ["SUPABASE_URL", "SUPABASE_KEY"] %}
+    <span
+      class="setup-required-badge"
+      data-supabase-required-badge
+      hidden
+    ></span>
     {% endif %}
-    {% endfor %}
+  </label>
+  <input
+    type="{% if meta.secret %}password{% else %}text{% endif %}"
+    id="{{ key }}"
+    name="{{ key }}"
+    value="{{ values.get(key, '') }}"
+    placeholder="{{ meta.help }}"
+    autocomplete="{% if meta.secret %}off{% else %}on{% endif %}"
+    data-setup-field="{{ key }}"
+    {% if meta.secret %}data-secret="true"{% endif %}
+    aria-required="{% if meta.required %}true{% else %}false{% endif %}"
+    {% if meta.required %}required{% endif %}
+  >
+  <small class="help">{{ meta.help }}</small>
+</div>
+{%- endmacro %}
 
-    <h3>Discord</h3>
-    {% for key, meta in delivery_keys.items() %}
-    {% if meta.group == "discord" %}
-    <div class="field">
-      <label for="{{ key }}">{{ meta.label }}</label>
-      <input
-        type="{% if meta.secret %}password{% else %}text{% endif %}"
-        id="{{ key }}"
-        name="{{ key }}"
-        value="{{ values.get(key, '') }}"
-        placeholder="{{ meta.help }}"
+{% set first_run_status = setup_state.first_run_status %}
+{% set essential_ready = setup_state.openai_configured %}
+{% set required_onboarding_saved = setup_state.openai_configured %}
+{% set progress_ready = setup_state.local_ready and setup_state.criteria_exists and setup_state.db_exists %}
+{% set feed_ready = setup_state.feed_items_available %}
+{% set setup_completion_ready = setup_state.setup_completed %}
+{% set first_feed_partially_ready = setup_state.first_feed_usable_before_collection_complete %}
+{% set first_run_active = setup_state.first_run_active %}
+{% set setup_navigation_locked = setup_state.setup_navigation_locked %}
+{% set feed_navigation_available = setup_state.feed_navigation_available %}
+{% set feed_navigation_href = "/feed" if feed_navigation_available else "#setup-progress" %}
+{% set collection_counts = setup_state.collection_progress_counts or {} %}
+{% set collection_errors = setup_state.collection_progress_errors or [] %}
+{% set collection_failed = setup_state.collection_failed %}
+{% set collection_no_items = setup_state.collection_no_items %}
+{% set collection_terminal_attention = setup_state.collection_terminal_attention %}
+{% set collection_slow_progress = setup_state.collection_slow_progress %}
+{% set collection_status = setup_state.collection_progress_status or first_run_status %}
+{% set first_feed_item = setup_state.first_feed_item or {} %}
+{% set progress_panel_state = "complete" if setup_completion_ready else ("partial" if first_feed_partially_ready else ("failure" if collection_terminal_attention else ("active" if first_run_active else "idle"))) %}
+{% set run_feedback_state = "success" if setup_completion_ready else ("progress" if first_feed_partially_ready else ("failure" if collection_terminal_attention else ("progress" if progress_ready else "idle"))) %}
+{% set storage_value = values.get("HEDWIG_STORAGE", "sqlite").lower() %}
+{% set supabase_mode_selected = storage_value == "supabase" %}
+{% set supabase_required_keys = [] %}
+
+<div
+  class="setup-shell"
+  data-setup-navigation-locked="{% if setup_navigation_locked %}true{% else %}false{% endif %}"
+  data-navigation-lock-target="{{ setup_state.navigation_lock_target or '/setup#setup-progress' }}"
+>
+  <section class="setup-hero">
+    <div>
+      <p class="eyebrow">One-shot local onboarding</p>
+      <h1>Setup Hedwig, then open your first feed.</h1>
+      <p class="subtitle">
+        Start with only an OpenAI API key. Hedwig defaults to local SQLite,
+        the current AI-builder criteria profile, enabled source registry defaults,
+        and the dashboard feed as the delivery target.
+      </p>
+    </div>
+    <div class="setup-hero-panel" aria-label="Setup readiness">
+      <span class="status-pill {% if setup_state.openai_configured %}done{% else %}pending{% endif %}">
+        {% if setup_state.openai_configured %}OpenAI ready{% else %}OpenAI required{% endif %}
+      </span>
+      <span class="status-pill done">SQLite local mode</span>
+      <span class="status-pill {% if setup_state.feed_items_available %}done{% else %}pending{% endif %}">
+        {% if setup_state.feed_items_available %}Feed has {{ setup_state.feed_items }} items{% else %}Feed pending{% endif %}
+      </span>
+    </div>
+  </section>
+
+  {% if not setup_state.openai_configured %}
+  <div class="alert setup-alert">
+    Only OPENAI_API_KEY is blocking for first-run local SQLite setup. Supabase,
+    delivery, source APIs, and profile polish are optional advanced configuration.
+  </div>
+  {% else %}
+  <div class="alert success setup-alert">
+    Local setup is ready. You can run the feed, adjust steering, or update advanced settings below.
+  </div>
+  {% endif %}
+
+  <section
+    class="setup-primary-path-card"
+    aria-labelledby="setup-primary-path-heading"
+    data-primary-setup-path
+    data-required-first-run-options
+    data-advanced-options-non-blocking="true"
+  >
+    <div class="setup-primary-path-heading">
+      <div>
+        <p class="eyebrow">Primary /setup path</p>
+        <h2 id="setup-primary-path-heading">Everything required for the first local feed is on this page.</h2>
+      </div>
+      <a href="#setup-essential" class="btn btn-primary btn-large" data-primary-setup-start>
+        Start required setup
+      </a>
+    </div>
+    <p class="muted">
+      Use this consolidated path for first-run onboarding. It keeps required setup
+      OpenAI-only and local, while existing storage, delivery, source, profile,
+      import/export, settings, and meta controls remain reachable below as
+      collapsed optional sections.
+    </p>
+    <ol class="setup-primary-path-list">
+      <li data-required-first-run-option="openai-key">
+        <strong>OpenAI API key</strong>
+        <span>Required in <a href="#setup-essential">Essential</a>; saved to the local .env file.</span>
+      </li>
+      <li data-required-first-run-option="local-sqlite">
+        <strong>Local SQLite mode</strong>
+        <span>Applied by default as HEDWIG_STORAGE=sqlite; Supabase stays in Advanced.</span>
+      </li>
+      <li data-required-first-run-option="criteria-profile">
+        <strong>Criteria profile</strong>
+        <span>Generated from the optional interest or the preserved AI agents, LLM tooling, and research papers default.</span>
+      </li>
+      <li data-required-first-run-option="source-defaults">
+        <strong>Source defaults</strong>
+        <span>Uses the enabled registry/source_settings preset automatically.</span>
+      </li>
+      <li data-required-first-run-option="first-collection">
+        <strong>First collection</strong>
+        <span>Starts from this /setup form and reports slow-run progress without leaving the page.</span>
+      </li>
+      <li data-required-first-run-option="feed-handoff">
+        <strong>Feed handoff</strong>
+        <span>Dashboard <a href="{{ feed_navigation_href }}" data-setup-feed-navigation>/feed</a> unlocks after the readiness criteria pass.</span>
+      </li>
+    </ol>
+    <div class="setup-primary-path-actions">
+      <a href="#setup-criteria" class="btn">Optional interest</a>
+      <a href="#setup-progress" class="btn">First-run progress</a>
+      <a
+        href="{{ feed_navigation_href }}"
+        class="btn {% if not feed_navigation_available %}is-waiting{% endif %}"
+        data-setup-feed-navigation
+        aria-disabled="{% if feed_navigation_available %}false{% else %}true{% endif %}"
+      >{% if feed_navigation_available %}View /feed{% else %}Feed opens after readiness{% endif %}</a>
+      <a href="#setup-advanced" class="btn" data-primary-advanced-preservation-link>
+        Optional advanced controls
+      </a>
+    </div>
+  </section>
+
+  <section
+    id="setup-success-state"
+    class="setup-success-state {% if setup_completion_ready %}visible{% endif %}"
+    data-setup-success-state
+    data-onboarding-completion-state="{% if setup_completion_ready %}succeeded{% else %}pending{% endif %}"
+    data-setup-completion-distinct-state="true"
+    data-feed-items="{{ setup_state.feed_items }}"
+    data-completion-action="{{ setup_state.completion_action }}"
+    data-redirect-target="{{ setup_state.redirect_target or '' }}"
+    data-visible="{% if setup_completion_ready %}true{% else %}false{% endif %}"
+    aria-live="polite"
+    {% if not setup_completion_ready %}hidden{% endif %}
+  >
+    <div>
+      <p class="eyebrow">Onboarding succeeded</p>
+      <span class="setup-success-state-label">Setup complete</span>
+      <h2>Hedwig is ready locally.</h2>
+      <p data-setup-success-copy>First-run setup completed with OpenAI, local SQLite, generated criteria, and {{ setup_state.feed_items }} feed item{% if setup_state.feed_items != 1 %}s{% endif %} available in the dashboard feed.</p>
+      <div class="setup-success-proof" aria-label="Completed setup proof points">
+        <span data-setup-success-proof="openai">OpenAI key saved</span>
+        <span data-setup-success-proof="sqlite">Local SQLite active</span>
+        <span data-setup-success-proof="criteria">Criteria generated</span>
+        <span data-setup-success-proof="feed">/feed ready</span>
+      </div>
+    </div>
+    <div class="setup-success-actions">
+      <a href="{{ feed_navigation_href }}" class="btn btn-primary btn-large" data-setup-success-feed-link data-setup-feed-navigation aria-label="View feed">
+        View feed
+      </a>
+      <a href="#setup-completion" class="btn">Review setup summary</a>
+    </div>
+  </section>
+
+  <section
+    id="setup-partial-feed-readiness"
+    class="setup-success-state partial {% if first_feed_partially_ready %}visible{% endif %}"
+    data-setup-partial-feed-readiness
+    data-visible="{% if first_feed_partially_ready %}true{% else %}false{% endif %}"
+    aria-live="polite"
+    {% if not first_feed_partially_ready %}hidden{% endif %}
+  >
+    <div>
+      <p class="eyebrow">Partial readiness</p>
+      <h2>Your local feed is almost ready while collection finishes.</h2>
+      <p data-setup-partial-feed-copy>
+        {{ setup_state.feed_items }} SQLite-backed feed item{% if setup_state.feed_items != 1 %}s{% endif %}
+        are readable, but stay on /setup until the tracked first collection completes.
+        Feed navigation unlocks after completion.
+      </p>
+    </div>
+    <div class="setup-success-actions">
+      <a
+        href="{{ feed_navigation_href }}"
+        class="btn btn-primary btn-large {% if setup_navigation_locked %}is-locked{% endif %}"
+        data-setup-partial-feed-link
+        data-setup-feed-navigation
+        aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
       >
-    </div>
-    {% endif %}
-    {% endfor %}
-
-    <h3>SMTP Email</h3>
-    {% for key, meta in delivery_keys.items() %}
-    {% if meta.group == "smtp" %}
-    <div class="field">
-      <label for="{{ key }}">{{ meta.label }}</label>
-      <input
-        type="{% if meta.secret %}password{% else %}text{% endif %}"
-        id="{{ key }}"
-        name="{{ key }}"
-        value="{{ values.get(key, '') }}"
-        placeholder="{{ meta.help }}"
-      >
-    </div>
-    {% endif %}
-    {% endfor %}
-  </section>
-
-  <section class="form-section">
-    <h2>3. Optional Keys</h2>
-    <p class="muted">Expand source coverage with these optional APIs.</p>
-
-    {% for key, meta in optional_keys.items() %}
-    <div class="field">
-      <label for="{{ key }}">{{ meta.label }}</label>
-      <input
-        type="{% if meta.secret %}password{% else %}text{% endif %}"
-        id="{{ key }}"
-        name="{{ key }}"
-        value="{{ values.get(key, '') }}"
-        placeholder="{{ meta.help }}"
-      >
-      <small class="help">{{ meta.help }}</small>
-    </div>
-    {% endfor %}
-  </section>
-
-  <section class="form-section">
-    <h2>4. Test Your Keys</h2>
-    <p class="muted">Click to verify each key is valid. Hedwig will send test messages to Slack/Discord and checks SMTP connectivity.</p>
-    <button type="button" class="btn btn-primary"
-            hx-post="/setup/test"
-            hx-include="#setup-form"
-            hx-target="#test-results"
-            hx-swap="innerHTML">
-      🧪 Test All Keys
-    </button>
-    <div id="test-results"></div>
-  </section>
-
-  <section class="form-section">
-    <h2>5. Create Supabase Tables</h2>
-    <p class="muted">Automatically create all required tables in Supabase.</p>
-    <button type="button" class="btn"
-            hx-post="/setup/create-tables"
-            hx-target="#db-results"
-            hx-swap="innerHTML">
-      🗃️ Create Tables
-    </button>
-    <div id="db-results"></div>
-  </section>
-
-  <section class="form-section">
-    <h2>6. Save Configuration</h2>
-    <button type="button" class="btn btn-primary btn-large"
-            hx-post="/setup/save"
-            hx-include="#setup-form"
-            hx-swap="none"
-            onclick="showToast('✅ Saved to .env')">
-      💾 Save All
-    </button>
-  </section>
-
-  <section class="form-section">
-    <h2>7. Next Steps</h2>
-    <div class="next-steps">
-      <a href="/onboarding" class="btn btn-primary">🎙️ Start Socratic Onboarding</a>
-      <a href="/" class="btn">← Back to Dashboard</a>
+        Feed unlocks after collection
+      </a>
+      <a href="#setup-progress" class="btn">Keep watching progress</a>
     </div>
   </section>
-</form>
+
+  <details class="setup-details setup-advanced-entrypoint" data-advanced-setup-entrypoint>
+    <summary>Advanced setup (optional)</summary>
+    <p class="muted">
+      Keep this collapsed for the one-shot OpenAI + local SQLite path. Expand it only
+      if you want optional Supabase-backed storage, delivery, source/API keys,
+      profile, export/import, or model/backend settings before the first feed.
+    </p>
+    <div class="button-row">
+      <a href="#setup-advanced" class="btn" data-advanced-setup-link>
+        Open advanced setup controls
+      </a>
+      <a href="#setup-delivery-configuration" class="btn" data-delivery-setup-link>
+        Configure delivery channels
+      </a>
+      <a href="#setup-source-api-keys" class="btn" data-source-api-key-setup-link>
+        Configure source API keys
+      </a>
+      <a href="#setup-model-backend-settings" class="btn" data-model-backend-setup-link>
+        Configure model/backend settings
+      </a>
+      <a href="#setup-general-settings" class="btn" data-general-settings-setup-link>
+        Open general settings section
+      </a>
+      <a href="/settings" class="btn">Open detailed source settings</a>
+      <a href="/profile" class="btn">Open profile and export</a>
+      <a href="#setup-export-import" class="btn" data-export-import-setup-link>
+        Export/import algorithm
+      </a>
+    </div>
+  </details>
+
+  <section
+    class="setup-option-map"
+    aria-labelledby="setup-option-map-heading"
+    data-setup-option-location-map
+  >
+    <div class="setup-option-map-heading">
+      <div>
+        <p class="eyebrow">Setup inventory</p>
+        <h2 id="setup-option-map-heading">Every configuration and onboarding option has a visible home.</h2>
+      </div>
+      <p class="muted">
+        Use the essential path for the first feed. This map shows where each
+        existing option lives in the single /setup flow so advanced controls stay
+        reachable without becoming blocking setup tasks.
+      </p>
+    </div>
+    <div class="setup-option-map-grid">
+      {% for group in setup_option_location_map %}
+      <article class="setup-option-map-card" data-setup-option-group="{{ group.id }}">
+        <div class="setup-option-map-card-header">
+          <span class="setup-badge">{{ group.layer }}</span>
+          <h3><a href="{{ group.href }}">{{ group.title }}</a></h3>
+          <p>{{ group.location }}</p>
+        </div>
+        <ul>
+          {% for option in group.options %}
+          <li>{{ option }}</li>
+          {% endfor %}
+        </ul>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <nav
+    class="setup-flow-nav"
+    aria-label="Setup flow navigation"
+    data-completion-gate="{% if setup_completion_ready %}complete{% elif first_feed_partially_ready %}partial{% else %}waiting{% endif %}"
+  >
+    <a href="#setup-essential" class="{% if setup_state.openai_configured %}complete{% else %}current{% endif %}">
+      <strong>1. Essential</strong>
+      <span>OpenAI + SQLite</span>
+    </a>
+    <a href="#setup-criteria">
+      <strong>2. Criteria</strong>
+      <span>Optional interests</span>
+    </a>
+    <a href="#setup-sources">
+      <strong>3. Sources</strong>
+      <span>Automatic defaults</span>
+    </a>
+    <a href="#setup-progress" class="{% if setup_state.local_ready %}complete{% endif %}">
+      <strong>4. Progress</strong>
+      <span>First run status</span>
+    </a>
+    <a href="#setup-steering">
+      <strong>5. Steering</strong>
+      <span>Optional tuning</span>
+    </a>
+    <a href="#setup-feed">
+      <strong>6. Feed</strong>
+      <span>Consume + operate</span>
+    </a>
+    <a
+      href="#setup-completion"
+      class="completion-link {% if setup_completion_ready %}complete{% elif first_feed_partially_ready %}partial{% else %}waiting{% endif %}"
+      aria-disabled="{% if setup_state.feed_items_available %}false{% else %}true{% endif %}"
+      data-setup-completion-link
+    >
+      <strong>7. Finish</strong>
+      <span>{% if setup_completion_ready %}Ready for /feed{% elif first_feed_partially_ready %}Feed usable, finishing{% else %}Waiting on first feed{% endif %}</span>
+    </a>
+    <a href="#setup-advanced">
+      <strong>8. Advanced</strong>
+      <span>Optional controls</span>
+    </a>
+  </nav>
+
+  <form
+    id="setup-form"
+    class="setup-flow"
+    action="/setup/one-shot"
+    method="post"
+    enctype="application/x-www-form-urlencoded"
+    data-one-shot-submit-form
+    onsubmit="handleOneShotSetupSubmit(event)"
+    data-openai-configured="{% if setup_state.openai_configured %}true{% else %}false{% endif %}"
+    data-required-onboarding-saved="{% if required_onboarding_saved %}true{% else %}false{% endif %}"
+    data-storage-mode="{{ setup_state.storage_mode }}"
+    data-collection-progress-endpoint="/setup/collection-progress"
+    data-feed-collection-progress-endpoint="/feed/collection-progress"
+    data-setup-navigation-locked="{% if setup_navigation_locked %}true{% else %}false{% endif %}"
+  >
+    <section id="setup-essential" class="setup-step-card essential-card" data-setup-step="essential">
+      <div class="step-marker">1</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Essential</p>
+            <h2>OpenAI key + local SQLite</h2>
+          </div>
+          <span class="setup-badge">Minimum setup</span>
+        </div>
+        <p class="muted">
+          This is the only blocking step. Local SQLite is the default storage mode,
+          and no external delivery channel is required to complete setup.
+        </p>
+        <div class="setup-step-state {% if essential_ready %}complete{% else %}attention{% endif %}" data-step-status="essential">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: {% if essential_ready %}ready{% else %}needs OpenAI key{% endif %}</strong>
+            <span>
+              Guidance: paste the key, then continue. SQLite is applied automatically; Supabase and delivery stay optional.
+            </span>
+          </div>
+        </div>
+
+        {% for key, meta in required_keys.items() %}
+          {{ env_field(key, meta) }}
+        {% endfor %}
+        <div id="openai-key-error" class="setup-field-error" role="alert" hidden></div>
+        <div id="setup-client-status" class="setup-client-status" aria-live="polite">
+          Your OpenAI key is saved only to the local .env file. Browser draft persistence excludes secrets.
+        </div>
+
+        <div class="setup-summary-grid">
+          <div data-safe-default="openai-only">
+            <strong>Only required input</strong>
+            <span>OPENAI_API_KEY; every other setup value has a safe default.</span>
+          </div>
+          <div data-safe-default="storage-mode">
+            <strong>Storage default</strong>
+            <span>HEDWIG_STORAGE={{ setup_defaults.storage_mode }} for the first local feed.</span>
+          </div>
+          <div data-safe-default="interest-text">
+            <strong>Interest default</strong>
+            <span>{{ setup_defaults.interest_text }}</span>
+          </div>
+          <div data-safe-default="source-preset">
+            <strong>Source default</strong>
+            <span>{{ setup_defaults.source_preset }}; source selection is optional.</span>
+          </div>
+          <div data-safe-default="delivery-target">
+            <strong>Delivery default</strong>
+            <span>{{ setup_defaults.delivery_target }}; external delivery is not required.</span>
+          </div>
+          <div data-safe-default="model-backend">
+            <strong>Model/backend defaults</strong>
+            <span>
+              {{ setup_defaults.model_backend.OPENAI_MODEL_FAST }},
+              {{ setup_defaults.model_backend.OPENAI_MODEL_DEEP }},
+              {{ setup_defaults.model_backend.HEDWIG_PIPELINE }} pipeline.
+            </span>
+          </div>
+          <div>
+            <strong>Required environment</strong>
+            {% if supabase_mode_selected %}
+            <span>OPENAI_API_KEY is the only required field for one-shot setup; Supabase keys remain Advanced.</span>
+            {% else %}
+            <span>OPENAI_API_KEY is required for local SQLite first-run setup.</span>
+            {% endif %}
+          </div>
+          <div>
+            {% if supabase_mode_selected %}
+            <strong>Supabase requirement is advanced-only</strong>
+            <span>SUPABASE_URL and SUPABASE_KEY are needed only if you later operate in Supabase hosted/team mode.</span>
+            {% else %}
+            <strong>Not required for local mode</strong>
+            <span>SUPABASE_URL and SUPABASE_KEY are optional Advanced settings for hosted/team mode.</span>
+            {% endif %}
+          </div>
+          <div>
+            <strong>Storage</strong>
+            {% if supabase_mode_selected %}
+            <span>Supabase selected in Advanced; local SQLite remains the one-shot first-feed path.</span>
+            {% else %}
+            <span>Local SQLite selected automatically; storage choices live in Advanced.</span>
+            {% endif %}
+          </div>
+          <div>
+            <strong>Criteria</strong>
+            <span>Default AI-builder profile generation</span>
+          </div>
+          <div>
+            <strong>Sources</strong>
+            <span>Default enabled set from registry/source_settings</span>
+          </div>
+          <div>
+            <strong>Delivery</strong>
+            <span>Dashboard /feed first</span>
+          </div>
+        </div>
+
+        <details class="setup-progressive-details">
+          <summary>Why this is enough for minimum setup</summary>
+          <p class="muted">
+            Hedwig can generate the criteria profile, initialize local SQLite, run enabled default sources,
+            and hand off to /feed with only OPENAI_API_KEY. Hosted storage and external delivery are advanced paths.
+          </p>
+        </details>
+
+        <div class="button-row">
+          <button
+            type="button"
+            class="btn btn-primary btn-large"
+            id="save-required-setup-btn"
+            data-required-onboarding-save-control
+            onclick="saveRequiredOnboardingInputs()"
+          >
+            Save required inputs
+          </button>
+          <a href="#setup-criteria" class="btn btn-primary btn-large">Continue to optional interests</a>
+          <a
+            href="{{ feed_navigation_href }}"
+            class="btn btn-large {% if setup_navigation_locked %}is-locked{% elif not feed_navigation_available %}is-waiting{% endif %}"
+            data-setup-feed-navigation
+            aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
+          >{% if feed_navigation_available %}View /feed{% else %}Feed opens after readiness{% endif %}</a>
+        </div>
+        <div id="required-onboarding-save-results" class="setup-inline-result" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="setup-criteria" class="setup-step-card criteria-card" data-setup-step="criteria">
+      <div class="step-marker">2</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Optional interests</p>
+            <h2>Use default criteria or add one line of steering</h2>
+          </div>
+          <span class="setup-badge">Optional</span>
+        </div>
+        <p class="muted">
+          Interest selection is not mandatory. If you skip this card, Hedwig keeps
+          the quickstart default criteria for an AI builder focused on AI agents,
+          LLM tooling, and research papers.
+        </p>
+        <div class="setup-step-state complete" data-step-status="criteria">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: optional and default-ready</strong>
+            <span>
+              Guidance: leave this blank for the preserved quickstart defaults, or add one concise interest sentence.
+            </span>
+          </div>
+        </div>
+
+        <div class="setup-criteria-default" aria-label="Default criteria preview">
+          <div>
+            <strong>Default role</strong>
+            <span>AI builder</span>
+          </div>
+          <div>
+            <strong>Default interests</strong>
+            <span>AI agents, LLM tooling, and research papers</span>
+          </div>
+          <div>
+            <strong>Generation behavior</strong>
+            <span>Uses the existing quickstart AI-builder criteria generator.</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="interest_text">Optional one-line interest seed</label>
+          <input
+            type="text"
+            id="interest_text"
+            name="interest_text"
+            value=""
+            placeholder="{{ setup_default_interest }}"
+            maxlength="160"
+            autocomplete="off"
+            aria-describedby="interest_text_help"
+            data-optional-interest="true"
+            data-default-interest="{{ setup_default_interest }}"
+          >
+          <small id="interest_text_help" class="help">
+            Add one sentence only if you want a different first criteria profile.
+            Leaving this blank uses the default interest: {{ setup_default_interest }}.
+          </small>
+        </div>
+
+        <div id="criteria-step-status" class="setup-client-status" aria-live="polite">
+          You can skip interest selection and still complete setup with the default criteria.
+        </div>
+
+        <details class="setup-progressive-details">
+          <summary>What gets generated</summary>
+          <p class="muted">
+            The one-shot action uses the existing quickstart criteria generator, persists a first criteria version,
+            and records the initial profile so later /chat, /criteria, and onboarding tools can refine it.
+          </p>
+        </details>
+
+        <div class="button-row">
+          <button type="button" class="btn" id="skip-criteria-btn" onclick="skipCriteriaStep()">
+            Skip and use default criteria
+          </button>
+          <button
+            type="submit"
+            class="btn btn-primary btn-large"
+            id="one-shot-btn"
+            data-one-shot-start-control
+            data-ready-label="Continue with these interests"
+            data-missing-key-label="Enter OpenAI key to continue"
+            data-unsaved-label="Save required inputs to continue"
+            aria-disabled="{% if required_onboarding_saved %}false{% else %}true{% endif %}"
+            {% if not required_onboarding_saved %}disabled{% endif %}
+          >
+            Continue with these interests
+          </button>
+        </div>
+        <div id="one-shot-results" class="setup-inline-result" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="setup-sources" class="setup-step-card sources-card" data-setup-step="sources">
+      <div class="step-marker">3</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Automatic sources</p>
+            <h2>Default source configuration is applied automatically</h2>
+          </div>
+          <span class="setup-badge">No action needed</span>
+        </div>
+        <p class="muted">
+          One-shot setup uses the currently enabled source set from
+          registry/source_settings automatically. Source selection is not a required
+          setup step; expand the optional controls only if you want to override the
+          first-run preset or open detailed source configuration.
+        </p>
+        <div class="setup-step-state complete" data-step-status="sources">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: automatic registry defaults</strong>
+            <span>
+              Guidance: registry defaults are applied automatically; source API keys remain optional advanced inputs.
+            </span>
+          </div>
+        </div>
+
+        {% for preset in source_presets %}
+        {% if preset.id == default_source_preset %}
+        <input
+          type="hidden"
+          value="{{ preset.id }}"
+          data-default-source-preset
+          data-preset-label="{{ preset.label }}"
+          data-preset-enabled-count="{{ preset.enabled_count }}"
+          data-preset-total-count="{{ preset.total_count }}"
+        >
+        <div class="setup-source-auto-card" aria-describedby="source-default-help">
+          <div>
+            <strong>{{ preset.label }}</strong>
+            <span>{{ preset.description }}</span>
+            <small>{{ preset.enabled_count }} of {{ preset.total_count }} registered sources enabled automatically</small>
+          </div>
+          <span class="setup-source-chips" aria-label="{{ preset.label }} source preview">
+            {% for source_id in preset.preview_source_ids %}
+            <em>{{ source_id }}</em>
+            {% endfor %}
+            {% if preset.enabled_count > preset.preview_source_ids|length %}
+            <em>+{{ preset.enabled_count - preset.preview_source_ids|length }} more</em>
+            {% endif %}
+          </span>
+        </div>
+        {% endif %}
+        {% endfor %}
+        <small id="source-default-help" class="help">
+          This default is submitted automatically with one-shot setup. Advanced source selection,
+          registry review, and source API keys are optional and collapsed below.
+        </small>
+
+        <details class="setup-progressive-details">
+          <summary>How automatic source defaults affect first run</summary>
+          <p class="muted">
+            The first collection uses the default enabled source map from registry/source_settings. This does not remove
+            detailed source controls; /sources and /settings remain available for power-user edits after setup.
+          </p>
+        </details>
+
+        <details
+          class="setup-progressive-details"
+          data-source-toggle-progressive-disclosure
+          data-advanced-source-settings
+          data-uncommon-setup-inputs
+        >
+          <summary>Optional source toggles and registry settings</summary>
+          <p class="muted">
+            Leave this closed for the automatic registry/source_settings default.
+            Expand only if you want to override source enablement before the first
+            collection; detailed source controls also remain available in /sources
+            and /settings.
+          </p>
+          <fieldset
+            class="setup-source-toggle-panel"
+            data-setup-source-toggle-surface
+            data-source-settings-path="{{ setup_source_settings_path }}"
+          >
+            <legend>Source toggles</legend>
+            <p class="muted">
+              Existing source toggles are reachable here before setup completion,
+              while the first run is waiting, and after feed items are ready. Saving these
+              toggles updates the local registry/source_settings defaults used by the
+              registry default preset.
+            </p>
+            <div class="setup-source-toggle-grid">
+              {% for source in setup_source_toggles %}
+              <label class="setup-source-toggle {% if source.enabled %}selected{% endif %}" for="setup-source-toggle-{{ source.id }}">
+                <input
+                  type="checkbox"
+                  id="setup-source-toggle-{{ source.id }}"
+                  value="{{ source.id }}"
+                  data-setup-source-toggle
+                  {% if source.enabled %}checked{% endif %}
+                >
+                <span>
+                  <strong>{{ source.meta.display_name }}</strong>
+                  <small>{{ source.id }} · {{ source.meta.fetch_method }} · {{ source.meta.plugin_type }}</small>
+                </span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="button-row">
+              <button type="button" class="btn" id="setup-source-toggle-save-btn" onclick="saveSetupSourceToggles()">
+                Save source toggles
+              </button>
+              <a href="/settings" class="btn">Open detailed source settings</a>
+              <a href="/sources" class="btn">View source registry</a>
+            </div>
+            <div id="setup-source-toggle-results" class="setup-inline-result" aria-live="polite"></div>
+          </fieldset>
+        </details>
+
+        <details
+          class="setup-progressive-details"
+          data-advanced-source-controls
+          data-uncommon-setup-inputs
+        >
+          <summary>Optional advanced source selection and configuration</summary>
+          <p class="muted">
+            Leave this closed for the lowest-friction first run. Open it only to choose a
+            non-default source preset, inspect the source registry, or configure detailed
+            source controls after setup.
+          </p>
+          <fieldset class="setup-source-preset-grid">
+            <legend>Advanced source preset selection</legend>
+            {% for preset in source_presets %}
+            <label
+              class="setup-source-preset {% if preset.id == default_source_preset %}selected{% endif %}"
+              for="source_preset_{{ preset.id }}"
+              data-preset-label="{{ preset.label }}"
+              data-preset-enabled-count="{{ preset.enabled_count }}"
+              data-preset-total-count="{{ preset.total_count }}"
+            >
+              <input
+                type="radio"
+                id="source_preset_{{ preset.id }}"
+                name="source_preset"
+                value="{{ preset.id }}"
+                {% if preset.id == default_source_preset %}checked{% endif %}
+              >
+              <span>
+                <strong>{{ preset.label }}</strong>
+                <small>{{ preset.description }}</small>
+                <small>{{ preset.enabled_count }} of {{ preset.total_count }} registered sources</small>
+              </span>
+            </label>
+            {% endfor %}
+          </fieldset>
+          <div class="button-row">
+            <a href="/settings" class="btn">Open detailed source settings</a>
+            <a href="/sources" class="btn">View source registry</a>
+            <a href="#setup-source-api-keys" class="btn" data-source-api-key-setup-link>
+              Configure source API keys
+            </a>
+          </div>
+        </details>
+
+        <div class="button-row">
+          <a href="#setup-progress" class="btn btn-primary">Continue to first run status</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup-progress" class="setup-step-card" data-setup-step="progress">
+      <div class="step-marker">4</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Progress</p>
+            <h2>First run status</h2>
+          </div>
+          <span id="first-run-pill" class="setup-badge {% if setup_state.feed_items_available %}ready{% endif %}">
+            {{ first_run_status.replace('_', ' ') }}
+          </span>
+        </div>
+        <p class="muted">
+          Long first collections can take a while. This page stays useful while Hedwig
+          collects and scores; /feed navigation appears after the readiness criteria pass.
+        </p>
+        <div class="setup-step-state {% if feed_ready %}complete{% elif progress_ready or collection_terminal_attention %}attention{% else %}pending{% endif %}" data-step-status="progress">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: {{ first_run_status.replace('_', ' ') }}</strong>
+            <span>
+              {% if collection_failed %}
+              Guidance: the first collection failed in place; fix the error and retry without leaving setup.
+              {% elif collection_no_items %}
+              Guidance: the first collection finished without feed items; review sources or retry from this page.
+              {% else %}
+              Guidance: refresh here during slow collection; if items are not ready yet, stay on this progress card.
+              {% endif %}
+            </span>
+          </div>
+        </div>
+        <div
+          id="setup-run-feedback"
+          class="setup-run-feedback {{ run_feedback_state }}"
+          data-setup-run-feedback
+          data-run-feedback-state="{{ run_feedback_state }}"
+          role="status"
+          aria-live="polite"
+        >
+          <strong id="setup-run-feedback-title">
+            {% if setup_completion_ready %}
+            First run succeeded
+            {% elif first_feed_partially_ready %}
+            Feed usable while collection finishes
+            {% elif collection_failed %}
+            First collection failed
+            {% elif collection_no_items %}
+            No feed items yet
+            {% elif progress_ready %}
+            First run in progress
+            {% else %}
+            First run not started
+            {% endif %}
+          </strong>
+          <span id="setup-run-feedback-message">
+            {% if setup_completion_ready %}
+            Feed items are available. Open /feed to start consuming your personal algorithm.
+            {% elif first_feed_partially_ready %}
+            Local SQLite already has readable feed items. Stay on /setup while this page keeps polling for the tracked collection to finish.
+            {% elif collection_failed %}
+            The first collection failed before feed items were saved. Review the error below, then retry from this page.
+            {% elif collection_no_items %}
+            The first collection finished without feed items. Retry after adjusting sources; /feed unlocks once items are saved.
+            {% elif progress_ready %}
+            Required local setup is ready and Hedwig is waiting for first feed items. Keep this page open until /feed unlocks.
+            {% else %}
+            Start the first collection after saving your OpenAI key; progress, success, and failure feedback appears here.
+            {% endif %}
+          </span>
+        </div>
+        <div
+          id="setup-first-run-failure"
+          class="setup-failure-state"
+          data-setup-failure-state
+          data-visible="{% if collection_terminal_attention %}true{% else %}false{% endif %}"
+          role="alert"
+          aria-live="assertive"
+          {% if not collection_terminal_attention %}hidden{% endif %}
+        >
+          <div>
+            <p class="eyebrow">Recovery</p>
+            <h3>First-run setup needs attention</h3>
+            <p id="setup-failure-message">
+              {% if collection_failed %}
+              {% if collection_errors %}
+              {{ collection_errors[-1].get("message", "The first collection failed.") }}
+              {% else %}
+              The first collection failed before feed items were saved.
+              {% endif %}
+              Fix the issue, then retry from this page without losing your setup inputs.
+              {% elif collection_no_items %}
+              The first collection finished without feed items. Review source coverage, keep this page open,
+              then retry without leaving setup.
+              {% else %}
+              The first collection did not start. Review the error, keep this page open,
+              then retry without leaving setup.
+              {% endif %}
+            </p>
+          </div>
+          <ul>
+            <li>Confirm OPENAI_API_KEY is present and current.</li>
+            <li>Confirm the local SQLite database path is writable.</li>
+            <li>Review optional source/API keys only if the error names a source.</li>
+          </ul>
+          <div class="button-row">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              id="setup-failure-retry-btn"
+              data-one-shot-start-control
+              data-setup-failure-retry
+              data-ready-label="Retry first collection"
+              data-missing-key-label="Enter OpenAI key to retry"
+              data-unsaved-label="Save required inputs to retry"
+              aria-disabled="{% if required_onboarding_saved %}false{% else %}true{% endif %}"
+              {% if not required_onboarding_saved %}disabled{% endif %}
+            >
+              Retry first collection
+            </button>
+            <button type="button" class="btn" onclick="refreshOneShotStatus()">Refresh status</button>
+            <a href="/status" class="btn">Open /status</a>
+          </div>
+        </div>
+        <div
+          id="setup-first-run-progress"
+          class="setup-first-run-progress {{ progress_panel_state }}"
+          data-first-run-progress
+          data-collection-progress-polling="/setup/collection-progress"
+          data-active="{% if first_run_active %}true{% else %}false{% endif %}"
+          data-progress-percent="{{ setup_state.progress_percent }}"
+          aria-live="polite"
+          aria-busy="{% if first_run_active %}true{% else %}false{% endif %}"
+        >
+          <div class="setup-progress-header">
+            <strong id="setup-first-run-progress-title">
+              {% if setup_completion_ready %}
+              Setup/feed initialization complete
+              {% elif first_feed_partially_ready %}
+              Feed usable while collection finishes
+              {% elif collection_failed %}
+              First collection failed
+              {% elif collection_no_items %}
+              First collection finished with no items
+              {% elif first_run_active %}
+              Setup/feed initialization is running
+              {% else %}
+              Setup/feed initialization has not started
+              {% endif %}
+            </strong>
+            <span id="setup-first-run-progress-percent">{{ setup_state.progress_percent }}%</span>
+          </div>
+          <div
+            class="setup-progress-meter"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="{{ setup_state.progress_percent }}"
+            aria-label="First-run setup progress"
+          >
+            <span style="width: {{ setup_state.progress_percent }}%"></span>
+          </div>
+          <p id="setup-first-run-progress-message">
+            {% if setup_completion_ready %}
+            Feed items are ready. Continue to /feed.
+            {% elif first_feed_partially_ready %}
+            Feed items are readable from local SQLite now. Stay on /setup while it keeps watching the first collection.
+            {% elif collection_failed %}
+            First collection failed. Fix the recorded error, then retry from this setup step; /feed unlocks after a successful collection.
+            {% elif collection_no_items %}
+            First collection completed without saving feed items. Review sources or retry; setup stays on this page until items are available.
+            {% elif first_run_active %}
+            Criteria and local SQLite are ready. Hedwig is collecting and scoring the first feed; this page will keep polling.
+            {% if collection_slow_progress %}Slow collection is expected on the first run; keep this page open for live counts and recovery options.{% endif %}
+            {% elif setup_state.local_ready %}
+            Required local setup is saved. Start the first collection to begin feed initialization.
+            {% else %}
+            Save OPENAI_API_KEY to enable local setup and first-feed initialization.
+            {% endif %}
+          </p>
+          <p
+            id="setup-first-run-progress-details"
+            class="muted"
+            data-first-run-progress-details
+          >
+            Status: <span data-progress-detail-status>{{ setup_state.collection_progress_status or first_run_status }}</span>.
+            Counts:
+            <span data-progress-detail-counts>
+              collected {{ collection_counts.get("posts_collected", 0) }},
+              filtered {{ collection_counts.get("posts_filtered", 0) }},
+              scored {{ collection_counts.get("signals_scored", 0) }},
+              saved {{ collection_counts.get("signals_saved", setup_state.feed_items) }}
+            </span>.
+            Last updated:
+            <span data-progress-detail-updated>
+              {{ setup_state.collection_progress_last_updated_at or "not started" }}
+            </span>.
+            {% if collection_errors %}
+            Latest error:
+            <span data-progress-detail-error>{{ collection_errors[-1].get("message", "") }}</span>.
+            {% else %}
+            <span data-progress-detail-error>No backend errors recorded.</span>
+            {% endif %}
+          </p>
+        </div>
+        <div class="setup-progress-list" id="setup-progress-list">
+          <div data-progress-step="openai_configured" class="{% if setup_state.openai_configured %}complete{% endif %}">
+            <span></span>
+            <p>OpenAI key configured</p>
+          </div>
+          <div data-progress-step="local_ready" class="{% if setup_state.local_ready %}complete{% endif %}">
+            <span></span>
+            <p>Local SQLite mode active</p>
+          </div>
+          <div data-progress-step="criteria_exists" class="{% if setup_state.criteria_exists %}complete{% endif %}">
+            <span></span>
+            <p>Criteria profile generated</p>
+          </div>
+          <div data-progress-step="db_exists" class="{% if setup_state.db_exists %}complete{% endif %}">
+            <span></span>
+            <p>Local database initialized</p>
+          </div>
+          <div data-progress-step="feed_items_available" class="{% if setup_state.feed_items_available %}complete{% endif %}">
+            <span></span>
+            <p>Feed items available{% if setup_state.feed_items %}: {{ setup_state.feed_items }}{% endif %}</p>
+          </div>
+        </div>
+        <div
+          class="setup-run-control"
+          aria-describedby="start-first-run-help"
+          data-start-first-run-control
+          data-existing-run-mechanism="/run/daily"
+          data-run-start-endpoint="/setup/one-shot"
+        >
+          <div>
+            <strong>Ready to launch the first collection?</strong>
+            <span id="start-first-run-help">
+              This starts the local SQLite first run with the generated criteria and
+              registry/source_settings defaults, then keeps this page polling until
+              /feed has items.
+            </span>
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary btn-large"
+            id="start-first-run-btn"
+            data-one-shot-start-control
+            data-ready-label="Start first collection"
+            data-missing-key-label="Enter OpenAI key to start first collection"
+            data-unsaved-label="Save required inputs to start first collection"
+            aria-disabled="{% if required_onboarding_saved %}false{% else %}true{% endif %}"
+            {% if not required_onboarding_saved %}disabled{% endif %}
+          >
+            Start first collection
+          </button>
+        </div>
+        <div class="button-row">
+          <button type="button" class="btn" onclick="refreshOneShotStatus()">Refresh status</button>
+          <a
+            href="{{ feed_navigation_href }}"
+            class="btn btn-primary {% if setup_navigation_locked %}is-locked{% elif not feed_navigation_available %}is-waiting{% endif %}"
+            data-setup-feed-navigation
+            aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
+          >{% if feed_navigation_available %}Open /feed{% else %}Waiting for /feed readiness{% endif %}</a>
+          <a href="/status" class="btn">Open /status</a>
+        </div>
+        <details class="setup-progressive-details">
+          <summary>Recovery if the first run is slow</summary>
+          <p class="muted">
+            A slow source or empty first collection does not strand setup. Keep refreshing this card, open /status for
+            runtime health, or keep this setup progress visible while collection continues.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <section id="setup-steering" class="setup-step-card" data-setup-step="steering">
+      <div class="step-marker">5</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Steering</p>
+            <h2>Tune after the first feed</h2>
+          </div>
+          <span class="setup-badge">Non-blocking</span>
+        </div>
+        <p class="muted">
+          Keep first-run friction low, then use natural-language steering and existing
+          power-user pages when you want more control.
+        </p>
+        <div class="setup-step-state pending" data-step-status="steering">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: available after setup</strong>
+            <span>
+              Guidance: use these controls after the first feed if you want more precise algorithm steering.
+            </span>
+          </div>
+        </div>
+        <div class="setup-link-grid">
+          <a href="/chat">
+            <strong>Chat control</strong>
+            <span>Steer Hedwig in natural language.</span>
+          </a>
+          <a href="/criteria">
+            <strong>Criteria</strong>
+            <span>Inspect or edit the generated profile.</span>
+          </a>
+          <a href="/onboarding">
+            <strong>Socratic onboarding</strong>
+            <span>Deepen preferences when ready.</span>
+          </a>
+          <a href="/onboarding/auto">
+            <strong>Auto onboarding</strong>
+            <span>Keep the existing automated flow reachable.</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup-feed" class="setup-step-card" data-setup-step="feed">
+      <div class="step-marker">6</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Consume and operate</p>
+            <h2>Feed-first dashboard</h2>
+          </div>
+          <span class="setup-badge">Default target</span>
+        </div>
+        <p class="muted">
+          Hedwig’s first delivery target is the dashboard feed. Monitoring and
+          source review stay close at hand; power-user surfaces remain in Advanced.
+        </p>
+        <div class="setup-step-state {% if feed_ready %}complete{% else %}pending{% endif %}" data-step-status="feed">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: {% if feed_ready %}feed items ready{% else %}waiting for first items{% endif %}</strong>
+            <span>
+              Guidance: /feed is the default destination; source review, signals, briefs, and ambient surfaces remain reachable.
+            </span>
+          </div>
+        </div>
+        <article
+          class="setup-feed-preview {% if first_feed_item %}ready{% else %}waiting{% endif %}"
+          data-setup-feed-preview
+          data-preview-ready="{% if first_feed_item %}true{% else %}false{% endif %}"
+          aria-live="polite"
+        >
+          <div class="setup-feed-preview-heading">
+            <div>
+              <p class="eyebrow">First-feed preview</p>
+              <h3 id="setup-feed-preview-title">
+                {% if first_feed_item %}
+                {{ first_feed_item.title }}
+                {% else %}
+                First feed preview pending
+                {% endif %}
+              </h3>
+            </div>
+            <span id="setup-feed-preview-count" class="setup-badge {% if feed_ready %}ready{% endif %}">
+              {% if feed_ready %}{{ setup_state.feed_items }} ready{% else %}Waiting{% endif %}
+            </span>
+          </div>
+          <p id="setup-feed-preview-meta" class="setup-feed-preview-meta">
+            {% if first_feed_item %}
+            <span data-feed-preview-platform>{{ first_feed_item.platform }}</span>
+            {% if first_feed_item.author %}<span data-feed-preview-author>{{ first_feed_item.author }}</span>{% endif %}
+            {% if first_feed_item.urgency %}<span data-feed-preview-urgency>{{ first_feed_item.urgency }}</span>{% endif %}
+            {% if first_feed_item.relevance_score is not none and first_feed_item.relevance_score != "" %}
+            <span data-feed-preview-score>Score {{ "%.2f"|format(first_feed_item.relevance_score|float) }}</span>
+            {% endif %}
+            {% else %}
+            <span data-feed-preview-platform>Local SQLite feed data will appear here after the first collection saves items.</span>
+            {% endif %}
+          </p>
+          <p id="setup-feed-preview-summary" class="muted">
+            {% if first_feed_item %}
+            {{ (first_feed_item.why_relevant or first_feed_item.content or "This item is ready in your local dashboard feed.")[:240] }}
+            {% else %}
+            This inline preview uses the same local SQLite feed data as /feed. Start the first collection, then keep this page open for ready-state content and recovery.
+            {% endif %}
+          </p>
+          <div class="button-row">
+            <a
+              id="setup-feed-preview-link"
+              href="{{ first_feed_item.url or feed_navigation_href }}"
+              class="btn btn-primary"
+              data-feed-preview-link
+            >
+              {% if first_feed_item.url %}Open source item{% elif feed_navigation_available %}Open /feed{% else %}Waiting for /feed readiness{% endif %}
+            </a>
+            <a
+              href="{{ feed_navigation_href }}"
+              class="btn {% if setup_navigation_locked %}is-locked{% elif not feed_navigation_available %}is-waiting{% endif %}"
+              data-feed-preview-feed-link
+              data-setup-feed-navigation
+              aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
+            >{% if feed_navigation_available %}Open dashboard /feed{% else %}Feed unlocks after readiness{% endif %}</a>
+          </div>
+        </article>
+        <div class="setup-link-grid">
+          <a
+            href="{{ feed_navigation_href }}"
+            data-setup-feed-navigation
+            aria-disabled="{% if feed_navigation_available %}false{% else %}true{% endif %}"
+          >
+            <strong>Feed</strong>
+            <span>{% if feed_navigation_available %}Personal SNS-style consumption surface.{% else %}Unlocks when first-run readiness passes.{% endif %}</span>
+          </a>
+          <a href="/signals">
+            <strong>Signals</strong>
+            <span>Inspect collected items and export raw signals.</span>
+          </a>
+          <a href="/brief">
+            <strong>Brief</strong>
+            <span>Read daily and weekly summaries.</span>
+          </a>
+          <a href="/status">
+            <strong>Status</strong>
+            <span>Check readiness and runtime health.</span>
+          </a>
+          <a href="/ambient/pwa">
+            <strong>Ambient</strong>
+            <span>Optional PWA surface after first run.</span>
+          </a>
+        </div>
+        <details class="setup-progressive-details" data-feed-source-review>
+          <summary>Optional source review after the first feed</summary>
+          <p class="muted">
+            Source review and selection stay available without becoming part of
+            the essential feed handoff.
+          </p>
+          <div class="button-row">
+            <a href="/sources" class="btn">View source registry</a>
+            <a href="/settings" class="btn">Open detailed source settings</a>
+          </div>
+        </details>
+        <details class="setup-progressive-details" data-delivery-settings-entrypoint>
+          <summary>Optional delivery configuration after the first feed</summary>
+          <p class="muted">
+            Dashboard /feed remains the default delivery target. External Slack,
+            Discord, SMTP email, and ambient delivery surfaces are preserved as
+            optional advanced configuration and do not block setup completion.
+          </p>
+          <div class="button-row">
+            <a href="#setup-delivery-configuration" class="btn">Configure delivery channels</a>
+            <a href="/ambient/pwa" class="btn">Open ambient surface</a>
+            <a href="/brief" class="btn">Open brief surface</a>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section
+      id="setup-completion"
+      class="setup-step-card completion-card {% if setup_completion_ready %}ready{% elif first_feed_partially_ready %}partial{% else %}waiting{% endif %}"
+      data-setup-step="completion"
+      data-completion-gate="{% if setup_completion_ready %}complete{% elif first_feed_partially_ready %}partial{% else %}waiting{% endif %}"
+      data-completion-requires-delivery="false"
+      data-feed-ready-completion-card
+      data-feed-ready="{% if setup_state.feed_items_available %}true{% else %}false{% endif %}"
+      data-setup-complete="{% if setup_completion_ready %}true{% else %}false{% endif %}"
+      data-partial-feed-ready="{% if first_feed_partially_ready %}true{% else %}false{% endif %}"
+      data-redirect-target="{{ setup_state.redirect_target or '' }}"
+    >
+      <div class="step-marker">7</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Completion gate</p>
+            <h2>Feed-ready completion</h2>
+          </div>
+          <span id="setup-completion-pill" class="setup-badge {% if setup_completion_ready %}ready{% endif %}">
+            {% if setup_completion_ready %}Complete{% elif first_feed_partially_ready %}Feed usable{% else %}Waiting{% endif %}
+          </span>
+        </div>
+        <p class="muted" id="setup-completion-message">
+          {% if setup_completion_ready %}
+          First-run setup is complete. Open the dashboard feed to start consuming your personal algorithm.
+          {% elif first_feed_partially_ready %}
+          Local SQLite feed data is usable now, but setup keeps feed navigation locked
+          until the tracked first collection finishes.
+          {% else %}
+          Setup can keep running here while the first collection finishes. /feed navigation appears
+          only after the readiness criteria below pass.
+          {% endif %}
+        </p>
+        <div class="setup-step-state {% if setup_completion_ready %}complete{% else %}attention{% endif %}" data-step-status="completion">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: {% if setup_completion_ready %}complete{% elif first_feed_partially_ready %}feed usable, collection finishing{% else %}waiting on feed items{% endif %}</strong>
+            <span>
+              Guidance: completion requires the minimum local setup checks, readable feed data, and the first collection completion signal.
+            </span>
+          </div>
+        </div>
+        <div class="setup-completion-summary" aria-label="Feed-ready completion summary">
+          <div>
+            <strong id="setup-completion-count">
+              {% if setup_state.feed_items_available %}
+              {{ setup_state.feed_items }} feed item{% if setup_state.feed_items != 1 %}s{% endif %}
+              {% else %}
+              No feed items yet
+              {% endif %}
+            </strong>
+            <span>Feed readiness</span>
+          </div>
+          <div>
+            <strong id="setup-completion-action">{{ setup_state.completion_action }}</strong>
+            <span>Completion action</span>
+          </div>
+          <div>
+            <strong id="setup-completion-redirect">
+              {{ setup_state.redirect_target or "Waiting for feed items" }}
+            </strong>
+            <span>Redirect target</span>
+          </div>
+          <div>
+            <strong id="setup-completion-fallback">{% if feed_navigation_available %}View /feed{% else %}Keep setup open{% endif %}</strong>
+            <span>{% if feed_navigation_available %}Available after readiness passes{% else %}Slow collection progress stays visible here{% endif %}</span>
+          </div>
+        </div>
+        <div class="setup-completion-checks" aria-label="Minimum setup completion checks">
+          <div data-completion-check="openai_configured" class="{% if setup_state.openai_configured %}complete{% endif %}">
+            OpenAI key configured
+          </div>
+          <div data-completion-check="local_ready" class="{% if setup_state.local_ready %}complete{% endif %}">
+            Local SQLite active
+          </div>
+          <div data-completion-check="criteria_exists" class="{% if setup_state.criteria_exists %}complete{% endif %}">
+            Criteria generated
+          </div>
+          <div data-completion-check="db_exists" class="{% if setup_state.db_exists %}complete{% endif %}">
+            Local database initialized
+          </div>
+          <div data-completion-check="feed_items_available" class="{% if setup_state.feed_items_available %}complete{% endif %}">
+            Feed items available
+          </div>
+          <div data-completion-check="first_collection_completed" class="{% if setup_state.first_collection_completed %}complete{% endif %}">
+            First collection completed
+          </div>
+          <div data-completion-check="delivery_optional" class="complete">
+            External delivery optional
+          </div>
+        </div>
+        <div
+          class="setup-feed-navigation-criteria"
+          aria-label="Feed navigation readiness criteria"
+          data-feed-navigation-readiness-criteria
+          data-feed-navigation-available="{% if setup_state.feed_navigation_available %}true{% else %}false{% endif %}"
+          data-feed-navigation-blocked="{% if setup_state.feed_navigation_blocked %}true{% else %}false{% endif %}"
+        >
+          <h3>Feed navigation readiness criteria</h3>
+          <p class="muted">
+            /feed navigation unlocks after setup completion only when every local
+            readiness criterion below is satisfied. Until then, /setup stays as
+            the progress and recovery surface.
+          </p>
+          <div class="setup-feed-navigation-criteria-list">
+            {% for criterion in setup_state.feed_navigation_criteria %}
+            <div
+              data-feed-navigation-criterion="{{ criterion.id }}"
+              class="{% if criterion.satisfied %}complete{% else %}blocked{% endif %}"
+            >
+              <strong>{{ criterion.label }}</strong>
+              <span>{{ criterion.detail }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        <nav
+          class="setup-primary-nav {% if setup_completion_ready %}ready{% elif first_feed_partially_ready %}partial{% else %}waiting{% endif %}"
+          aria-label="Post-setup primary navigation"
+          data-post-setup-primary-nav
+          data-ready="{% if setup_completion_ready %}true{% else %}false{% endif %}"
+          data-partial-feed-ready="{% if first_feed_partially_ready %}true{% else %}false{% endif %}"
+        >
+          <p class="setup-primary-nav-lead" data-post-setup-primary-nav-lead>
+            {% if setup_state.feed_items_available %}
+            {% if setup_completion_ready %}
+            Setup is complete. Continue with the primary Hedwig surfaces.
+            {% else %}
+            Feed data is usable now, but setup keeps navigation here until collection finishes.
+            {% endif %}
+            {% else %}
+            These primary surfaces remain reachable while setup waits for first feed items.
+            {% endif %}
+          </p>
+          <div class="setup-primary-nav-links">
+            <a
+              href="{{ feed_navigation_href }}" data-primary-nav-target="feed"
+              data-setup-feed-navigation
+              aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
+            >
+              <strong>Feed</strong>
+              <span>{% if feed_navigation_available %}Open your personal SNS-style feed.{% else %}Unlocks after the setup readiness criteria pass.{% endif %}</span>
+            </a>
+            <a href="/chat" data-primary-nav-target="chat">
+              <strong>Chat</strong>
+              <span>Steer Hedwig in natural language.</span>
+            </a>
+            <a href="/profile" data-primary-nav-target="profile">
+              <strong>Profile</strong>
+              <span>Review preferences and export surfaces.</span>
+            </a>
+            <a href="/status" data-primary-nav-target="status">
+              <strong>Status</strong>
+              <span>Check readiness and runtime health.</span>
+            </a>
+          </div>
+        </nav>
+        <div class="button-row">
+          <a
+            id="setup-finish-feed-link"
+            href="{{ feed_navigation_href }}"
+            class="btn btn-primary {% if not setup_completion_ready %}is-waiting{% endif %}"
+            data-setup-feed-navigation
+            aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
+          >
+            {% if setup_completion_ready %}Open completed /feed{% elif first_feed_partially_ready %}Feed unlocks after collection{% else %}Feed opens after readiness{% endif %}
+          </a>
+          <button type="button" class="btn" onclick="refreshOneShotStatus()">Refresh until ready</button>
+          <a href="#setup-advanced" class="btn">Skip to Advanced</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup-advanced" class="setup-step-card advanced-card" data-setup-step="advanced">
+      <div class="step-marker">8</div>
+      <div class="step-content">
+        <div class="step-heading">
+          <div>
+            <p class="eyebrow">Advanced</p>
+            <h2>Optional configuration</h2>
+          </div>
+          <span class="setup-badge">Collapsed by default</span>
+        </div>
+        <p class="muted">
+          These controls preserve the old setup wizard and power-user paths without
+          blocking first-run setup.
+        </p>
+        <div class="setup-step-state pending" data-step-status="advanced">
+          <span class="setup-status-dot"></span>
+          <div>
+            <strong>Status: collapsed and non-blocking</strong>
+            <span>
+              Guidance: expand only what you need for hosted storage, delivery, source keys, model/backend tuning, profile work, or meta tools.
+            </span>
+          </div>
+        </div>
+
+        <details
+          id="setup-supabase-storage"
+          class="setup-details"
+          data-supabase-setup-option
+          data-advanced-only="true"
+          data-uncommon-setup-inputs
+        >
+          <summary>Storage backend and Supabase setup (optional)</summary>
+          <p class="muted">
+            Local SQLite is the default. Supabase is optional and only needed
+            when you deliberately choose Supabase-backed storage; it is not a prerequisite for first-run onboarding.
+          </p>
+          <div class="setup-summary-grid setup-supabase-summary" aria-label="Supabase setup summary">
+            <div>
+              <strong>Primary path stays local</strong>
+              <span>The one-shot setup action still writes HEDWIG_STORAGE=sqlite for the first feed.</span>
+            </div>
+            <div>
+              <strong>Use Supabase later</strong>
+              <span>Choose this only when you want Supabase-backed usage after local setup is working.</span>
+            </div>
+            <div>
+              {% if supabase_mode_selected %}
+              <strong>Hosted keys are advanced-only</strong>
+              <span>SUPABASE_URL and SUPABASE_KEY are needed only when you use Supabase hosted/team mode outside the one-shot local path.</span>
+              {% else %}
+              <strong>Hosted keys are optional</strong>
+              <span>Supabase URL and service role key are not required for local SQLite and are saved to .env only when provided.</span>
+              {% endif %}
+            </div>
+            <div>
+              <strong>Schema helper</strong>
+              <span>Create tables from here, or copy the SQL into the Supabase SQL Editor.</span>
+            </div>
+          </div>
+          <fieldset
+            class="setup-mode-picker compact"
+            aria-describedby="advanced-storage-mode-help"
+            data-advanced-storage-mode
+            data-supabase-storage-choice
+          >
+            <legend>Advanced storage choice</legend>
+            <label class="setup-mode-option {% if storage_value in ["", "sqlite", "local"] %}selected{% endif %}" for="storage_sqlite">
+              <input
+                type="radio"
+                id="storage_sqlite"
+                name="HEDWIG_STORAGE"
+                value="sqlite"
+                {% if storage_value in ["", "sqlite", "local"] %}checked{% endif %}
+              >
+              <span>
+                <strong>Local SQLite</strong>
+                <small>Default first-run mode. No Supabase or external delivery required.</small>
+              </span>
+            </label>
+            <label
+              class="setup-mode-option {% if storage_value == "supabase" %}selected{% endif %}"
+              for="storage_supabase"
+              data-supabase-storage-radio
+            >
+              <input
+                type="radio"
+                id="storage_supabase"
+                name="HEDWIG_STORAGE"
+                value="supabase"
+                {% if storage_value == "supabase" %}checked{% endif %}
+              >
+              <span>
+                <strong>Supabase hosted/team mode</strong>
+                <small>Optional upgrade. Requires Supabase URL and service role key.</small>
+              </span>
+            </label>
+            <small id="advanced-storage-mode-help" class="help">
+              Local SQLite remains available here for explicit review, but choosing storage is not part of the primary one-shot path.
+              The one-shot setup action always creates the first feed in local SQLite mode.
+            </small>
+          </fieldset>
+          <div
+            id="supabase-requirement-message"
+            class="setup-client-status {% if supabase_mode_selected %}warn{% endif %}"
+            data-supabase-requirement-message
+            aria-live="polite"
+          >
+            {% if supabase_mode_selected %}
+            SUPABASE_URL and SUPABASE_KEY are needed only for the advanced Supabase hosted/team mode selected here.
+            {% else %}
+            Local SQLite selected: Supabase can stay blank. SUPABASE_URL and SUPABASE_KEY are only needed if you later choose Supabase hosted/team mode.
+            {% endif %}
+          </div>
+          {% for key, meta in storage_keys.items() %}
+            {% if key != "HEDWIG_STORAGE" %}
+              {{ env_field(key, meta) }}
+            {% endif %}
+          {% endfor %}
+          <button type="button" class="btn"
+                  data-supabase-create-tables-action
+                  hx-post="/setup/create-tables"
+                  hx-target="#db-results"
+                  hx-swap="innerHTML">
+            Create Supabase Tables
+          </button>
+          <div id="db-results"></div>
+        </details>
+
+        <details
+          id="setup-delivery-configuration"
+          class="setup-details"
+          data-delivery-progressive-disclosure
+          data-delivery-optional-configuration
+          data-uncommon-setup-inputs
+        >
+          <summary>Delivery channels: Slack, Discord, or SMTP email</summary>
+          <p class="muted">
+            Optional for local setup. Configure Slack, Discord, or SMTP email when
+            you want external alerts; testing checks SMTP connectivity. Keep this section collapsed for one-shot local setup,
+            or save only these keys when you are ready to route delivery outside the dashboard feed.
+          </p>
+          <div
+            class="setup-step-state complete"
+            data-delivery-optional-status
+            data-step-status="delivery-optional"
+          >
+            <span class="setup-status-dot"></span>
+            <div>
+              <strong>Status: optional and skipped by default</strong>
+              <span>
+                Guidance: dashboard /feed is already the default delivery target, so external delivery can be skipped or deferred without blocking setup.
+              </span>
+            </div>
+          </div>
+          <div class="setup-summary-grid" aria-label="Optional delivery summary">
+            <div>
+              <strong>Default delivery</strong>
+              <span>Dashboard /feed receives the first local collection automatically.</span>
+            </div>
+            <div>
+              <strong>Skip path</strong>
+              <span>Leave Slack, Discord, and SMTP blank, then continue to first-run progress.</span>
+            </div>
+            <div>
+              <strong>Defer path</strong>
+              <span>Return here after the first feed if you want alerts or email briefs.</span>
+            </div>
+            <div>
+              <strong>Setup impact</strong>
+              <span>No delivery channel is required for setup completion.</span>
+            </div>
+          </div>
+
+          <h3>Slack</h3>
+          {% for key, meta in delivery_keys.items() %}
+            {% if meta.group == "slack" %}
+              {{ env_field(key, meta) }}
+            {% endif %}
+          {% endfor %}
+
+          <h3>Discord</h3>
+          {% for key, meta in delivery_keys.items() %}
+            {% if meta.group == "discord" %}
+              {{ env_field(key, meta) }}
+            {% endif %}
+          {% endfor %}
+
+          <h3>SMTP Email</h3>
+          {% for key, meta in delivery_keys.items() %}
+            {% if meta.group == "smtp" %}
+              {{ env_field(key, meta) }}
+            {% endif %}
+          {% endfor %}
+          <div class="button-row">
+            <button type="button" class="btn"
+                    hx-post="/setup/save"
+                    hx-include="#setup-form"
+                    hx-swap="none"
+                    onclick="showToast('Delivery settings saved to .env')">
+              Save delivery settings
+            </button>
+            <button type="button" class="btn"
+                    hx-post="/setup/test"
+                    hx-include="#setup-form"
+                    hx-target="#delivery-test-results"
+                    hx-swap="innerHTML">
+              Test delivery settings
+            </button>
+            <a href="/ambient/pwa" class="btn">Open ambient delivery</a>
+            <a href="/brief" class="btn">Open brief delivery</a>
+            <a href="#setup-progress" class="btn btn-primary" data-skip-delivery-setup>
+              Skip delivery for now
+            </a>
+            <a href="#setup-feed" class="btn" data-defer-delivery-setup>
+              Defer until after first feed
+            </a>
+          </div>
+          <div id="delivery-test-results"></div>
+        </details>
+
+        <details
+          id="setup-source-api-keys"
+          class="setup-details"
+          data-source-api-keys-progressive-disclosure
+          data-uncommon-setup-inputs
+        >
+          <summary>Source/API keys and model/backend settings</summary>
+          <p class="muted">
+            Expand source coverage, podcast handling, embeddings, and pipeline behavior.
+            The default enabled source set still comes from registry/source_settings,
+            so these source API key controls are optional and do not block the primary
+            OpenAI + SQLite setup path.
+          </p>
+          {% for key, meta in optional_keys.items() %}
+            {% if key not in model_backend_keys %}
+              {{ env_field(key, meta) }}
+            {% endif %}
+          {% endfor %}
+          <div class="button-row">
+            <button type="button" class="btn"
+                    hx-post="/setup/save"
+                    hx-include="#setup-form"
+                    hx-swap="none"
+                    onclick="showToast('Source API key settings saved to .env')">
+              Save source/API key settings
+            </button>
+            <a href="/sources" class="btn">View source registry</a>
+            <a href="/settings" class="btn">Open source toggles</a>
+          </div>
+        </details>
+
+        <details
+          id="setup-model-backend-settings"
+          class="setup-details"
+          data-model-backend-progressive-disclosure
+          data-uncommon-setup-inputs
+        >
+          <summary>Model/backend settings (optional)</summary>
+          <p class="muted">
+            OpenAI model IDs, pipeline mode, and embedding behavior are advanced
+            tuning controls. The one-shot setup keeps Hedwig on the default
+            AI-builder behavior and does not require changing these settings.
+          </p>
+          <div class="setup-summary-grid">
+            <div>
+              <strong>Default model path</strong>
+              <span>Leave blank to use OPENAI_MODEL_FAST=gpt-4o-mini and OPENAI_MODEL_DEEP=gpt-4o.</span>
+            </div>
+            <div>
+              <strong>Algorithm backend</strong>
+              <span>HEDWIG_PIPELINE defaults to ensemble; single keeps the legacy LLM-only scorer reachable.</span>
+            </div>
+            <div>
+              <strong>Embeddings</strong>
+              <span>Embeddings stay automatic when OpenAI is configured; set HEDWIG_DISABLE_EMBEDDINGS=1 only for fallback mode.</span>
+            </div>
+            <div>
+              <strong>Non-blocking setup</strong>
+              <span>Keep this collapsed for minimum OpenAI + local SQLite onboarding.</span>
+            </div>
+          </div>
+          {% for key, meta in model_backend_keys.items() %}
+            {{ env_field(key, meta) }}
+          {% endfor %}
+          <div class="button-row">
+            <button type="button" class="btn"
+                    hx-post="/setup/model-backend/save"
+                    hx-include="#setup-form"
+                    hx-swap="none"
+                    data-setup-model-backend-save
+                    onclick="showToast('Model/backend settings saved using the settings save path')">
+              Save model/backend settings
+            </button>
+            <a href="/settings#model-backend-settings" class="btn btn-primary" data-existing-model-backend-settings-link>
+              Open existing model/backend settings
+            </a>
+            <a href="/status" class="btn">Open backend health status</a>
+            <a href="/settings" class="btn">Open source settings</a>
+          </div>
+        </details>
+
+        <details
+          id="setup-export-import"
+          class="setup-details"
+          data-export-import-progressive-disclosure
+          data-uncommon-setup-inputs
+        >
+          <summary>Algorithm export/import bundle (optional)</summary>
+          <p class="muted">
+            Download or restore a portable Hedwig algorithm bundle after the first
+            local feed path is working. These controls call the existing
+            sovereignty-checked export/import APIs and do not block setup completion.
+          </p>
+          <div class="setup-summary-grid">
+            <div>
+              <strong>Export</strong>
+              <span>Downloads criteria, algorithm, sovereignty metadata, and active interpretation style.</span>
+            </div>
+            <div>
+              <strong>Import dry-run</strong>
+              <span>Previews allowed and rejected changes before anything is written.</span>
+            </div>
+            <div>
+              <strong>Confirm import</strong>
+              <span>Applies only the user-editable subset enforced by sovereignty boundaries.</span>
+            </div>
+            <div>
+              <strong>Setup impact</strong>
+              <span>Optional power-user action; OpenAI + SQLite onboarding can finish without it.</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="algorithm_bundle_file">Import algorithm bundle</label>
+            <input
+              type="file"
+              id="algorithm_bundle_file"
+              name="algorithm_bundle_file"
+              accept=".zip,application/zip"
+              data-algorithm-import-file
+            >
+            <small class="help">
+              Choose a bundle previously downloaded from Hedwig. Dry-run first to inspect changes.
+            </small>
+          </div>
+          <div class="button-row">
+            <a href="/algorithm/export" class="btn btn-primary" download data-algorithm-export-control>
+              Download algorithm bundle
+            </a>
+            <button
+              type="button"
+              class="btn"
+              onclick="dryRunAlgorithmImport()"
+              data-algorithm-import-dry-run
+            >
+              Dry-run import
+            </button>
+            <button
+              type="button"
+              class="btn"
+              onclick="confirmAlgorithmImport()"
+              data-algorithm-import-confirm
+            >
+              Confirm import
+            </button>
+            <a href="/profile" class="btn">Open profile export surface</a>
+          </div>
+          <div
+            id="algorithm-import-results"
+            class="setup-client-status"
+            aria-live="polite"
+            data-algorithm-import-results
+          >
+            Import is optional. Leave this section collapsed for one-shot local setup.
+          </div>
+        </details>
+
+        <details
+          id="setup-profile"
+          class="setup-details"
+          data-profile-progressive-disclosure
+          data-post-onboarding-profile-polish
+        >
+          <summary>Algorithm profile review (optional)</summary>
+          <p class="muted">
+            The existing profile page remains available for criteria review, algorithm
+            state, interpretation style, feed personality, source links, and export
+            access. Leave this collapsed for minimum OpenAI + SQLite setup.
+          </p>
+          <div
+            class="setup-client-status"
+            data-profile-polish-non-blocking
+            aria-live="polite"
+          >
+            Profile polish is an after-onboarding activity, not a required setup task.
+            Complete the first local feed first, then return here or open /profile when
+            you want to refine interpretation style, behavior signals, or bundle access.
+          </div>
+          <div class="setup-summary-grid">
+            <div>
+              <strong>Criteria profile</strong>
+              <span>Review the generated criteria without changing setup completion.</span>
+            </div>
+            <div>
+              <strong>Feed personality</strong>
+              <span>Inspect behavior signals after items and feedback exist.</span>
+            </div>
+            <div>
+              <strong>Sources and evolution</strong>
+              <span>Use the existing profile links into source and evolution surfaces.</span>
+            </div>
+            <div>
+              <strong>Export access</strong>
+              <span>Open the existing bundle export path from the profile surface.</span>
+            </div>
+          </div>
+          <div class="button-row">
+            <a href="/profile" class="btn btn-primary" data-profile-setup-link data-profile-polish-link>
+              Open existing profile page
+            </a>
+            <a href="/algorithm/export" class="btn" download>
+              Download algorithm bundle
+            </a>
+          </div>
+        </details>
+
+        <details
+          id="setup-general-settings"
+          class="setup-details"
+          data-general-settings-progressive-disclosure
+        >
+          <summary>General Settings (optional)</summary>
+          <p class="muted">
+            The existing settings page remains the canonical place for source
+            plugin toggles. This setup section only links to that surface so the
+            /settings and /settings/save behavior stays unchanged.
+          </p>
+          <div class="setup-summary-grid">
+            <div>
+              <strong>Existing behavior preserved</strong>
+              <span>Uses the current /settings page and save route instead of adding a second settings form here.</span>
+            </div>
+            <div>
+              <strong>Source plugin toggles</strong>
+              <span>Enable or disable registered source plugins after first-run defaults are applied.</span>
+            </div>
+            <div>
+              <strong>Local or SaaS destination</strong>
+              <span>Settings continue saving to the same local file or authenticated SaaS account.</span>
+            </div>
+            <div>
+              <strong>Non-blocking setup</strong>
+              <span>Leave this collapsed for minimum OpenAI + local SQLite onboarding.</span>
+            </div>
+          </div>
+          <div class="button-row">
+            <a href="/settings" class="btn btn-primary" data-general-settings-link>
+              Open existing settings page
+            </a>
+            <a href="#setup-sources" class="btn">
+              Back to source defaults
+            </a>
+          </div>
+        </details>
+
+        <details
+          id="setup-status"
+          class="setup-details"
+          data-status-progressive-disclosure
+        >
+          <summary>Status and runtime health (optional)</summary>
+          <p class="muted">
+            The existing status page remains available for exit conditions,
+            source health, retraining history, and owned algorithm training
+            status. Leave this collapsed for minimum OpenAI + SQLite setup;
+            opening status does not change setup behavior.
+          </p>
+          <div class="setup-summary-grid">
+            <div>
+              <strong>Exit conditions</strong>
+              <span>Review existing readiness gates without blocking setup.</span>
+            </div>
+            <div>
+              <strong>Source health</strong>
+              <span>Inspect recent source activity and missing optional keys.</span>
+            </div>
+            <div>
+              <strong>Training status</strong>
+              <span>Check owned algorithm backend readiness and feedback history.</span>
+            </div>
+            <div>
+              <strong>Behavior</strong>
+              <span>Links to the current /status implementation unchanged.</span>
+            </div>
+          </div>
+          <div class="button-row">
+            <a href="/status" class="btn btn-primary" data-status-setup-link>
+              Open existing status page
+            </a>
+            <a href="#setup-progress" class="btn">
+              Back to first-run progress
+            </a>
+          </div>
+        </details>
+
+        <details class="setup-details" data-legacy-setup-actions-progressive-disclosure>
+          <summary>Profile, export/import, settings, and evolution tools</summary>
+          <p class="muted">
+            Profile polish, sovereignty export/import APIs, settings, sandbox, and
+            meta/evolution controls stay reachable without blocking setup completion.
+          </p>
+          <p class="eyebrow">Advanced navigation</p>
+          <div class="setup-link-grid">
+            <a href="/profile">
+              <strong>Profile + export/import</strong>
+              <span>Profile polish and bundle access.</span>
+            </a>
+            <a href="#setup-export-import">
+              <strong>Algorithm export/import</strong>
+              <span>Use same-page bundle controls without leaving setup.</span>
+            </a>
+            <a href="/algorithm/export" download>
+              <strong>Download algorithm bundle</strong>
+              <span>Export criteria, algorithm, and sovereignty data.</span>
+            </a>
+            <a href="/settings">
+              <strong>Settings</strong>
+              <span>Feed modes and advanced toggles.</span>
+            </a>
+            <a href="/evolution">
+              <strong>Evolution</strong>
+              <span>Track algorithm changes over time.</span>
+            </a>
+            <a href="/meta">
+              <strong>Meta tools</strong>
+              <span>Inspect advanced self-improvement controls.</span>
+            </a>
+            <a href="/sovereignty">
+              <strong>Sovereignty</strong>
+              <span>Review editable, system-mutable, and readonly boundaries.</span>
+            </a>
+            <a href="/sandbox">
+              <strong>Sandbox</strong>
+              <span>Try ranking what-if experiments.</span>
+            </a>
+          </div>
+        </details>
+
+        <details class="setup-details">
+          <summary>Test keys, save manually, and open legacy setup actions</summary>
+          <p class="muted">
+            Use these when you are editing advanced keys without running the one-shot setup.
+          </p>
+          <div class="button-row">
+            <button type="button" class="btn btn-primary"
+                    hx-post="/setup/test"
+                    hx-include="#setup-form"
+                    hx-target="#test-results"
+                    hx-swap="innerHTML">
+              Test All Keys
+            </button>
+            <button type="button" class="btn"
+                    hx-post="/setup/save"
+                    hx-include="#setup-form"
+                    hx-swap="none"
+                    onclick="showToast('Saved to .env')">
+              Save All
+            </button>
+            <a href="/" class="btn">Back to Dashboard</a>
+          </div>
+          <div id="test-results"></div>
+        </details>
+      </div>
+    </section>
+  </form>
+</div>
 
 <div id="toast" class="toast"></div>
 <script>
+const SETUP_DRAFT_STORAGE_KEY = 'hedwig.setup.draft.v1';
+const SETUP_ONE_SHOT_RUN_ENDPOINT = '/setup/one-shot';
+const SETUP_COLLECTION_PROGRESS_ENDPOINT = '/setup/collection-progress';
+const SETUP_COLLECTION_POLL_INTERVAL_MS = 2500;
+const SECRET_SETUP_FIELDS = new Set(['OPENAI_API_KEY', 'SUPABASE_KEY', 'SLACK_WEBHOOK_ALERTS', 'SLACK_WEBHOOK_DAILY', 'DISCORD_WEBHOOK_ALERTS', 'DISCORD_WEBHOOK_DAILY', 'DISCORD_WEBHOOK_WEEKLY', 'SMTP_PASS', 'EXA_API_KEY', 'SCRAPECREATORS_API_KEY', 'JINA_API_KEY']);
+const SETUP_INITIAL_REDIRECT = {
+  state: {
+    feed_items_available: {{ 'true' if setup_state.feed_items_available else 'false' }},
+    first_feed_data_verified: {{ 'true' if setup_state.first_feed_data_verified else 'false' }},
+    feed_items: {{ setup_state.feed_items|int }},
+    redirect_target: {{ (setup_state.redirect_target or '')|tojson }},
+    setup_completed: {{ 'true' if setup_state.setup_completed else 'false' }},
+    first_feed_usable_before_collection_complete: {{ 'true' if setup_state.first_feed_usable_before_collection_complete else 'false' }},
+    feed_navigation_available: {{ 'true' if setup_state.feed_navigation_available else 'false' }},
+    setup_navigation_locked: {{ 'true' if setup_state.setup_navigation_locked else 'false' }},
+    completion_navigation_disabled: {{ 'true' if setup_state.completion_navigation_disabled else 'false' }}
+  },
+  redirect_to: {{ (setup_state.redirect_target or '')|tojson }},
+  redirect_immediately: {{ 'true' if setup_state.redirect_target and setup_state.setup_completed else 'false' }}
+};
+const SETUP_INITIAL_COLLECTION_POLL = {
+  state: {
+    local_ready: {{ 'true' if setup_state.local_ready else 'false' }},
+    feed_items_available: {{ 'true' if setup_state.feed_items_available else 'false' }},
+    feed_items: {{ setup_state.feed_items|int }},
+    first_run_active: {{ 'true' if setup_state.first_run_active else 'false' }},
+    first_run_status: {{ setup_state.first_run_status|tojson }},
+    setup_completed: {{ 'true' if setup_state.setup_completed else 'false' }},
+    collection_process_incomplete: {{ 'true' if setup_state.collection_process_incomplete else 'false' }},
+    first_feed_usable_before_collection_complete: {{ 'true' if setup_state.first_feed_usable_before_collection_complete else 'false' }},
+    feed_navigation_available: {{ 'true' if setup_state.feed_navigation_available else 'false' }},
+    collection_progress_status: {{ (setup_state.collection_progress_status or '')|tojson }},
+    progress_percent: {{ setup_state.progress_percent|int }},
+    collection_progress_counts: {{ setup_state.collection_progress_counts|tojson }},
+    collection_progress_errors: {{ setup_state.collection_progress_errors|tojson }},
+    setup_navigation_locked: {{ 'true' if setup_state.setup_navigation_locked else 'false' }},
+    completion_navigation_disabled: {{ 'true' if setup_state.completion_navigation_disabled else 'false' }}
+  },
+  collection_progress: {
+    run_id: {{ setup_state.collection_progress.get("id")|tojson if setup_state.collection_progress else 'null' }},
+    status: {{ (setup_state.collection_progress_status or setup_state.first_run_status or 'not_started')|tojson }},
+    progress_percent: {{ setup_state.progress_percent|int }},
+    counts: {{ setup_state.collection_progress_counts|tojson }},
+    errors: {{ setup_state.collection_progress_errors|tojson }},
+    is_active: {{ 'true' if setup_state.first_run_active else 'false' }},
+    is_terminal: {{ 'true' if setup_state.setup_completed or setup_state.collection_terminal_attention else 'false' }},
+    collection_process_incomplete: {{ 'true' if setup_state.collection_process_incomplete else 'false' }},
+    first_feed_usable_before_collection_complete: {{ 'true' if setup_state.first_feed_usable_before_collection_complete else 'false' }}
+  },
+  redirect_to: {{ (setup_state.redirect_target or '')|tojson }},
+  redirect_immediately: {{ 'true' if setup_state.redirect_target and setup_state.setup_completed else 'false' }}
+};
+const setupClientState = {
+  storageMode: 'sqlite',
+  openaiKeyPresent: false,
+  requiredOnboardingSaved: {{ 'true' if required_onboarding_saved else 'false' }},
+  oneShotLocalOnly: true,
+  supabaseModeSelected: false,
+  sourcePresetState: null,
+  statusPollAttempts: 0,
+  collectionPollTimer: null,
+  collectionLifecycleActive: false,
+  collectionLifecycleTerminal: false,
+  lastCollectionStatus: {{ (setup_state.collection_progress_status or setup_state.first_run_status or 'not_started')|tojson }},
+  feedNavigationAvailable: {{ 'true' if setup_state.feed_navigation_available else 'false' }},
+  setupNavigationLocked: {{ 'true' if setup_state.setup_navigation_locked else 'false' }}
+};
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+function setupForm() {
+  return document.getElementById('setup-form');
+}
+
+function openAIKeyInput() {
+  return document.getElementById('OPENAI_API_KEY');
+}
+
+function oneShotStartControls() {
+  return Array.from(document.querySelectorAll('[data-one-shot-start-control]'));
+}
+
+function setupRunStartEndpoint() {
+  return document.querySelector('[data-run-start-endpoint]')?.dataset.runStartEndpoint
+    || SETUP_ONE_SHOT_RUN_ENDPOINT;
+}
+
+function setupCollectionProgressEndpoint() {
+  return setupForm()?.dataset.collectionProgressEndpoint
+    || SETUP_COLLECTION_PROGRESS_ENDPOINT;
+}
+
+function setupNavigationLocked(data = null) {
+  const state = data?.state || data || {};
+  if (Object.prototype.hasOwnProperty.call(state, 'setup_navigation_locked')) {
+    return Boolean(state.setup_navigation_locked);
+  }
+  return Boolean(setupClientState.setupNavigationLocked);
+}
+
+function setupFeedNavigationAvailable(data = null) {
+  const state = data?.state || data || {};
+  if (
+    Object.prototype.hasOwnProperty.call(state, 'feed_navigation_available')
+    || Object.prototype.hasOwnProperty.call(state, 'setup_completed')
+    || Object.prototype.hasOwnProperty.call(state, 'setup_complete')
+  ) {
+    return Boolean(state.feed_navigation_available || state.setup_completed || state.setup_complete);
+  }
+  return Boolean(setupClientState.feedNavigationAvailable);
+}
+
+function applySetupNavigationLock(data = null) {
+  const locked = setupNavigationLocked(data);
+  const available = setupFeedNavigationAvailable(data);
+  setupClientState.setupNavigationLocked = locked;
+  setupClientState.feedNavigationAvailable = available;
+  const shell = document.querySelector('.setup-shell');
+  const form = setupForm();
+  if (shell) shell.dataset.setupNavigationLocked = locked ? 'true' : 'false';
+  if (form) form.dataset.setupNavigationLocked = locked ? 'true' : 'false';
+  document.querySelectorAll('a[href="/feed"], [data-setup-feed-navigation]').forEach((link) => {
+    link.dataset.setupNavigationLocked = locked ? 'true' : 'false';
+    link.dataset.feedNavigationAvailable = available ? 'true' : 'false';
+    link.classList.toggle('is-locked', locked);
+    link.classList.toggle('is-waiting', !available);
+    link.setAttribute('aria-disabled', locked || !available ? 'true' : 'false');
+    if (!available && link.getAttribute('href') === '/feed') {
+      link.setAttribute('href', '#setup-progress');
+    } else if (available && link.matches('[data-setup-feed-navigation]')) {
+      link.setAttribute('href', '/feed');
+    }
+  });
+}
+
+function interceptSetupFeedNavigation(event) {
+  const link = event.target?.closest?.('a[href="/feed"], [data-setup-feed-navigation]');
+  if (!link || (setupFeedNavigationAvailable() && !setupNavigationLocked())) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const waitingForReadiness = !setupFeedNavigationAvailable();
+  renderSetupRunFeedback(
+    'progress',
+    waitingForReadiness ? 'Feed navigation is not ready yet' : 'First collection still running',
+    waitingForReadiness
+      ? 'Stay on /setup while Hedwig collects, scores, and verifies the first local feed item.'
+      : 'Stay on /setup while Hedwig finishes collection. Feed navigation unlocks after the first collection completes.'
+  );
+  renderFirstRunProgress(
+    'active',
+    waitingForReadiness ? 80 : 95,
+    'Setup/feed initialization is running',
+    waitingForReadiness
+      ? 'Slow first collection is expected. This page keeps polling until feed readiness criteria pass.'
+      : 'Completion and feed navigation are disabled until the tracked first collection finishes.'
+  );
+  openSetupDisclosureTarget('#setup-progress');
+  showToast(waitingForReadiness ? 'Stay on /setup until /feed is ready.' : 'Stay on /setup until the first collection finishes.');
+}
+
+function requiredOnboardingSaveControl() {
+  return document.querySelector('[data-required-onboarding-save-control]');
+}
+
+function interestInput() {
+  return document.getElementById('interest_text');
+}
+
+function selectedStorageMode() {
+  const selected = document.querySelector('input[name="HEDWIG_STORAGE"]:checked');
+  return (selected ? selected.value : 'sqlite').trim().toLowerCase() || 'sqlite';
+}
+
+function selectedSourcePreset() {
+  const selected = document.querySelector('input[name="source_preset"]:checked');
+  const automatic = document.querySelector('[data-default-source-preset]');
+  return (selected?.value || automatic?.value || 'registry_default').trim() || 'registry_default';
+}
+
+function selectedSourcePresetDetails() {
+  const selected = document.querySelector('input[name="source_preset"]:checked');
+  const label = selected?.closest('.setup-source-preset');
+  const automatic = document.querySelector('[data-default-source-preset]');
+  return {
+    presetId: selectedSourcePreset(),
+    label: label?.dataset.presetLabel || automatic?.dataset.presetLabel || selectedSourcePreset(),
+    enabledCount: label?.dataset.presetEnabledCount || automatic?.dataset.presetEnabledCount || '',
+    totalCount: label?.dataset.presetTotalCount || automatic?.dataset.presetTotalCount || ''
+  };
+}
+
+function sourceToggleInputs() {
+  return Array.from(document.querySelectorAll('[data-setup-source-toggle]'));
+}
+
+function selectedSetupSourceIds() {
+  return sourceToggleInputs()
+    .filter((input) => input.checked)
+    .map((input) => input.value);
+}
+
+function renderSetupSourceToggleSelection() {
+  sourceToggleInputs().forEach((input) => {
+    input.closest('.setup-source-toggle')?.classList.toggle('selected', input.checked);
+  });
+}
+
+function isLocalStorageMode(mode) {
+  return mode === 'sqlite' || mode === 'local' || mode === '';
+}
+
+function readSetupDraft() {
+  try {
+    return JSON.parse(window.localStorage.getItem(SETUP_DRAFT_STORAGE_KEY) || '{}');
+  } catch (_error) {
+    return {};
+  }
+}
+
+function persistSetupDraft() {
+  const form = setupForm();
+  if (!form) return;
+  const draft = {};
+  const interest = document.getElementById('interest_text');
+  if (interest && interest.value.trim()) draft.interest_text = interest.value.trim();
+  draft.HEDWIG_STORAGE = selectedStorageMode();
+
+  // Never place API keys or other secrets in browser storage.
+  for (const field of form.querySelectorAll('[data-setup-field]')) {
+    if (!SECRET_SETUP_FIELDS.has(field.name) && field.type !== 'password' && field.value.trim()) {
+      draft[field.name] = field.value.trim();
+    }
+  }
+  try {
+    window.localStorage.setItem(SETUP_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch (_error) {
+    // Draft persistence is best-effort; setup still works without browser storage.
+  }
+}
+
+function restoreSetupDraft() {
+  const draft = readSetupDraft();
+  const interest = document.getElementById('interest_text');
+  if (interest && !interest.value && draft.interest_text) {
+    interest.value = draft.interest_text;
+  }
+}
+
+function validateOpenAIKey(showMessage = false) {
+  const input = openAIKeyInput();
+  const error = document.getElementById('openai-key-error');
+  if (!input) return true;
+
+  const hasKey = input.value.trim().length > 0;
+  input.setAttribute('aria-invalid', hasKey ? 'false' : 'true');
+  input.closest('.field')?.classList.toggle('invalid', !hasKey);
+
+  if (error) {
+    error.hidden = hasKey || !showMessage;
+    error.textContent = hasKey
+      ? ''
+      : 'OPENAI_API_KEY is required even for local SQLite mode.';
+  }
+  return hasKey;
+}
+
+function updateSetupClientState(options = {}) {
+  const mode = selectedStorageMode();
+  const localMode = isLocalStorageMode(mode);
+  setupClientState.storageMode = mode;
+  setupClientState.openaiKeyPresent = validateOpenAIKey(Boolean(options.showValidation));
+  setupClientState.oneShotLocalOnly = true;
+  setupClientState.supabaseModeSelected = mode === 'supabase';
+
+  document.querySelectorAll('.setup-mode-option').forEach((label) => {
+    const radio = label.querySelector('input[type="radio"]');
+    label.classList.toggle('selected', Boolean(radio && radio.checked));
+  });
+  document.querySelectorAll('.setup-source-preset').forEach((label) => {
+    const radio = label.querySelector('input[type="radio"]');
+    label.classList.toggle('selected', Boolean(radio && radio.checked));
+  });
+  document.querySelectorAll('[data-supabase-required-badge]').forEach((badge) => {
+    badge.hidden = true;
+    badge.textContent = '';
+  });
+  ['SUPABASE_URL', 'SUPABASE_KEY'].forEach((key) => {
+    const field = document.getElementById(key);
+    if (field) field.setAttribute('aria-required', 'false');
+  });
+  renderSetupSourceToggleSelection();
+
+  const status = document.getElementById('setup-client-status');
+  if (status) {
+    status.classList.toggle('warn', !setupClientState.openaiKeyPresent);
+    if (!setupClientState.openaiKeyPresent) {
+      status.textContent = 'Enter an OpenAI key to enable first-run local setup. Supabase can stay blank; local SQLite is the storage default.';
+    } else if (!setupClientState.requiredOnboardingSaved) {
+      status.textContent = 'OpenAI key is present. Starting the first collection will save the local SQLite setup automatically.';
+    } else if (!localMode) {
+      status.textContent = 'Supabase hosted/team mode selected for advanced storage; fill SUPABASE_URL and SUPABASE_KEY for that mode. The one-shot setup action still creates a local SQLite first feed.';
+    } else {
+      status.textContent = 'Ready for one-shot local setup. Your API key will be saved to .env, not browser storage.';
+    }
+  }
+  const supabaseRequirementMessage = document.querySelector('[data-supabase-requirement-message]');
+  if (supabaseRequirementMessage) {
+    const supabaseRequiredMessage = [
+      'SUPABASE_URL and SUPABASE_KEY',
+      'are needed only for the advanced Supabase hosted/team mode selected here.'
+    ].join(' ');
+    supabaseRequirementMessage.classList.toggle('warn', setupClientState.supabaseModeSelected);
+    supabaseRequirementMessage.textContent = setupClientState.supabaseModeSelected
+      ? supabaseRequiredMessage
+      : 'Local SQLite selected: Supabase can stay blank. SUPABASE_URL and SUPABASE_KEY are only needed if you later choose Supabase hosted/team mode.';
+  }
+
+  oneShotStartControls().forEach((button) => {
+    const pollingActive = setupClientState.collectionLifecycleActive
+      && !setupClientState.collectionLifecycleTerminal;
+    const enabled = setupClientState.openaiKeyPresent && !pollingActive;
+    button.disabled = !enabled;
+    button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    if (pollingActive) {
+      button.textContent = 'First collection running...';
+    } else {
+      button.textContent = enabled
+        ? (button.dataset.readyLabel || 'Start first collection')
+        : (
+          button.dataset.missingKeyLabel || 'Enter OpenAI key to start'
+        );
+    }
+  });
+  applySetupNavigationLock();
+
+  const criteriaStatus = document.getElementById('criteria-step-status');
+  const interest = interestInput();
+  if (criteriaStatus && interest) {
+    const hasInterest = interest.value.trim().length > 0;
+    criteriaStatus.textContent = hasInterest
+      ? 'This one-line interest will seed the generated AI-builder criteria profile.'
+      : 'You can skip interest selection and still complete setup with the default criteria.';
+  }
+
+  const appliedSourcePresetState = setupClientState.sourcePresetState?.preset_id === selectedSourcePreset()
+    ? setupClientState.sourcePresetState
+    : null;
+  renderSourcePresetStepState(appliedSourcePresetState);
+}
+
+function oneShotFormData() {
+  const form = setupForm();
+  const formData = new FormData(form);
+  const input = openAIKeyInput();
+  if (input) formData.set('OPENAI_API_KEY', input.value.trim());
+  formData.set('HEDWIG_STORAGE', 'sqlite');
+  formData.set('source_preset', selectedSourcePreset());
+  return formData;
+}
+
+function requiredOnboardingFormData() {
+  const formData = new FormData();
+  const input = openAIKeyInput();
+  formData.set('OPENAI_API_KEY', input ? input.value.trim() : '');
+  formData.set('HEDWIG_STORAGE', 'sqlite');
+  return formData;
+}
+
+function updateStepState(key, stateClass, statusText, guidanceText) {
+  const cardState = document.querySelector(`[data-step-status="${key}"]`);
+  if (!cardState) return;
+  cardState.classList.toggle('complete', stateClass === 'complete');
+  cardState.classList.toggle('attention', stateClass === 'attention');
+  cardState.classList.toggle('pending', stateClass === 'pending');
+  const status = cardState.querySelector('strong');
+  const guidance = cardState.querySelector('span:not(.setup-status-dot)');
+  if (status) status.textContent = `Status: ${statusText}`;
+  if (guidance) guidance.textContent = `Guidance: ${guidanceText}`;
+}
+
+function renderSetupRunFeedback(stateClass, titleText, messageText) {
+  const feedback = document.querySelector('[data-setup-run-feedback]');
+  const title = document.getElementById('setup-run-feedback-title');
+  const message = document.getElementById('setup-run-feedback-message');
+  if (!feedback) return;
+  ['idle', 'progress', 'success', 'failure'].forEach((state) => {
+    feedback.classList.toggle(state, state === stateClass);
+  });
+  feedback.dataset.runFeedbackState = stateClass;
+  if (title) title.textContent = titleText;
+  if (message) message.textContent = messageText;
+}
+
+function renderFirstRunProgress(stateClass, percent, titleText, messageText) {
+  const progress = document.querySelector('[data-first-run-progress]');
+  const title = document.getElementById('setup-first-run-progress-title');
+  const percentLabel = document.getElementById('setup-first-run-progress-percent');
+  const message = document.getElementById('setup-first-run-progress-message');
+  const meter = progress?.querySelector('[role="progressbar"]');
+  const fill = meter?.querySelector('span');
+  if (!progress) return;
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  ['idle', 'active', 'partial', 'complete', 'failure'].forEach((state) => {
+    progress.classList.toggle(state, state === stateClass);
+  });
+  progress.dataset.active = stateClass === 'active' ? 'true' : 'false';
+  progress.dataset.progressPercent = String(safePercent);
+  progress.setAttribute('aria-busy', stateClass === 'active' ? 'true' : 'false');
+  if (title) title.textContent = titleText;
+  if (percentLabel) percentLabel.textContent = `${safePercent}%`;
+  if (message) message.textContent = messageText;
+  if (meter) {
+    meter.setAttribute('aria-valuenow', String(safePercent));
+  }
+  if (fill) {
+    fill.style.width = `${safePercent}%`;
+  }
+}
+
+function renderSetupFailureState(messageText) {
+  const failure = document.querySelector('[data-setup-failure-state]');
+  const message = document.getElementById('setup-failure-message');
+  if (!failure) return;
+  failure.hidden = false;
+  failure.dataset.visible = 'true';
+  failure.classList.add('visible');
+  if (message) {
+    message.textContent = `${messageText} Fix the issue, then retry from this page without losing your setup inputs.`;
+  }
+}
+
+function clearSetupFailureState() {
+  const failure = document.querySelector('[data-setup-failure-state]');
+  if (!failure) return;
+  failure.hidden = true;
+  failure.dataset.visible = 'false';
+  failure.classList.remove('visible');
+}
+
+function renderSourcePresetStepState(sourcePresetState = null) {
+  const selected = selectedSourcePresetDetails();
+  const presetId = sourcePresetState?.preset_id || selected.presetId;
+  const enabledCount = sourcePresetState?.enabled_count ?? selected.enabledCount;
+  const totalCount = selected.totalCount;
+  const label = selected.label;
+  const applied = Boolean(sourcePresetState);
+  const countText = enabledCount && totalCount
+    ? `${enabledCount} of ${totalCount} registered sources`
+    : (enabledCount ? `${enabledCount} sources` : 'selected sources');
+  updateStepState(
+    'sources',
+    'complete',
+    applied ? `${label} applied` : `${label} selected`,
+    `${countText} will be enabled for the first run via preset ${presetId}; detailed source controls remain in /sources and /settings.`
+  );
+}
+
+function renderSetupFeedPreview(state) {
+  const preview = document.querySelector('[data-setup-feed-preview]');
+  if (!preview || !state) return;
+  const item = state.first_feed_item || {};
+  const count = Number(state.feed_items || 0);
+  const ready = Boolean(state.feed_items_available) && count > 0 && Boolean(item.title);
+  const feedNavigationAvailable = setupFeedNavigationAvailable(state);
+  const title = document.getElementById('setup-feed-preview-title');
+  const countLabel = document.getElementById('setup-feed-preview-count');
+  const meta = document.getElementById('setup-feed-preview-meta');
+  const summary = document.getElementById('setup-feed-preview-summary');
+  const link = document.getElementById('setup-feed-preview-link');
+
+  preview.dataset.previewReady = ready ? 'true' : 'false';
+  preview.classList.toggle('ready', ready);
+  preview.classList.toggle('waiting', !ready);
+  if (title) {
+    title.textContent = ready ? item.title : 'First feed preview pending';
+  }
+  if (countLabel) {
+    countLabel.textContent = ready ? `${count} ready` : 'Waiting';
+    countLabel.classList.toggle('ready', ready);
+  }
+  if (meta) {
+    const metaParts = ready
+      ? [item.platform, item.author, item.urgency, item.relevance_score !== null && item.relevance_score !== undefined && item.relevance_score !== '' ? `Score ${Number(item.relevance_score).toFixed(2)}` : '']
+        .filter(Boolean)
+      : ['Local SQLite feed data will appear here after the first collection saves items.'];
+    meta.textContent = metaParts.join(' · ');
+  }
+  if (summary) {
+    const previewText = item.why_relevant || item.content || 'This item is ready in your local dashboard feed.';
+    summary.textContent = ready
+      ? String(previewText).slice(0, 240)
+      : 'This inline preview uses the same local SQLite feed data as /feed. Start the first collection, then keep this page open for ready-state content and recovery.';
+  }
+  if (link) {
+    link.href = ready && item.url ? item.url : (feedNavigationAvailable ? '/feed' : '#setup-progress');
+    link.textContent = ready && item.url ? 'Open source item' : (feedNavigationAvailable ? 'Open /feed' : 'Waiting for /feed readiness');
+  }
+}
+
+function renderSetupState(state) {
+  const pill = document.getElementById('first-run-pill');
+  const result = document.getElementById('one-shot-results');
+  const successState = document.querySelector('[data-setup-success-state]');
+  const partialState = document.querySelector('[data-setup-partial-feed-readiness]');
+  const completionCard = document.getElementById('setup-completion');
+  const completionPill = document.getElementById('setup-completion-pill');
+  const completionMessage = document.getElementById('setup-completion-message');
+  const finishFeedLink = document.getElementById('setup-finish-feed-link');
+  const completionNav = document.querySelector('[data-setup-completion-link]');
+  const completionCount = document.getElementById('setup-completion-count');
+  const completionAction = document.getElementById('setup-completion-action');
+  const completionRedirect = document.getElementById('setup-completion-redirect');
+  const postSetupPrimaryNav = document.querySelector('[data-post-setup-primary-nav]');
+  const postSetupPrimaryNavLead = document.querySelector('[data-post-setup-primary-nav-lead]');
+  const progressDetailStatus = document.querySelector('[data-progress-detail-status]');
+  const progressDetailCounts = document.querySelector('[data-progress-detail-counts]');
+  const progressDetailUpdated = document.querySelector('[data-progress-detail-updated]');
+  const progressDetailError = document.querySelector('[data-progress-detail-error]');
+  if (!state) return;
+  const count = Number(state.feed_items || 0);
+  const ready = Boolean(state.feed_items_available) && count > 0;
+  const setupComplete = Boolean(state.setup_completed || state.setup_complete);
+  const feedNavigationAvailable = Boolean(state.feed_navigation_available || setupComplete);
+  const partiallyReady = ready && !setupComplete && Boolean(state.first_feed_usable_before_collection_complete || state.collection_process_incomplete);
+  const collectionCounts = state.collection_progress_counts || {};
+  const collectionErrors = Array.isArray(state.collection_progress_errors) ? state.collection_progress_errors : [];
+  const completionActionPath = state.completion_action || '/feed';
+  const feedNavigationHref = feedNavigationAvailable ? '/feed' : '#setup-progress';
+  const redirectTarget = feedNavigationAvailable ? (state.redirect_target || '/feed') : '';
+  const localReady = Boolean(state.openai_configured && state.local_ready);
+  const progressReady = Boolean(state.local_ready && state.criteria_exists && state.db_exists);
+  const progressClass = setupComplete ? 'complete' : (progressReady ? 'attention' : 'pending');
+  const progressStatus = (state.first_run_status || 'unknown').replaceAll('_', ' ');
+  const feedbackState = setupComplete ? 'success' : ((partiallyReady || progressReady) ? 'progress' : 'idle');
+  const firstRunActive = Boolean(state.first_run_active);
+  const navigationLocked = Boolean(state.setup_navigation_locked || state.completion_navigation_disabled);
+  const progressPercent = state.progress_percent || (setupComplete ? 100 : (ready ? 95 : (firstRunActive ? 80 : 20)));
+
+  setupClientState.setupNavigationLocked = navigationLocked;
+  setupClientState.feedNavigationAvailable = feedNavigationAvailable;
+  clearSetupFailureState();
+  renderSetupFeedPreview(state);
+  applySetupNavigationLock(state);
+
+  if (pill) {
+    pill.textContent = progressStatus;
+    pill.classList.toggle('ready', ready);
+  }
+  if (progressDetailStatus) {
+    progressDetailStatus.textContent = state.collection_progress_status || state.first_run_status || 'not_started';
+  }
+  if (progressDetailCounts) {
+    progressDetailCounts.textContent = `collected ${Number(collectionCounts.posts_collected || 0)}, filtered ${Number(collectionCounts.posts_filtered || 0)}, scored ${Number(collectionCounts.signals_scored || 0)}, saved ${Number(collectionCounts.signals_saved || count)}`;
+  }
+  if (progressDetailUpdated) {
+    progressDetailUpdated.textContent = state.collection_progress_last_updated_at || 'not started';
+  }
+  if (progressDetailError) {
+    const latestError = collectionErrors.length ? collectionErrors[collectionErrors.length - 1] : null;
+    progressDetailError.textContent = latestError?.message || 'No backend errors recorded.';
+  }
+  updateStepState(
+    'essential',
+    localReady ? 'complete' : 'attention',
+    localReady ? 'ready' : 'needs OpenAI key',
+    'paste the key, then continue. SQLite is applied automatically; Supabase and delivery stay optional.'
+  );
+  updateStepState(
+    'progress',
+    progressClass,
+    progressStatus,
+    'refresh here during slow collection; if items are not ready yet, stay on this progress card.'
+  );
+  updateStepState(
+    'feed',
+    ready ? 'complete' : 'pending',
+    ready ? 'feed items ready' : 'waiting for first items',
+    '/feed is the default destination; source review, signals, briefs, and ambient surfaces remain reachable.'
+  );
+  updateStepState(
+    'completion',
+    setupComplete ? 'complete' : 'attention',
+    setupComplete ? 'complete' : (partiallyReady ? 'feed usable, collection finishing' : 'waiting on feed items'),
+    'completion requires the minimum local setup checks, readable feed data, and the first collection completion signal.'
+  );
+  renderSetupRunFeedback(
+    feedbackState,
+    setupComplete ? 'First run succeeded' : (partiallyReady ? 'Feed usable while collection finishes' : (progressReady ? 'First run in progress' : 'First run not started')),
+    setupComplete
+      ? `Feed is ready with ${count} item${count === 1 ? '' : 's'}. Open /feed to start consuming your personal algorithm.`
+      : (
+        partiallyReady
+          ? `Local SQLite has ${count} readable feed item${count === 1 ? '' : 's'}. Stay on /setup while it keeps polling for collection completion.`
+          : (
+        progressReady
+          ? 'Required local setup is ready and Hedwig is waiting for first feed items. Keep this page open until /feed unlocks.'
+          : 'Start the first collection after saving your OpenAI key; progress, success, and failure feedback appears here.'
+          )
+      )
+  );
+  renderFirstRunProgress(
+    setupComplete ? 'complete' : (ready ? 'partial' : (firstRunActive ? 'active' : 'idle')),
+    progressPercent,
+    setupComplete
+      ? 'Setup/feed initialization complete'
+      : (ready ? 'Feed usable while collection finishes' : (firstRunActive ? 'Setup/feed initialization is running' : 'Setup/feed initialization has not started')),
+    setupComplete
+      ? 'Feed items are ready. Continue to /feed.'
+      : (
+        ready
+          ? 'Feed items are readable from local SQLite now. Setup keeps feed navigation locked until the tracked first collection completes.'
+          : (
+        firstRunActive
+          ? 'Criteria and local SQLite are ready. Hedwig is collecting and scoring the first feed; this page will keep polling.'
+          : (
+            localReady
+              ? 'Required local setup is saved. Start the first collection to begin feed initialization.'
+              : 'Save OPENAI_API_KEY to enable local setup and first-feed initialization.'
+          )
+          )
+      )
+  );
+  if (result) {
+    result.innerHTML = feedNavigationAvailable
+      ? `<div class="test-row ok">Feed ready with ${count} item${count === 1 ? '' : 's'}. <a href="/feed">Open /feed</a></div>`
+      : '<div class="test-row ok">Setup is progressing. Stay on this page while Hedwig verifies the first local feed.</div>';
+  }
+  if (successState) {
+    successState.hidden = !setupComplete;
+    successState.dataset.visible = setupComplete ? 'true' : 'false';
+    successState.dataset.onboardingCompletionState = setupComplete ? 'succeeded' : 'pending';
+    successState.dataset.feedItems = String(count);
+    successState.dataset.completionAction = completionActionPath;
+    successState.dataset.redirectTarget = redirectTarget;
+    successState.classList.toggle('visible', setupComplete);
+    const successCopy = successState.querySelector('[data-setup-success-copy]');
+    if (successCopy && setupComplete) {
+      successCopy.textContent = `First-run setup completed with OpenAI, local SQLite, generated criteria, and ${count} feed item${count === 1 ? '' : 's'} available in the dashboard feed.`;
+    }
+  }
+  if (partialState) {
+    partialState.hidden = !partiallyReady;
+    partialState.dataset.visible = partiallyReady ? 'true' : 'false';
+    partialState.classList.toggle('visible', partiallyReady);
+    const partialCopy = partialState.querySelector('[data-setup-partial-feed-copy]');
+    if (partialCopy && partiallyReady) {
+      partialCopy.textContent = `${count} SQLite-backed feed item${count === 1 ? '' : 's'} are readable, but stay on /setup until the tracked first collection completes. Feed navigation unlocks after completion.`;
+    }
+  }
+  if (completionCard) {
+    const completionGate = setupComplete ? 'complete' : (partiallyReady ? 'partial' : 'waiting');
+    completionCard.dataset.completionGate = completionGate;
+    completionCard.dataset.feedReady = ready ? 'true' : 'false';
+    completionCard.dataset.setupComplete = setupComplete ? 'true' : 'false';
+    completionCard.dataset.partialFeedReady = partiallyReady ? 'true' : 'false';
+    completionCard.dataset.redirectTarget = redirectTarget;
+    completionCard.dataset.setupNavigationLocked = navigationLocked ? 'true' : 'false';
+    completionCard.classList.toggle('ready', setupComplete);
+    completionCard.classList.toggle('partial', partiallyReady);
+    completionCard.classList.toggle('waiting', !setupComplete && !partiallyReady);
+  }
+  if (completionPill) {
+    completionPill.textContent = setupComplete ? 'Complete' : (partiallyReady ? 'Feed usable' : 'Waiting');
+    completionPill.classList.toggle('ready', setupComplete);
+  }
+  if (completionMessage) {
+    completionMessage.textContent = setupComplete
+      ? 'First-run setup is complete. Open the dashboard feed to start consuming your personal algorithm.'
+      : (
+        partiallyReady
+          ? 'Local SQLite feed data is usable now, but setup keeps feed navigation locked until the tracked first collection finishes.'
+          : 'Setup can keep running here while the first collection finishes. The feed remains reachable as a fallback, but this completion gate only turns green once items are available.'
+      );
+  }
+  if (finishFeedLink) {
+    finishFeedLink.textContent = setupComplete ? 'Open completed /feed' : (partiallyReady ? 'Feed unlocks after collection' : 'Feed opens after readiness');
+    finishFeedLink.href = feedNavigationHref;
+    finishFeedLink.classList.toggle('is-waiting', !setupComplete);
+    finishFeedLink.classList.toggle('is-locked', navigationLocked);
+    finishFeedLink.setAttribute('aria-disabled', feedNavigationAvailable && !navigationLocked ? 'false' : 'true');
+  }
+  if (completionCount) {
+    completionCount.textContent = ready
+      ? `${count} feed item${count === 1 ? '' : 's'}`
+      : 'No feed items yet';
+  }
+  if (completionAction) {
+    completionAction.textContent = feedNavigationAvailable ? completionActionPath : 'Pending readiness criteria';
+  }
+  if (completionRedirect) {
+    completionRedirect.textContent = redirectTarget || 'Waiting for feed items';
+  }
+  if (completionNav) {
+    completionNav.classList.toggle('complete', setupComplete);
+    completionNav.classList.toggle('waiting', !setupComplete);
+    completionNav.setAttribute('aria-disabled', ready && !navigationLocked ? 'false' : 'true');
+    const label = completionNav.querySelector('span');
+    if (label) label.textContent = setupComplete ? 'Ready for /feed' : (partiallyReady ? 'Feed usable, finishing' : 'Waiting on first feed');
+  }
+  if (postSetupPrimaryNav) {
+    postSetupPrimaryNav.dataset.ready = setupComplete ? 'true' : 'false';
+    postSetupPrimaryNav.dataset.partialFeedReady = partiallyReady ? 'true' : 'false';
+    postSetupPrimaryNav.classList.toggle('ready', setupComplete);
+    postSetupPrimaryNav.classList.toggle('partial', partiallyReady);
+    postSetupPrimaryNav.classList.toggle('waiting', !setupComplete && !partiallyReady);
+  }
+  if (postSetupPrimaryNavLead) {
+    postSetupPrimaryNavLead.textContent = setupComplete
+      ? 'Setup is complete. Continue with the primary Hedwig surfaces.'
+      : (
+        partiallyReady
+          ? 'Feed data is usable now, but setup keeps navigation here until collection finishes.'
+          : 'These primary surfaces remain reachable while setup waits for first feed items.'
+      );
+  }
+  const navigationCriteriaPanel = document.querySelector('[data-feed-navigation-readiness-criteria]');
+  if (navigationCriteriaPanel) {
+    const feedNavigationAvailable = Boolean(state.feed_navigation_available || setupComplete);
+    navigationCriteriaPanel.dataset.feedNavigationAvailable = feedNavigationAvailable ? 'true' : 'false';
+    navigationCriteriaPanel.dataset.feedNavigationBlocked = feedNavigationAvailable ? 'false' : 'true';
+  }
+  const navigationCriteria = state.feed_navigation_criteria || state.feed_navigation_readiness?.criteria || [];
+  if (Array.isArray(navigationCriteria)) {
+    navigationCriteria.forEach((criterion) => {
+      const row = document.querySelector(`[data-feed-navigation-criterion="${criterion.id}"]`);
+      if (!row) return;
+      row.classList.toggle('complete', Boolean(criterion.satisfied));
+      row.classList.toggle('blocked', !criterion.satisfied);
+    });
+  }
+  document.querySelectorAll('[data-progress-step]').forEach((row) => {
+    const key = row.dataset.progressStep;
+    row.classList.toggle('complete', Boolean(state[key]));
+    if (key === 'feed_items_available') {
+      const label = row.querySelector('p');
+      if (label) {
+        const count = Number(state.feed_items || 0);
+        label.textContent = `Feed items available${count ? `: ${count}` : ''}`;
+      }
+    }
+  });
+  document.querySelectorAll('[data-completion-check]').forEach((row) => {
+    const key = row.dataset.completionCheck;
+    row.classList.toggle('complete', Boolean(state[key]));
+  });
+}
+
+function feedRedirectTarget(data) {
+  const state = data?.state || {};
+  const navigationLocked = Boolean(state.setup_navigation_locked || state.completion_navigation_disabled);
+  const feedItemsAvailable = Boolean(state.feed_items_available) && Number(state.feed_items || 0) > 0;
+  const target = data?.redirect_to || state.redirect_target || '';
+  const redirectImmediately = data?.redirect_immediately === true;
+  return !navigationLocked && redirectImmediately && feedItemsAvailable && target === '/feed' ? target : '';
+}
+
+function routeToFeedWhenReady(data) {
+  const target = feedRedirectTarget(data);
+  if (target === '/feed') {
+    window.location.assign(target);
+    return true;
+  }
+  return false;
+}
+
+function setupInitialRedirectSuppressed() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('review') === '1' || params.get('redirect') === '0' || Boolean(window.location.hash);
+}
+
+function routeInitialSetupToFeedWhenReady() {
+  if (setupInitialRedirectSuppressed()) return false;
+  return routeToFeedWhenReady(SETUP_INITIAL_REDIRECT);
+}
+
+function collectionProgressIsActive(data) {
+  const progress = data?.collection_progress || {};
+  const state = data?.state || {};
+  const status = progress.status || state.collection_progress_status || state.first_run_status || '';
+  const activeStatuses = new Set(['queued', 'running', 'collected', 'filtered', 'scored', 'routed', 'saved']);
+  const runId = progress.run_id || state.collection_progress?.id || '';
+  const hasBackendRun = runId !== null && runId !== undefined && String(runId) !== '';
+  return Boolean(activeStatuses.has(status) || (hasBackendRun && (progress.is_active || state.first_run_active)));
+}
+
+function collectionProgressIsTerminal(data) {
+  const progress = data?.collection_progress || {};
+  const state = data?.state || {};
+  const status = progress.status || state.collection_progress_status || state.first_run_status || '';
+  const terminalStatuses = new Set(['completed', 'failed', 'no_items']);
+  const feedReady = Boolean(state.feed_items_available) && Number(state.feed_items || 0) > 0;
+  const collectionIncomplete = Boolean(state.collection_process_incomplete || progress.collection_process_incomplete);
+  return Boolean(progress.is_terminal || terminalStatuses.has(status) || (feedReady && !collectionIncomplete));
+}
+
+function latestCollectionError(data) {
+  const progress = data?.collection_progress || {};
+  const state = data?.state || {};
+  const errors = Array.isArray(progress.errors)
+    ? progress.errors
+    : (Array.isArray(state.collection_progress_errors) ? state.collection_progress_errors : []);
+  const latest = errors.length ? errors[errors.length - 1] : null;
+  return latest?.message || latest?.error || '';
+}
+
+function collectionLifecycleMessage(data) {
+  const progress = data?.collection_progress || {};
+  const counts = progress.counts || data?.state?.collection_progress_counts || {};
+  const status = progress.status || data?.state?.collection_progress_status || 'not_started';
+  const collected = Number(counts.posts_collected || 0);
+  const filtered = Number(counts.posts_filtered || 0);
+  const scored = Number(counts.signals_scored || 0);
+  const saved = Number(counts.signals_saved || data?.state?.feed_items || 0);
+  return `Status ${status}: collected ${collected}, filtered ${filtered}, scored ${scored}, saved ${saved}.`;
+}
+
+function renderCollectionProgressLifecycle(data) {
+  const progress = data?.collection_progress || {};
+  const state = data?.state || {};
+  const ready = Boolean(state.feed_items_available) && Number(state.feed_items || 0) > 0;
+  const status = progress.status || state.collection_progress_status || state.first_run_status || 'not_started';
+  const percent = Number(progress.progress_percent || state.progress_percent || 0);
+  const terminal = collectionProgressIsTerminal(data);
+  const active = collectionProgressIsActive(data) && !terminal;
+  const errorMessage = latestCollectionError(data);
+
+  setupClientState.collectionLifecycleActive = active;
+  setupClientState.collectionLifecycleTerminal = terminal;
+  setupClientState.setupNavigationLocked = Boolean(state.setup_navigation_locked || (active && !terminal));
+  setupClientState.lastCollectionStatus = status;
+  applySetupNavigationLock(state);
+
+  if (ready && terminal) {
+    clearSetupFailureState();
+    renderSetupRunFeedback(
+      'success',
+      'First run succeeded',
+      `Feed items are ready. Open /feed to start consuming your personal algorithm.`
+    );
+    renderFirstRunProgress(
+      'complete',
+      100,
+      'Setup/feed initialization complete',
+      'Feed items are ready. Continue to /feed.'
+    );
+    return;
+  }
+
+  if (ready && !terminal) {
+    clearSetupFailureState();
+    renderSetupRunFeedback(
+      'progress',
+      'Feed usable while collection finishes',
+      `Local SQLite has ${Number(state.feed_items || 0)} readable feed item${Number(state.feed_items || 0) === 1 ? '' : 's'}. Stay on /setup while setup keeps polling.`
+    );
+    renderFirstRunProgress(
+      'partial',
+      Number(progress.progress_percent || state.progress_percent || 95),
+      'Feed usable while collection finishes',
+      'Feed items are readable from local SQLite now. Setup keeps feed navigation locked until the tracked first collection completes.'
+    );
+    return;
+  }
+
+  if (status === 'failed') {
+    const message = errorMessage || 'The collection run failed before feed items were saved.';
+    renderSetupFailureState(message);
+    renderSetupRunFeedback('failure', 'First collection failed', `${message} Retry from this page when ready.`);
+    renderFirstRunProgress('failure', percent || 0, 'First collection failed', `${message} /feed unlocks after a successful retry.`);
+    return;
+  }
+
+  if (terminal && (status === 'no_items' || status === 'completed')) {
+    const message = status === 'completed'
+      ? 'The first collection completed but did not save feed items.'
+      : 'The first collection finished without feed items.';
+    renderSetupFailureState(message);
+    renderSetupRunFeedback('failure', 'No feed items yet', `${message} Review sources or retry; /feed unlocks after items are saved.`);
+    renderFirstRunProgress('failure', percent || 90, 'First collection finished with no items', `${message} You can retry without leaving setup.`);
+    return;
+  }
+
+  if (active) {
+    clearSetupFailureState();
+    renderSetupRunFeedback(
+      'progress',
+      'First collection running',
+      `${collectionLifecycleMessage(data)} This page will keep polling until feed items are available.`
+    );
+    renderFirstRunProgress(
+      'active',
+      percent || 80,
+      'Setup/feed initialization is running',
+      `${collectionLifecycleMessage(data)} Keep this page open for live progress.`
+    );
+    return;
+  }
+
+  if (state.local_ready && !ready) {
+    renderSetupRunFeedback(
+      'progress',
+      'Waiting for first feed items',
+      'Required local setup is saved. Use Start first collection if no run is active, or wait here while setup checks for feed items.'
+    );
+  }
+}
+
+function clearCollectionProgressPoll() {
+  if (setupClientState.collectionPollTimer) {
+    window.clearTimeout(setupClientState.collectionPollTimer);
+    setupClientState.collectionPollTimer = null;
+  }
+}
+
+function scheduleOneShotStatusRefresh(delay = SETUP_COLLECTION_POLL_INTERVAL_MS, options = {}) {
+  clearCollectionProgressPoll();
+  setupClientState.statusPollAttempts += 1;
+  if (!options.force && setupClientState.collectionLifecycleTerminal) return;
+  setupClientState.collectionPollTimer = window.setTimeout(refreshOneShotStatus, delay);
+}
+
+function startSetupCollectionLifecyclePolling(initialData = SETUP_INITIAL_COLLECTION_POLL) {
+  const active = collectionProgressIsActive(initialData);
+  const terminal = collectionProgressIsTerminal(initialData);
+  setupClientState.collectionLifecycleActive = active;
+  setupClientState.collectionLifecycleTerminal = terminal;
+  setupClientState.lastCollectionStatus = (
+    initialData?.collection_progress?.status
+    || initialData?.state?.collection_progress_status
+    || initialData?.state?.first_run_status
+    || setupClientState.lastCollectionStatus
+  );
+  if (active && !terminal) {
+    renderCollectionProgressLifecycle(initialData);
+    scheduleOneShotStatusRefresh(SETUP_COLLECTION_POLL_INTERVAL_MS, {force: true});
+  }
+  updateSetupClientState();
+}
+
+async function saveRequiredOnboardingInputs() {
+  const result = document.getElementById('required-onboarding-save-results');
+  const button = requiredOnboardingSaveControl();
+  updateSetupClientState({showValidation: true});
+  if (!setupClientState.openaiKeyPresent) {
+    if (result) result.innerHTML = '<div class="test-row fail">Add OPENAI_API_KEY before saving required setup inputs.</div>';
+    return;
+  }
+
+  if (button) button.disabled = true;
+  if (result) result.innerHTML = '<div class="test-row ok">Saving required OpenAI + local SQLite inputs...</div>';
+
+  try {
+    const response = await fetch('/setup/required/save', {
+      method: 'POST',
+      body: requiredOnboardingFormData()
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Required setup inputs were not saved');
+    }
+    setupClientState.requiredOnboardingSaved = true;
+    renderSetupState(data.state);
+    updateSetupClientState();
+    if (result) result.innerHTML = '<div class="test-row ok">Required inputs saved. First collection controls are enabled.</div>';
+    showToast(data.message || 'Required setup inputs saved');
+  } catch (error) {
+    setupClientState.requiredOnboardingSaved = false;
+    if (result) result.innerHTML = `<div class="test-row fail">${error.message}</div>`;
+  } finally {
+    if (button) button.disabled = false;
+    updateSetupClientState();
+  }
+}
+
+async function startOneShotSetup() {
+  const result = document.getElementById('one-shot-results');
+  const form = setupForm();
+  if (!form) return;
+  updateSetupClientState({showValidation: true});
+  if (!setupClientState.openaiKeyPresent) {
+    if (result) result.innerHTML = '<div class="test-row fail">Add OPENAI_API_KEY before starting local setup.</div>';
+    renderSetupRunFeedback(
+      'failure',
+      'First run blocked',
+      'OPENAI_API_KEY is required before Hedwig can start the local first collection.'
+    );
+    return;
+  }
+  oneShotStartControls().forEach((button) => {
+    button.disabled = true;
+  });
+  clearCollectionProgressPoll();
+  setupClientState.collectionLifecycleActive = true;
+  setupClientState.collectionLifecycleTerminal = false;
+  setupClientState.setupNavigationLocked = true;
+  setupClientState.lastCollectionStatus = 'starting';
+  applySetupNavigationLock();
+  clearSetupFailureState();
+  if (result) result.innerHTML = '<div class="test-row ok">Saving local setup and starting first feed run...</div>';
+  renderSetupRunFeedback(
+    'progress',
+    'Starting first collection',
+    'Saving local setup, generating criteria, initializing SQLite, and launching the first feed run.'
+  );
+  renderFirstRunProgress(
+    'active',
+    70,
+    'Setup/feed initialization is running',
+    'Saving local setup, generating criteria, initializing SQLite, and launching the first feed run. Keep this page open for live progress.'
+  );
+
+  try {
+    const response = await fetch(setupRunStartEndpoint(), {
+      method: 'POST',
+      body: oneShotFormData()
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      const error = new Error(data.error || 'Setup failed');
+      error.setupState = data.state || null;
+      throw error;
+    }
+    setupClientState.requiredOnboardingSaved = true;
+    renderSetupState(data.state);
+    setupClientState.sourcePresetState = data.source_preset_state || null;
+    renderSourcePresetStepState(data.source_preset_state);
+    showToast(data.message || 'Local setup started');
+    setupClientState.statusPollAttempts = 0;
+    renderCollectionProgressLifecycle(data);
+    routeToFeedWhenReady(data);
+    if (collectionProgressIsTerminal(data)) return;
+    scheduleOneShotStatusRefresh(SETUP_COLLECTION_POLL_INTERVAL_MS, {force: true});
+  } catch (error) {
+    setupClientState.collectionLifecycleActive = false;
+    setupClientState.collectionLifecycleTerminal = true;
+    setupClientState.setupNavigationLocked = false;
+    if (error.setupState?.local_ready) {
+      setupClientState.requiredOnboardingSaved = true;
+    }
+    if (result) result.innerHTML = `<div class="test-row fail">${error.message}</div>`;
+    renderSetupFailureState(error.message);
+    renderSetupRunFeedback(
+      'failure',
+      'First run failed',
+      `${error.message}. Fix the issue, then retry from this page.`
+    );
+    renderFirstRunProgress(
+      'failure',
+      0,
+      'Setup/feed initialization failed',
+      `${error.message}. Fix the issue, then retry from this page.`
+    );
+  } finally {
+    updateSetupClientState();
+  }
+}
+
+function handleOneShotSetupSubmit(event) {
+  if (event) event.preventDefault();
+  persistSetupDraft();
+  updateSetupClientState({showValidation: true});
+  startOneShotSetup();
+}
+
+function skipCriteriaStep() {
+  const interest = interestInput();
+  if (interest) interest.value = '';
+  persistSetupDraft();
+  updateSetupClientState({showValidation: true});
+  startOneShotSetup();
+}
+
+function continueWithCriteria() {
+  const form = setupForm();
+  if (form?.requestSubmit) {
+    form.requestSubmit();
+    return;
+  }
+  handleOneShotSetupSubmit();
+}
+
+async function saveSetupSourceToggles() {
+  const button = document.getElementById('setup-source-toggle-save-btn');
+  const result = document.getElementById('setup-source-toggle-results');
+  const selectedSourceIds = selectedSetupSourceIds();
+  const body = new URLSearchParams();
+  selectedSourceIds.forEach((sourceId) => body.append('enabled_sources', sourceId));
+
+  if (button) button.disabled = true;
+  if (result) result.innerHTML = '<div class="test-row ok">Saving source toggles...</div>';
+
+  try {
+    const response = await fetch('/setup/source-settings/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Could not save source toggles');
+    }
+    const registryDefaultPreset = document.querySelector('input[name="source_preset"][value="registry_default"]');
+    if (registryDefaultPreset) registryDefaultPreset.checked = true;
+    setupClientState.sourcePresetState = {
+      preset_id: 'registry_default',
+      enabled_count: data.enabled_count
+    };
+    renderSourcePresetStepState(setupClientState.sourcePresetState);
+    if (result) {
+      result.innerHTML = `<div class="test-row ok">${data.enabled_count} of ${data.registered_source_count} sources enabled. Saved to ${data.source_settings_path}.</div>`;
+    }
+    showToast(data.message || 'Source toggles saved');
+  } catch (error) {
+    if (result) result.innerHTML = `<div class="test-row fail">${error.message}</div>`;
+  } finally {
+    if (button) button.disabled = false;
+    renderSetupSourceToggleSelection();
+  }
+}
+
+async function refreshCollectionProgress() {
+  const result = document.getElementById('one-shot-results');
+  try {
+    const response = await fetch(setupCollectionProgressEndpoint());
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Could not refresh collection progress');
+    }
+    renderSetupState(data.state);
+    renderCollectionProgressLifecycle(data);
+    if (data.redirect_to && result) {
+      result.innerHTML = `<div class="test-row ok">Feed items are ready. <a href="${data.redirect_to}">Open /feed</a>.</div>`;
+    }
+    routeToFeedWhenReady(data);
+    if (collectionProgressIsTerminal(data)) {
+      clearCollectionProgressPoll();
+      updateSetupClientState();
+      return;
+    }
+    if (collectionProgressIsActive(data) || (data.state?.local_ready && !data.state?.feed_items_available)) {
+      scheduleOneShotStatusRefresh(SETUP_COLLECTION_POLL_INTERVAL_MS, {force: true});
+    }
+  } catch (error) {
+    clearCollectionProgressPoll();
+    setupClientState.collectionLifecycleActive = false;
+    setupClientState.collectionLifecycleTerminal = true;
+    if (result) result.innerHTML = `<div class="test-row fail">Could not refresh status: ${error.message}</div>`;
+    renderSetupFailureState(`Could not refresh setup status: ${error.message}.`);
+    renderSetupRunFeedback(
+      'failure',
+      'Status refresh failed',
+      `Could not refresh setup status: ${error.message}. You can retry from /setup when ready.`
+    );
+  } finally {
+    updateSetupClientState();
+  }
+}
+
+async function refreshOneShotStatus() {
+  return refreshCollectionProgress();
+}
+
+async function selectedAlgorithmBundle() {
+  const input = document.querySelector('[data-algorithm-import-file]');
+  const file = input?.files?.[0];
+  if (!file) {
+    throw new Error('Choose an algorithm bundle before importing.');
+  }
+  return file.arrayBuffer();
+}
+
+function renderAlgorithmImportResult(data, fallbackMessage) {
+  const result = document.getElementById('algorithm-import-results');
+  if (!result) return;
+  if (!data?.ok) {
+    const errors = Array.isArray(data?.errors) ? data.errors.join(', ') : fallbackMessage;
+    result.innerHTML = `<div class="test-row fail">${errors || fallbackMessage}</div>`;
+    return;
+  }
+  const allowedCount = (data.criteria_allowed?.length || 0) + (data.algorithm_allowed?.length || 0);
+  const rejectedCount = (data.criteria_rejected?.length || 0) + (data.algorithm_rejected?.length || 0);
+  const version = data.manifest?.algorithm_version ? ` v${data.manifest.algorithm_version}` : '';
+  result.innerHTML = `<div class="test-row ok">${fallbackMessage}${version}. Allowed changes: ${allowedCount}; rejected by sovereignty: ${rejectedCount}.</div>`;
+}
+
+async function postAlgorithmBundle(endpoint, fallbackMessage) {
+  const result = document.getElementById('algorithm-import-results');
+  if (result) result.innerHTML = '<div class="test-row ok">Reading algorithm bundle...</div>';
+  try {
+    const body = await selectedAlgorithmBundle();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/zip'},
+      body
+    });
+    const data = await response.json();
+    renderAlgorithmImportResult(data, fallbackMessage);
+    if (!response.ok || !data.ok) {
+      throw new Error(data.errors?.join(', ') || fallbackMessage);
+    }
+    showToast(fallbackMessage);
+  } catch (error) {
+    if (result) result.innerHTML = `<div class="test-row fail">${error.message}</div>`;
+  }
+}
+
+function dryRunAlgorithmImport() {
+  postAlgorithmBundle('/algorithm/import/dry-run', 'Import dry-run complete');
+}
+
+function confirmAlgorithmImport() {
+  postAlgorithmBundle('/algorithm/import', 'Algorithm import complete');
+}
+
+function openSetupDisclosureTarget(targetId, options = {}) {
+  const rawTarget = String(targetId || window.location.hash || '').trim();
+  if (!rawTarget || rawTarget === '#') return false;
+  const id = rawTarget.startsWith('#') ? rawTarget.slice(1) : rawTarget;
+  const target = document.getElementById(decodeURIComponent(id));
+  if (!target) return false;
+
+  const disclosure = target.matches('details') ? target : target.closest('details');
+  const setupDisclosure = disclosure
+    && (disclosure.classList.contains('setup-details') || disclosure.classList.contains('setup-progressive-details'));
+  if (setupDisclosure) {
+    disclosure.open = true;
+    disclosure.dataset.openedBySetupHash = 'true';
+  }
+
+  if (options.scroll !== false) {
+    target.scrollIntoView({behavior: options.behavior || 'smooth', block: 'start'});
+  }
+  return Boolean(setupDisclosure);
+}
+
+function wireSetupProgressiveDisclosureLinks() {
+  document.querySelectorAll('a[href^="#"]').forEach((link) => {
+    link.addEventListener('click', () => {
+      window.setTimeout(() => openSetupDisclosureTarget(link.getAttribute('href')), 0);
+    });
+  });
+  window.addEventListener('hashchange', () => openSetupDisclosureTarget(window.location.hash));
+  openSetupDisclosureTarget(window.location.hash, {scroll: false});
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  restoreSetupDraft();
+  updateSetupClientState();
+  document.addEventListener('click', interceptSetupFeedNavigation, true);
+  wireSetupProgressiveDisclosureLinks();
+  routeInitialSetupToFeedWhenReady();
+  startSetupCollectionLifecyclePolling();
+  const form = setupForm();
+  if (!form) return;
+
+  form.addEventListener('input', (event) => {
+    if (event.target?.id === 'OPENAI_API_KEY') {
+      setupClientState.requiredOnboardingSaved = false;
+      updateSetupClientState();
+      return;
+    }
+    persistSetupDraft();
+  });
+
+  form.addEventListener('change', (event) => {
+    if (event.target?.name === 'HEDWIG_STORAGE') {
+      persistSetupDraft();
+    }
+    if (event.target?.name === 'source_preset') {
+      setupClientState.sourcePresetState = null;
+    }
+    if (event.target?.matches?.('[data-setup-source-toggle]')) {
+      setupClientState.sourcePresetState = null;
+      renderSetupSourceToggleSelection();
+    }
+    updateSetupClientState();
+  });
+});
 </script>
 
 {% endblock %}

@@ -10,6 +10,7 @@
 <div class="section">
   <div class="button-row">
     <a class="btn btn-primary" href="/algorithm/export" download>📦 Export bundle</a>
+    <a class="btn" href="#algorithm-export-import">Import bundle</a>
     <a class="btn" href="/sovereignty">🏛️ sovereignty 보기</a>
     <a class="btn" href="/evolution">🧬 진화 timeline</a>
   </div>
@@ -17,6 +18,70 @@
 
 <div class="section">
   <div class="profile-grid">
+    <article
+      id="algorithm-export-import"
+      class="profile-card"
+      data-post-setup-export-import-controls
+    >
+      <h3>📦 Algorithm Export / Import</h3>
+      <p class="muted">
+        Post-setup controls for moving your criteria, algorithm, sovereignty
+        metadata, and active interpretation style. Dry-run before confirming an import.
+      </p>
+      <details data-post-setup-import-disclosure>
+        <summary>Import an algorithm bundle</summary>
+        <div class="field">
+          <label for="profile_algorithm_bundle_file">Bundle zip</label>
+          <input
+            type="file"
+            id="profile_algorithm_bundle_file"
+            name="algorithm_bundle_file"
+            accept=".zip,application/zip"
+            data-algorithm-import-file
+          >
+          <small class="help">
+            Use a bundle downloaded from Hedwig. Sovereignty boundaries are checked before anything is applied.
+          </small>
+        </div>
+        <div class="button-row" style="margin-top: 12px;">
+          <button
+            type="button"
+            class="btn"
+            onclick="dryRunAlgorithmImport()"
+            data-algorithm-import-dry-run
+          >
+            Dry-run import
+          </button>
+          <button
+            type="button"
+            class="btn"
+            onclick="confirmAlgorithmImport()"
+            data-algorithm-import-confirm
+          >
+            Confirm import
+          </button>
+          <a class="btn" href="/sovereignty">Review sovereignty</a>
+        </div>
+      </details>
+      <div class="button-row" style="margin-top: 12px;">
+        <a
+          class="btn btn-primary"
+          href="/algorithm/export"
+          download
+          data-algorithm-export-control
+        >
+          Download algorithm bundle
+        </a>
+      </div>
+      <div
+        id="algorithm-import-results"
+        class="setup-client-status"
+        aria-live="polite"
+        data-algorithm-import-results
+      >
+        Export/import is available here after setup; it is not part of the first-run step sequence.
+      </div>
+    </article>
 
     <article class="profile-card">
       <h3>📝 Criteria — 무엇을 추천할지</h3>
@@ -90,5 +155,58 @@
 
   </div>
 </div>
+
+<script>
+async function selectedAlgorithmBundle() {
+  const input = document.querySelector('[data-algorithm-import-file]');
+  const file = input?.files?.[0];
+  if (!file) {
+    throw new Error('Choose an algorithm bundle before importing.');
+  }
+  return file.arrayBuffer();
+}
+
+function renderAlgorithmImportResult(data, fallbackMessage) {
+  const result = document.getElementById('algorithm-import-results');
+  if (!result) return;
+  if (!data?.ok) {
+    const errors = Array.isArray(data?.errors) ? data.errors.join(', ') : fallbackMessage;
+    result.innerHTML = `<div class="test-row fail">${errors || fallbackMessage}</div>`;
+    return;
+  }
+  const allowedCount = (data.criteria_allowed?.length || 0) + (data.algorithm_allowed?.length || 0);
+  const rejectedCount = (data.criteria_rejected?.length || 0) + (data.algorithm_rejected?.length || 0);
+  const version = data.manifest?.algorithm_version ? ` v${data.manifest.algorithm_version}` : '';
+  result.innerHTML = `<div class="test-row ok">${fallbackMessage}${version}. Allowed changes: ${allowedCount}; rejected by sovereignty: ${rejectedCount}.</div>`;
+}
+
+async function postAlgorithmBundle(endpoint, fallbackMessage) {
+  const result = document.getElementById('algorithm-import-results');
+  if (result) result.innerHTML = '<div class="test-row ok">Reading algorithm bundle...</div>';
+  try {
+    const body = await selectedAlgorithmBundle();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/zip'},
+      body
+    });
+    const data = await response.json();
+    renderAlgorithmImportResult(data, fallbackMessage);
+    if (!response.ok || !data.ok) {
+      throw new Error(data.errors?.join(', ') || fallbackMessage);
+    }
+  } catch (error) {
+    if (result) result.innerHTML = `<div class="test-row fail">${error.message}</div>`;
+  }
+}
+
+function dryRunAlgorithmImport() {
+  postAlgorithmBundle('/algorithm/import/dry-run', 'Import dry-run complete');
+}
+
+function confirmAlgorithmImport() {
+  postAlgorithmBundle('/algorithm/import', 'Algorithm import complete');
+}
+</script>
 
 {% endblock %}

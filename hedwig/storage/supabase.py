@@ -64,6 +64,144 @@ def _normalize_signal_owner(user_id: str | None) -> str:
 # Signals
 # ---------------------------------------------------------------------------
 
+_COLLECTION_RUN_COUNT_FIELDS = {
+    "posts_collected",
+    "posts_filtered",
+    "signals_scored",
+    "signals_saved",
+    "alerts_count",
+    "digest_count",
+    "skipped_count",
+}
+_COLLECTION_RUN_TERMINAL_STATUSES = {"completed", "failed", "no_items"}
+
+
+def _now() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def start_collection_run(
+    run_type: str = "daily",
+    *,
+    status: str = "queued",
+    metadata: dict | None = None,
+) -> str:
+    client = _get_client()
+    now = _now()
+    try:
+        result = (
+            client.table("collection_runs")
+            .insert(
+                {
+                    "run_type": str(run_type or "daily"),
+                    "status": str(status or "queued"),
+                    "metadata": metadata or {},
+                    "started_at": now,
+                    "last_updated_at": now,
+                }
+            )
+            .execute()
+        )
+        rows = result.data or []
+        return str(rows[0].get("id")) if rows else ""
+    except Exception as e:
+        logger.warning(f"Failed to start collection run progress: {e}")
+        return ""
+
+
+def update_collection_run(
+    run_id: str | int | None,
+    *,
+    status: str | None = None,
+    counts: dict[str, int] | None = None,
+    error: str | Exception | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    if not run_id:
+        return {}
+    client = _get_client()
+    now = _now()
+    try:
+        existing_rows = (
+            client.table("collection_runs")
+            .select("*")
+            .eq("id", str(run_id))
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        existing = existing_rows[0] if existing_rows else {}
+        payload: dict[str, object] = {"last_updated_at": now}
+        if status:
+            payload["status"] = str(status)
+            if status in _COLLECTION_RUN_TERMINAL_STATUSES:
+                payload["completed_at"] = existing.get("completed_at") or now
+        for key, value in (counts or {}).items():
+            if key in _COLLECTION_RUN_COUNT_FIELDS:
+                payload[key] = max(0, int(value or 0))
+        merged_metadata = existing.get("metadata") or {}
+        if not isinstance(merged_metadata, dict):
+            merged_metadata = {}
+        if metadata:
+            merged_metadata.update(metadata)
+        payload["metadata"] = merged_metadata
+        errors = existing.get("errors") or []
+        if not isinstance(errors, list):
+            errors = []
+        if error:
+            errors.append({"message": str(error), "captured_at": now})
+        payload["errors"] = errors
+
+        result = (
+            client.table("collection_runs")
+            .update(payload)
+            .eq("id", str(run_id))
+            .execute()
+        )
+        rows = result.data or []
+        return rows[0] if rows else {}
+    except Exception as e:
+        logger.warning(f"Failed to update collection run progress: {e}")
+        return {}
+
+
+def finish_collection_run(
+    run_id: str | int | None,
+    *,
+    status: str = "completed",
+    counts: dict[str, int] | None = None,
+    error: str | Exception | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    return update_collection_run(
+        run_id,
+        status=status,
+        counts=counts,
+        error=error,
+        metadata=metadata,
+    )
+
+
+def get_latest_collection_progress(run_type: str | None = None) -> dict:
+    client = _get_client()
+    try:
+        query = client.table("collection_runs").select("*")
+        if run_type:
+            query = query.eq("run_type", str(run_type))
+        rows = (
+            query.order("last_updated_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        return rows[0] if rows else {}
+    except Exception as e:
+        logger.warning(f"Failed to read collection run progress: {e}")
+        return {}
+
+
 def _lookup_existing_signal_urls(client, urls: list[str], signal_owner: str) -> list[dict]:
     if not urls:
         return []
@@ -1171,6 +1309,24 @@ CREATE TABLE IF NOT EXISTS run_history (
     run_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS collection_runs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    run_type TEXT NOT NULL DEFAULT 'daily',
+    status TEXT NOT NULL DEFAULT 'queued',
+    posts_collected INTEGER DEFAULT 0,
+    posts_filtered INTEGER DEFAULT 0,
+    signals_scored INTEGER DEFAULT 0,
+    signals_saved INTEGER DEFAULT 0,
+    alerts_count INTEGER DEFAULT 0,
+    digest_count INTEGER DEFAULT 0,
+    skipped_count INTEGER DEFAULT 0,
+    errors JSONB DEFAULT '[]',
+    metadata JSONB DEFAULT '{}',
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    last_updated_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
 ALTER TABLE signals
     ADD COLUMN IF NOT EXISTS user_id TEXT;
 
@@ -1216,6 +1372,8 @@ CREATE INDEX IF NOT EXISTS idx_user_sources_plugin_id ON user_sources(plugin_id)
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
 CREATE INDEX IF NOT EXISTS idx_run_history_run_at ON run_history(run_at DESC);
 CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type);
+CREATE INDEX IF NOT EXISTS idx_collection_runs_updated ON collection_runs(last_updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_collection_runs_status ON collection_runs(status);
 CREATE INDEX IF NOT EXISTS idx_evolution_timestamp ON evolution_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_criteria_version ON criteria_versions(version DESC);
 CREATE INDEX IF NOT EXISTS idx_memory_week ON user_memory(snapshot_week);
