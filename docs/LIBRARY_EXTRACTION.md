@@ -1,7 +1,7 @@
 # hedwig-engine Library Extraction Plan (Phase 6)
 
 ## Why
-Hedwig's **engine** (`hedwig/engine/`, `hedwig/evolution/`, `hedwig/qa/`) is the novel research artifact — a self-evolving recommendation engine with Algorithm Sovereignty, Triple-Input, Hybrid Ensemble, and Meta-Evolution. The rest (`dashboard`, `saas`, `delivery`, `native`) is derivative infrastructure.
+Hedwig's **engine** (`hedwig/engine/`, `hedwig/evolution/`, `hedwig/qa/`) is the novel research artifact — a self-evolving personal recommendation engine with Algorithm Sovereignty, Quad-Input Steering, Hybrid Ensemble, and Meta-Evolution. The rest (`dashboard`, `saas`, `delivery`, `native`) is derivative infrastructure.
 
 Extracting the engine as a standalone library (`hedwig-engine`) lets the innovation travel independently of Hedwig's product shell, positioning it as a reference implementation of the autoresearch pattern applied to personal recommendation.
 

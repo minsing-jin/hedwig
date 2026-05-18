@@ -11,7 +11,7 @@ All phases executed with gap below 0.1. After the initial pass, 9 deferred resid
 | Phase | Title | Gap | Tests |
 |---|---|---|---|
 | 0 | Pipeline smoke test + fixes | 0.05 | 6 |
-| 1 | Triple-Input + absorption infra | 0.08 | 15 |
+| 1 | Quad-Input Steering + absorption infra | 0.08 | 15 |
 | 2 | Instrumentation (trace/timeline/sandbox) | 0.07 | 9 |
 | 3 | Hybrid Ensemble (5 components, 2-stage) | 0.10 | 11 |
 | 4 | Meta-Evolution (autoresearch on algo) | 0.09 | 8 |
@@ -47,7 +47,7 @@ All phases executed with gap below 0.1. After the initial pass, 9 deferred resid
 - `hedwig/sources/_mcp_adapter.py`, `_skill_adapter.py` — absorption scaffolds
 
 ### Storage (new tables)
-- `evolution_signal` — Triple-Input unified stream (explicit/semi/implicit)
+- `evolution_signal` — Quad-Input Steering stream (explicit/semi/implicit-active/implicit-passive)
 - `algorithm_versions` — peer to criteria_versions; audit trail for algo changes
 
 ### New API surface (dashboard)
@@ -67,8 +67,8 @@ All phases executed with gap below 0.1. After the initial pass, 9 deferred resid
 |---|---|---|
 | 1 | Algorithm Sovereignty | `algorithm.yaml` + `criteria.yaml` + `algorithm_versions` + `evolution_log.jsonl` |
 | 2 | Self-Evolving Fitness (daily/weekly/monthly) | `evolution/engine.py` (daily/weekly) + `evolution/meta.py` (monthly) |
-| 3 | Triple-Input | `evolution_signal` table + NL editor + `/qa/feedback` + legacy upvote path |
-| 4 | 4-Tier Temporal | `main.py` (daily/weekly) + `critical.py` (instant) + `qa/router.py` (on-demand) |
+| 3 | Quad-Input Steering | `evolution_signal` table + NL editor + `/qa/feedback` + legacy upvote path + behavior events |
+| 4 | 5-Tier Temporal | `main.py` (daily/weekly) + `critical.py` (instant) + `qa/router.py` (on-demand) + `/feed` |
 | 5 | Absorption Gradient | `absorbed/last30days.py` (L2) + MCP/Skill adapter scaffolds (L1) + `absorption_backlog.md` |
 | 6 | Web = Engine 계기판 | dashboard surfaces all evolution mechanisms — no Stripe, no tier UI added |
 | 7 | Cognitive Augmentation | Pre-scorer (attention) + Devil's Advocate (bias) + Q&A RAG (memory) + timeline (metacog) |
