@@ -1,7 +1,7 @@
-# Hedwig v3 — Self-Evolving Personal Recommendation Engine
+# Hedwig v3 — Self-Evolving Personal Algorithm Steering Engine
 
-> 사용자가 **자연어·upvote·질문**으로 자신의 추천 알고리즘을 조각하는,
-> 크로스플랫폼 멀티모달 신호를 **4-tier temporal lattice**로 소비하는,
+> 사용자가 **자연어·upvote·질문·행동신호**로 자신의 추천 알고리즘을 방향 조정하는,
+> 크로스플랫폼 멀티모달 신호를 **5-tier temporal lattice**로 소비하는,
 > **인지 한계를 극복**하는 자기진화 엔진.
 
 **문서 상태**: v3 (2026-04-21, source of truth)
@@ -18,31 +18,31 @@
 
 ### 인사이트
 - 단순 "AI 요약 피드"는 commodity. **엔진이 본체**
-- 사용자가 알고리즘을 **소유**하고 **조각**할 수 있으면 광고 비즈가 구조적으로 못 만드는 것을 만들 수 있음
+- 사용자가 알고리즘을 **소유**하고 **steering**할 수 있으면 광고 비즈가 구조적으로 못 만드는 것을 만들 수 있음
 - 자기진화 루프(Karpathy autoresearch 정신)를 **알고리즘 구조 자체**에 적용하면 시간 지날수록 경쟁 격차 벌어짐
 
 ---
 
 ## 2. Positioning (한 줄)
 
-**Hedwig은 사용자가 자연어·upvote·행동·질문으로 자신의 추천 알고리즘을 조각하는, 크로스플랫폼 멀티모달 신호를 critical/daily/weekly/on-demand/**feed**로 소비하는 "내 SNS 플랫폼".**
+**Hedwig은 사용자가 자연어·upvote·행동·질문으로 자신이 소유한 추천 알고리즘을 steering하는, 크로스플랫폼 멀티모달 신호를 critical/daily/weekly/on-demand/**feed**로 소비하는 "내 SNS 플랫폼".**
 
-기업 SNS 알고리즘(engagement 최적화, 플랫폼 소유) ↔ Hedwig(내 니즈 최적화, **내가 소유하는 피드**).
+기업 SNS 알고리즘(engagement 최적화, 플랫폼 소유) ↔ Hedwig(내 니즈 최적화, **내가 소유하고 방향 조정하는 피드**).
 
 **두 모드 동시 지원**:
-- **Pull-to-digest** — 아침 브리프, 주간 브리프 (기존 "Radar" 프레임)
+- **Pull-to-digest** — 아침 브리프, 주간 브리프
 - **Push-to-stream** — 무한 스크롤 feed, 행동신호가 바로 알고리즘에 반영되는 SNS 프레임 (Phase 7에서 구현)
 
 ---
 
-## 3. 8 Principles
+## 3. 9 Principles
 
 | # | 원칙 | 의미 |
 |---|---|---|
 | 1 | **Algorithm Sovereignty** | `criteria.yaml` + `algorithm.yaml` + evolution log 전부 사용자 소유, audit/export 가능 |
 | 2 | **Self-Evolving Fitness** | daily micro + weekly macro + **monthly meta** (3-layer 진화) |
-| 3 | **Triple-Input** | explicit(자연어 편집) / semi(Q&A 수용) / implicit(upvote/click) |
-| 4 | **4-Tier Temporal** | critical(instant) / daily(morning) / weekly(strategy) / on-demand(Q&A) |
+| 3 | **Quad-Input Steering** | explicit(자연어 방향 조정) / semi(Q&A 수용) / implicit-active(upvote/click) / implicit-passive(dwell/skip/share) |
+| 4 | **5-Tier Temporal** | critical(instant) / daily(morning) / weekly(strategy) / on-demand(Q&A) / feed(stream) |
 | 5 | **Absorption Gradient** | L1 API call → L2 OSS code 체화 → L3 pattern 추출 → Novelty는 최후 수단 |
 | 6 | **Web = Engine 계기판** | dogfooding + mutation sandbox. **상업 껍데기(billing/tier/marketing) 금지** |
 | 7 | **Cognitive Augmentation** | 주의/편향/작업기억/메타인지 4한계 각각에 메커니즘 매핑 |
@@ -60,7 +60,7 @@
 
 ```
 1. Algorithm Sovereignty       — 사용자가 알고리즘 소유/감사/이식
-2. Quad-Input Sculpting        — 4경로 입력이 하나의 fitness로 수렴
+2. Quad-Input Steering         — 4경로 입력이 하나의 fitness로 수렴
                                  (explicit NL + semi Q&A + implicit vote + passive behavior)
 3. Self-Evolving Fitness       — daily/weekly/monthly 3층 진화
 4. 5-Tier Temporal Lattice     — critical/daily/weekly/on-demand/FEED 다섯 시간축
@@ -103,18 +103,20 @@
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ DELIVERY — 4-Tier                                           │
+│ DELIVERY — 5-Tier                                           │
 │  ⚡ Critical (instant push)                                  │
 │  🌅 Daily (morning brief)                                   │
 │  📈 Weekly (strategy brief + opportunity notes)             │
 │  💬 On-Demand (Q&A over DB + live search)                   │
+│  📱 Feed (SNS stream + behavior capture)                    │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ FEEDBACK — Triple-Input                                     │
-│  Explicit    : 자연어 criteria/algorithm 편집              │
-│  Semi        : Q&A 수용/거절, "이것 더"/"이것 빼"            │
-│  Implicit    : upvote/downvote, click, dwell, skip          │
+│ FEEDBACK — Quad-Input Steering                              │
+│  Explicit         : 자연어 criteria/algorithm 방향 조정     │
+│  Semi             : Q&A 수용/거절, "이것 더"/"이것 빼"       │
+│  Implicit-active  : upvote/downvote, save, share            │
+│  Implicit-passive : dwell, skip, scroll, re-open            │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -128,19 +130,20 @@
 
 ---
 
-## 6. Triple-Input Feedback (상세)
+## 6. Quad-Input Steering Feedback (상세)
 
 | Channel | Time const | Noise | 예 | 구현 |
 |---|---|---|---|---|
-| **Explicit** (needs) | 느림, 결정적 | 낮음 | "MoE 피로, agent 위주로" | 자연어 → YAML diff → confirm |
+| **Explicit** (direction) | 느림, 결정적 | 낮음 | "MoE 피로, agent 위주로" | 자연어 → YAML diff → confirm |
 | **Semi** (directed) | 중간 | 중간 | Q&A 수용, "deep dive", "다른 관점" | 이벤트 로그 → evolution signal |
-| **Implicit** (passive) | 빠름 | 높음 | upvote/downvote, click, dwell | 기존 feedback DB |
+| **Implicit-active** (button/swipe) | 빠름 | 중간 | upvote/downvote, save, share | feedback + behavior_events |
+| **Implicit-passive** (ambient) | 매우 빠름 | 높음 | dwell, skip, scroll, re-open | behavior_events → evolution signal |
 
-**핵심**: 세 경로 모두 **같은 `algorithm.yaml` + `criteria.yaml`**로 수렴. 진화 엔진이 세 입력을 blend.
+**핵심**: 네 경로 모두 **같은 `algorithm.yaml` + `criteria.yaml`**로 수렴. 사용자는 매번 수동 편집하지 않고, 자연어와 일상 행동으로 방향을 조정한다.
 
 ---
 
-## 7. 4-Tier Temporal Lattice
+## 7. 5-Tier Temporal Lattice
 
 | Layer | Trigger | 내용 | Channel |
 |---|---|---|---|
@@ -308,9 +311,9 @@ Karpathy autoresearch가 research paper를 진화시킨 것처럼, Hedwig은 **�
 - [x] Jina 429 완화 (동시성 ↓, API key 지원, backoff)
 - [ ] daily 1회 완주 검증, 30개 시그널 피드백, evolution 1 사이클 관찰
 
-### Phase 1 — Triple-Input 완성 + 흡수 인프라 (1-2주)
+### Phase 1 — Quad-Input Steering 완성 + 흡수 인프라 (1-2주)
 - [ ] `/ask` 채팅 엔드포인트: RAG(SQLite) + exa fallback
-- [ ] 자연어 criteria 편집기: 자연어 → YAML diff → confirm
+- [ ] 자연어 criteria steering: 자연어 → YAML diff → confirm
 - [ ] Ad-hoc 수용 이벤트: `evolution_signal` 테이블 (accept/reject 이벤트)
 - [ ] MCP/Skill 어댑터: `sources/_mcp_adapter.py`, `sources/_skill_adapter.py`
 - [ ] **last30days-skill 첫 L2 체화** (pre_scorer 업그레이드)

@@ -1,17 +1,17 @@
 # SNS Platform Pivot — Gap Analysis
 
 **Date**: 2026-04-24
-**Pivot**: Hedwig의 소비 UX 프레이밍을 **"내 Reader/Radar"** → **"내 SNS 플랫폼 (personal feed)"** 으로 재정렬.
-Algorithm Sovereignty 원칙은 동일하되 UX · 행동신호 · 확산 · 이식 모델이 바뀜.
+**Pivot**: Hedwig의 소비 UX 프레이밍을 **"브리프 중심 정보 도구"** → **"내가 소유하고 steering하는 SNS 플랫폼 (personal feed)"** 으로 재정렬.
+Algorithm Sovereignty 원칙은 동일하되, 사용자가 자연어와 행동신호로 방향을 조정하는 UX · 행동신호 · 확산 · 이식 모델이 바뀜.
 
 ## 프레임 비교
 
-| 축 | Radar/Curator (현재) | Personal SNS Platform (목표) |
+| 축 | 브리프/큐레이터 중심 이전 프레임 | Personal SNS Platform (목표) |
 |---|---|---|
 | 소비 단위 | 하루 1회 브리프 | 상시 feed (on/off 자유) |
 | 상호작용 | 👍/👎 버튼 | swipe / long-press / dwell / share |
 | 시간축 | Daily/Weekly 정시 push | 사용자가 열 때 최신 순 + Critical push |
-| 알고리즘 접근 | YAML + Ouroboros 문서 | "내 알고리즘" 프로필 페이지 |
+| 알고리즘 접근 | YAML + Ouroboros 문서 | "내 알고리즘" 프로필 + 자연어 steering |
 | 확산 | 혼자 사용 | 알고리즘 export/import/share |
 | 행동신호 | vote + Q&A | + dwell, scroll_depth, skip, share, re-open |
 | 모바일 | 없음 | PWA + 홈 배지 + 푸시 |
@@ -52,8 +52,8 @@ CREATE TABLE behavior_events (
 );
 ```
 
-Triple-Input이 4-Input으로 확장:
-- **Explicit** (NL 편집)
+Quad-Input Steering:
+- **Explicit** (NL 방향 조정)
 - **Semi** (Q&A 수용)
 - **Implicit-Active** (vote)
 - **Implicit-Passive** (dwell / skip / share) ← 신규
@@ -117,7 +117,7 @@ Import flow: bundle 업로드 → sovereignty boundary 검사 → dry-run rank o
 
 ## 기획서 업데이트 범위
 
-- `docs/VISION_v3.md` → §3 원칙 8→9, §4 차별축 5→6, §7 4-tier에 "feed stream" 층위 명시, §12 Roadmap에 Phase 7 추가
+- `docs/VISION_v3.md` → §3 원칙 8→9, §4 차별축 5→6, §7 5-tier에 "feed stream" 층위 명시, §12 Roadmap에 Phase 7 추가
 - `docs/absorption_backlog.md` → feed/timeline 관련 OSS + 논문 (Instagram Explore, TikTok recs, Twitter rankflow)
 
 ## Roadmap 추가 — Phase 7 "SNS Platform"

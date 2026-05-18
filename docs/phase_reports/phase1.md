@@ -1,4 +1,4 @@
-# Phase 1 Gap Report — Triple-Input + Absorption Infra
+# Phase 1 Gap Report — Quad-Input Steering + Absorption Infra
 
 **Date**: 2026-04-21
 **Status**: Complete
@@ -35,7 +35,7 @@
 - last30days absorption ported the three key ideas (persistence, saturation, velocity). Full parity with upstream is not required — Hedwig uses different source stack.
 
 ### Test coverage: 0.0
-- Triple-input path fully covered:
+- Quad-input steering path covered at this phase:
   - explicit: `criteria_edit` logs to evolution_signal ✅
   - semi: `qa_accept`/`qa_reject` via `/qa/feedback` ✅
   - implicit: existing `/feedback/{id}/{vote}` untouched, still logs via `save_feedback`
@@ -47,7 +47,7 @@
 ## Decision
 **Gap 0.08 < 0.1 threshold → proceed to Phase 2.**
 
-MCP/Skill adapter stubs are acceptable residual — they become live in a future targeted Phase 1 continuation when the user picks a specific MCP server to absorb. The core Triple-Input loop is fully functional.
+MCP/Skill adapter stubs are acceptable residual — they become live in a future targeted Phase 1 continuation when the user picks a specific MCP server to absorb. The core steering loop is fully functional for explicit, semi-explicit, and implicit feedback; later behavior events extend it into passive steering.
 
 ## Artifacts
 - `hedwig/storage/local.py` — `evolution_signal`, `algorithm_versions` tables + CRUD

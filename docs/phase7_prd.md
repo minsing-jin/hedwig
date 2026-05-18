@@ -1,7 +1,7 @@
 # Phase 7 — Personal SNS Platform PRD
 
 **Date**: 2026-04-27
-**Goal**: Hedwig을 "내가 소유한 SNS 플랫폼"으로 만든다. 엔진은 그대로, 소비 UX와 행동신호 채널을 추가.
+**Goal**: Hedwig을 "내가 소유하고 steering하는 SNS 플랫폼"으로 만든다. 엔진은 그대로, 소비 UX와 행동신호 채널을 추가.
 **Reference**: `docs/phase_reports/sns_platform_gap.md` (S1~S11), VISION_v3 §3 9원칙, §7 5-tier.
 
 ## Sprint specs
@@ -55,7 +55,7 @@ CREATE INDEX idx_behavior_type ON behavior_events(event_type, captured_at DESC);
 **Beacon**: `POST /events/beacon` accepts batch `[{signal_id, event_type, dwell_ms?, position_in_feed?}]`.
 JS uses `IntersectionObserver` (50% threshold) for `view_start`/`view_end`, computes `dwell_ms = end - start`. `navigator.sendBeacon()` on `pagehide`.
 
-**Triple-Input → Quad-Input**: behavior_events events surface as `evolution_signal(channel='implicit', kind='behavior_<type>')` lazily so the existing evolution loop sees them without new wiring.
+**Quad-Input Steering**: behavior_events events surface as `evolution_signal(channel='implicit', kind='behavior_<type>')` lazily so the existing evolution loop sees them without new wiring.
 
 **Acceptance**: 30 cards 스크롤하면 30 view_start + 30 view_end (혹은 dwell) 이벤트가 DB에 들어가 있어야 함.
 

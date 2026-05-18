@@ -19,8 +19,8 @@ Cross-checking VISION_v3.md / algorithm.yaml / principles vs shipped code, after
 |---|---|
 | 1 Algorithm Sovereignty | ✅ criteria_versions now captures user explicit edits (D2) |
 | 2 Self-Evolving Fitness | ✅ daily/weekly + monthly Meta, with correct fitness spec (D3) |
-| 3 Triple-Input | ✅ explicit via NL editor (newly versioned), semi via Q&A feedback, implicit via upvote |
-| 4 4-Tier Temporal | ✅ critical / daily / weekly / on-demand |
+| 3 Quad-Input Steering | ✅ explicit via NL editor (newly versioned), semi via Q&A feedback, implicit-active via upvote, implicit-passive via behavior events |
+| 4 5-Tier Temporal | ✅ critical / daily / weekly / on-demand / feed |
 | 5 Absorption Gradient | ✅ MCP HTTP + Skill loader + last30days enrichment |
 | 6 Engine 계기판 | ✅ /evolution /sandbox /meta visual widgets; no commercial shell |
 | 7 Cognitive Augmentation | ✅ pre-scorer + Devil's Advocate (LLM judge restored via D1) + Q&A RAG + timeline |

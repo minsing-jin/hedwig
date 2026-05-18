@@ -5,8 +5,8 @@
 <h1 align="center">🦉 Hedwig</h1>
 
 <p align="center">
-  <strong>내가 소유하고 자연어로 조각하는, 자기진화 개인 SNS 플랫폼</strong><br>
-  <em>Personal SNS Platform whose recommendation algorithm you own and evolve in natural language.</em>
+  <strong>내가 소유하고 자연어와 행동신호로 방향을 조정하는, 자기진화 개인 SNS 플랫폼</strong><br>
+  <em>Personal SNS Platform whose recommendation algorithm you own and steer with natural language and feedback.</em>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  기업 알고리즘 ↔ <strong>Hedwig (내가 소유한 자기진화 추천 엔진)</strong><br>
+  기업 알고리즘 ↔ <strong>Hedwig (내가 소유하고 조향하는 자기진화 추천 엔진)</strong><br>
   크로스플랫폼 신호를 ⚡ critical / 🌅 daily / 📈 weekly / 💬 on-demand / 📱 feed 다섯 시간축으로 소비
 </p>
 
@@ -77,6 +77,21 @@ python -m hedwig --quickstart
 > 🔑 OpenAI API 키 **하나만** 있으면 됨. Supabase · Slack · Discord 모두 옵션.
 > 🌐 브라우저가 `http://127.0.0.1:8765/chat` 으로 자동 열림.
 
+Hedwig의 핵심은 알고리즘을 블랙박스처럼 맡기거나 수동으로 만지는 것이 아니라 **steering**하는 것입니다. 사용자는 `criteria.yaml`, `algorithm.yaml`, `feeds.yaml`을 소유하고, `/chat` 자연어 지시와 `/feed` 행동신호로 추천 엔진의 방향을 계속 조정합니다. 시스템은 그 방향 안에서 daily/weekly/monthly 루프로 스스로 학습합니다.
+
+### 처음에 세팅할 것
+
+| 구분 | 필요 여부 | 왜 필요한가 |
+|---|---|---|
+| `OPENAI_API_KEY` | 필수 | LLM scoring, `/chat`, 자연어 steering, evolution |
+| SQLite local mode | 기본값 | Supabase 없이 `~/.hedwig/hedwig.db`로 바로 시작 |
+| Supabase | 옵션 | 여러 기기/팀/호스팅 운영 시 사용 |
+| Slack / Discord / Email | 옵션 | critical/daily/weekly를 외부 채널로 push |
+| Exa / Jina / ScrapeCreators | 옵션 | live search, URL 정규화 rate limit, TikTok/Instagram 확장 |
+| Podcast / Bluesky 설정 | 옵션 | 특정 RSS/handle을 추가 추적 |
+
+가장 빠른 UX는 `python -m hedwig --quickstart` 한 번으로 로컬 모드를 만들고, 이후 브라우저 `/setup` 한 페이지에서 옵션 키와 delivery를 추가하는 흐름입니다.
+
 ---
 
 ## 🏛️ 9가지 핵심 원칙
@@ -85,7 +100,7 @@ python -m hedwig --quickstart
 |---|---|---|
 | 1️⃣ | **Algorithm Sovereignty** | `criteria.yaml` + `algorithm.yaml` + `sovereignty.yaml` + `feeds.yaml` 모두 사용자 소유. 감사·이식 가능 |
 | 2️⃣ | **Self-Evolving Fitness** | daily micro · weekly macro · **monthly meta** 3층 진화. Karpathy autoresearch 패턴을 알고리즘 구조에 적용 |
-| 3️⃣ | **Quad-Input Sculpting** | explicit (NL 편집) + semi (Q&A 수용) + implicit-active (👍/👎) + implicit-passive (dwell/skip/share) |
+| 3️⃣ | **Quad-Input Steering** | 자연어 방향 조정 + Q&A 수용 + 👍/👎 버튼 + dwell/skip/share 행동신호가 하나의 fitness로 수렴 |
 | 4️⃣ | **5-Tier Temporal Lattice** | ⚡ critical · 🌅 daily · 📈 weekly · 💬 on-demand · 📱 feed 동시 서빙 |
 | 5️⃣ | **Absorption Gradient** | L1 API → L2 OSS 코드 체화 → L3 패턴 추출. 신규 Novelty는 최후 |
 | 6️⃣ | **Web = Engine 계기판** | dogfooding + sandbox. 상업 껍데기 금지 |
@@ -134,7 +149,7 @@ python -m hedwig --quickstart
 - 🧮 `pre_scorer` 5-factor (engagement · authority · recency · convergence · text-match)
 - 📊 last30days-style enrichment (persistence + saturation + velocity)
 
-### 🅱️ Stage B — Ranking Ensemble (`algorithm.yaml`로 사용자 제어)
+### 🅱️ Stage B — Ranking Ensemble (`algorithm.yaml`로 사용자 steering)
 | 컴포넌트 | 역할 |
 |---|---|
 | 🧠 **llm_judge** | top_k 만 (deep qualitative + Devil's Advocate) |
@@ -198,7 +213,7 @@ python -m hedwig --quickstart
 ### 📅 매일 (5분)
 1. 💬 `/chat` 또는 홈에서 `▶ Run Daily Pipeline` 클릭
 2. 📱 `/feed` 에서 `j`/`k` 로 스크롤하며 👍/👎 (dwell 자동 수집)
-3. 🗣️ 자연어로 방향 조정: `/chat` 에 *"agent 위주로"*
+3. 🗣️ 자연어로 알고리즘 steering: `/chat` 에 *"agent 위주로"*, *"논문 비중 높여"*, *"crypto 줄여"*
 
 ### 🗓️ 매주
 ```bash
@@ -305,8 +320,9 @@ HEDWIG_STORAGE=sqlite|supabase
 | 소스 통합 | 1-3개 분야 | 🌐 **20개 플랫폼** 한 번에 |
 | 반대 관점 | 편집자 1명 | 😈 **Devil's Advocate 자동** |
 | 알고리즘 소유권 | 발행자 자산 | 🏛️ **algorithm.yaml = 내 자산. export 가능** |
+| 알고리즘 조향권 | 편집자 취향을 따라감 | 🎛️ **자연어 + 행동신호로 내 방향에 맞게 steering** |
 
-> 💡 **뉴스레터는 "남이 만든 메뉴", Hedwig는 "내가 매일 깎는 부엌".**
+> 💡 **뉴스레터는 "남이 만든 메뉴", Hedwig는 "내가 방향을 잡고 매일 학습시키는 부엌".**
 
 ---
 
