@@ -4,16 +4,130 @@ import os
 from pathlib import Path
 
 import yaml
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 load_dotenv()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CRITERIA_PATH = PROJECT_ROOT / "criteria.yaml"
+
+def _path_from_env(name: str, default: Path) -> Path:
+    value = os.getenv(name, "").strip()
+    return Path(value).expanduser() if value else default
+
+
+CRITERIA_PATH = _path_from_env("HEDWIG_CRITERIA_PATH", PROJECT_ROOT / "criteria.yaml")
 ALGORITHM_PATH = PROJECT_ROOT / "algorithm.yaml"
 EVOLUTION_LOG_PATH = PROJECT_ROOT / "evolution_log.jsonl"
 ALGORITHM_LOG_PATH = PROJECT_ROOT / "algorithm_log.jsonl"
 USER_MEMORY_PATH = PROJECT_ROOT / "user_memory.jsonl"
+
+
+_RUNTIME_CONFIG_DEFAULTS = {
+    "OPENAI_API_KEY": "",
+    "OPENAI_MODEL_FAST": "gpt-4o-mini",
+    "OPENAI_MODEL_DEEP": "gpt-4o",
+    "SLACK_WEBHOOK_ALERTS": "",
+    "SLACK_WEBHOOK_DAILY": "",
+    "SLACK_BOT_TOKEN": "",
+    "DISCORD_WEBHOOK_ALERTS": "",
+    "DISCORD_WEBHOOK_DAILY": "",
+    "DISCORD_WEBHOOK_WEEKLY": "",
+    "SMTP_HOST": "",
+    "SMTP_PORT": "587",
+    "SMTP_USER": "",
+    "SMTP_PASS": "",
+    "SMTP_FROM": "",
+    "SUPABASE_URL": "",
+    "SUPABASE_KEY": "",
+    "REDDIT_CLIENT_ID": "",
+    "REDDIT_CLIENT_SECRET": "",
+    "EXA_API_KEY": "",
+    "SCRAPECREATORS_API_KEY": "",
+}
+
+
+def _candidate_env_paths(env_path: Path | str | None = None) -> list[Path]:
+    """Return likely local .env paths without requiring process env mutation."""
+    paths: list[Path] = []
+    if env_path is not None:
+        paths.append(Path(env_path).expanduser())
+    paths.extend([Path.cwd() / ".env", PROJECT_ROOT / ".env"])
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.resolve() if path.exists() else path.absolute()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(path)
+    return unique
+
+
+def _load_persisted_env(env_path: Path | str | None = None) -> dict[str, str]:
+    """Read persisted .env values directly; empty values are preserved."""
+    values: dict[str, str] = {}
+    for path in _candidate_env_paths(env_path):
+        if not path.exists():
+            continue
+        parsed = dotenv_values(path)
+        for key, value in parsed.items():
+            if value is not None:
+                values[key] = value
+    return values
+
+
+def _runtime_value(
+    key: str,
+    default: str = "",
+    *,
+    persisted: dict[str, str] | None = None,
+    prefer_persisted: bool = False,
+) -> str:
+    persisted = persisted or {}
+    if prefer_persisted and key in persisted:
+        return persisted.get(key, "") or default
+
+    env_value = os.getenv(key)
+    if env_value:
+        return env_value
+    if key in persisted:
+        return persisted.get(key, "") or default
+    return default
+
+
+def refresh_runtime_config(
+    env_path: Path | str | None = None,
+    *,
+    prefer_persisted: bool = False,
+    update_process_env: bool = False,
+) -> dict[str, str]:
+    """Refresh module-level runtime settings from process env and persisted .env.
+
+    The dashboard setup flow writes OPENAI_API_KEY to the managed .env while the
+    FastAPI process is already running. Refreshing these globals lets existing
+    ``from hedwig.config import OPENAI_API_KEY`` call sites read the persisted
+    setup value without requiring a process restart or an os.environ mutation.
+    """
+    persisted = _load_persisted_env(env_path)
+    refreshed: dict[str, str] = {}
+    for key, default in _RUNTIME_CONFIG_DEFAULTS.items():
+        value = _runtime_value(
+            key,
+            default,
+            persisted=persisted,
+            prefer_persisted=prefer_persisted,
+        )
+        globals()[key] = value
+        refreshed[key] = value
+        if update_process_env:
+            if value:
+                os.environ[key] = value
+            else:
+                os.environ.pop(key, None)
+    return refreshed
 
 
 def load_criteria() -> dict:
@@ -65,39 +179,8 @@ def _seed_algorithm_version_once(cfg: dict) -> None:
         pass
 
 
-# OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL_FAST = os.getenv("OPENAI_MODEL_FAST", "gpt-4o-mini")
-OPENAI_MODEL_DEEP = os.getenv("OPENAI_MODEL_DEEP", "gpt-4o")
-
-# Slack
-SLACK_WEBHOOK_ALERTS = os.getenv("SLACK_WEBHOOK_ALERTS", "")
-SLACK_WEBHOOK_DAILY = os.getenv("SLACK_WEBHOOK_DAILY", "")
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
-
-# Discord
-DISCORD_WEBHOOK_ALERTS = os.getenv("DISCORD_WEBHOOK_ALERTS", "")
-DISCORD_WEBHOOK_DAILY = os.getenv("DISCORD_WEBHOOK_DAILY", "")
-DISCORD_WEBHOOK_WEEKLY = os.getenv("DISCORD_WEBHOOK_WEEKLY", "")
-
-# SMTP
-SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = os.getenv("SMTP_PORT", "587")
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
-SMTP_FROM = os.getenv("SMTP_FROM", "")
-
-# Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-
-# Reddit
-REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
-REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
-
-# External APIs (optional)
-EXA_API_KEY = os.getenv("EXA_API_KEY", "")
-SCRAPECREATORS_API_KEY = os.getenv("SCRAPECREATORS_API_KEY", "")
+# Runtime settings
+refresh_runtime_config()
 
 
 def smtp_alerts_configured() -> bool:

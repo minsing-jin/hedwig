@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 
 from hedwig.models import ScoredSignal, UrgencyLevel
@@ -35,9 +36,14 @@ logger = logging.getLogger("hedwig")
 
 async def collect_all(enabled_only: bool = True) -> list:
     """Fallback: collect from all sources without agent strategy."""
-    from hedwig.sources import get_registered_sources
+    if enabled_only:
+        from hedwig.sources import settings as source_settings
 
-    registry = get_registered_sources()
+        registry = source_settings.filter_registered_sources()
+    else:
+        from hedwig.sources import get_registered_sources
+
+        registry = get_registered_sources()
     all_posts = []
 
     tasks = []
@@ -214,6 +220,81 @@ def print_signal(s: ScoredSignal, prefix: str = ""):
         logger.info(f"           ! {s.devils_advocate[:100]}")
 
 
+def _start_collection_progress(collect_only: bool) -> int | str | None:
+    """Open or resume the backend progress record used by setup/feed polling."""
+    run_id = os.getenv("HEDWIG_COLLECTION_RUN_ID", "").strip()
+    metadata = {
+        "entrypoint": "hedwig.run_daily",
+        "collect_only": collect_only,
+    }
+    try:
+        from hedwig import storage
+
+        if run_id:
+            storage.update_collection_run(
+                run_id,
+                status="running",
+                metadata=metadata,
+            )
+            return run_id
+        return storage.start_collection_run(
+            "daily",
+            status="running",
+            metadata=metadata,
+        )
+    except Exception as exc:
+        logger.warning("Collection progress tracking unavailable: %s", exc)
+        return run_id or None
+
+
+def _update_collection_progress(
+    run_id: int | str | None,
+    *,
+    status: str | None = None,
+    counts: dict[str, int] | None = None,
+    error: str | Exception | None = None,
+    metadata: dict | None = None,
+) -> None:
+    if not run_id:
+        return
+    try:
+        from hedwig import storage
+
+        storage.update_collection_run(
+            run_id,
+            status=status,
+            counts=counts,
+            error=error,
+            metadata=metadata,
+        )
+    except Exception as exc:
+        logger.warning("Collection progress update failed: %s", exc)
+
+
+def _finish_collection_progress(
+    run_id: int | str | None,
+    *,
+    status: str,
+    counts: dict[str, int] | None = None,
+    error: str | Exception | None = None,
+    metadata: dict | None = None,
+) -> None:
+    if not run_id:
+        return
+    try:
+        from hedwig import storage
+
+        storage.finish_collection_run(
+            run_id,
+            status=status,
+            counts=counts,
+            error=error,
+            metadata=metadata,
+        )
+    except Exception as exc:
+        logger.warning("Collection progress finish failed: %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Onboarding
 # ---------------------------------------------------------------------------
@@ -294,137 +375,212 @@ async def run_dry():
 async def run_daily(collect_only: bool = False):
     """Daily pipeline: Agent Strategy → Collect → Normalize → Pre-score → LLM Score → Deliver → Evolve."""
     logger.info(f"━━━ Hedwig v2.0 Daily Run — {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} ━━━")
+    progress_run_id = _start_collection_progress(collect_only)
 
-    # 0. Setup LLM client
-    llm = None
-    from hedwig.config import OPENAI_API_KEY, check_required_keys
-    if OPENAI_API_KEY:
-        try:
-            from openai import AsyncOpenAI
-            llm = AsyncOpenAI(api_key=OPENAI_API_KEY)
-        except ImportError:
-            pass
+    try:
+        # 0. Setup LLM client
+        llm = None
+        from hedwig.config import OPENAI_API_KEY, check_required_keys
+        if OPENAI_API_KEY:
+            try:
+                from openai import AsyncOpenAI
+                llm = AsyncOpenAI(api_key=OPENAI_API_KEY)
+            except ImportError:
+                pass
 
-    # 1. Agent-driven collection (LLM generates strategy)
-    if llm and not collect_only:
-        posts, strategy = await agent_collect(llm_client=llm)
-        focus_keywords = strategy.get("focus_keywords", [])
-        if not posts:
-            logger.warning("Agent collection returned no posts. Falling back to baseline collection.")
+        # 1. Agent-driven collection (LLM generates strategy)
+        if llm and not collect_only:
+            posts, strategy = await agent_collect(llm_client=llm)
+            focus_keywords = _normalize_keywords(strategy.get("focus_keywords", []))
+            if not focus_keywords:
+                focus_keywords = _extract_keywords_from_criteria()
+            if not posts:
+                logger.warning("Agent collection returned no posts. Falling back to baseline collection.")
+                posts = await collect_all()
+                focus_keywords = _extract_keywords_from_criteria()
+        else:
             posts = await collect_all()
             focus_keywords = _extract_keywords_from_criteria()
-    else:
-        posts = await collect_all()
-        focus_keywords = _extract_keywords_from_criteria()
 
-    if not posts:
-        logger.warning("No posts collected. Exiting.")
-        return
-
-    # 2. Normalize content via r.jina.ai + pre-score
-    posts = await normalize_and_prescore(posts, focus_keywords)
-
-    if not posts:
-        logger.warning("All posts filtered out by pre-scorer.")
-        return
-
-    # 3. Check keys for LLM scoring
-    mode = "score" if collect_only else "daily"
-    missing = check_required_keys(mode)
-    if missing:
-        logger.error(f"Missing env vars: {', '.join(missing)}")
-        return
-    from hedwig.config import check_optional_keys
-    for gap in check_optional_keys(mode):
-        logger.warning(f"Skipping optional capability — {gap}")
-
-    # 4. Scoring — ensemble (default) or legacy single-stage LLM
-    import os
-    pipeline_mode = os.getenv("HEDWIG_PIPELINE", "ensemble").lower()
-    if pipeline_mode == "ensemble":
-        # normalize_and_prescore already ran retrieval (pre_filter + history enrichment).
-        # rank_and_build_signals runs only the Stage B ranking so we don't duplicate work.
-        from hedwig.engine.ensemble.combine import rank_and_build_signals
-        logger.info(f"Ensemble ranking {len(posts)} retrieved candidates...")
-        scored, ensemble_stats = await rank_and_build_signals(posts, focus_keywords)
-        logger.info(
-            "Ensemble stats: %s components=%s",
-            {k: ensemble_stats[k] for k in ("retrieval_kept", "ranking_kept", "top_k")},
-            ensemble_stats["components_used"],
+        _update_collection_progress(
+            progress_run_id,
+            status="collected",
+            counts={"posts_collected": len(posts)},
+            metadata={"focus_keyword_count": len(focus_keywords)},
         )
-    else:
-        from hedwig.engine.scorer import score_posts
-        logger.info(f"LLM scoring {len(posts)} pre-filtered posts (legacy single-stage)...")
-        scored = await score_posts(posts)
+        if not posts:
+            logger.warning("No posts collected. Exiting.")
+            _finish_collection_progress(
+                progress_run_id,
+                status="no_items",
+                counts={"posts_collected": 0},
+            )
+            return
 
-    # 5. Filter into channels
-    alerts, digest = filter_signals(scored)
-    skipped = len(scored) - len(alerts) - len(digest)
-    logger.info(f"Results: {len(alerts)} alerts, {len(digest)} digest, {skipped} skipped")
+        # 2. Normalize content via r.jina.ai + pre-score
+        posts = await normalize_and_prescore(posts, focus_keywords)
+        _update_collection_progress(
+            progress_run_id,
+            status="filtered",
+            counts={"posts_filtered": len(posts)},
+        )
 
-    if collect_only:
-        for s in alerts[:10]:
-            print_signal(s, "ALERT")
-        for s in digest[:15]:
-            print_signal(s, "DIGEST")
-        return
+        if not posts:
+            logger.warning("All posts filtered out by pre-scorer.")
+            _finish_collection_progress(
+                progress_run_id,
+                status="no_items",
+                counts={"posts_filtered": 0},
+            )
+            return
 
-    # 6. Deliver to Slack + Discord + SMTP email (only configured channels)
-    from hedwig.config import (
-        SLACK_WEBHOOK_ALERTS,
-        SLACK_WEBHOOK_DAILY,
-        DISCORD_WEBHOOK_ALERTS,
-        DISCORD_WEBHOOK_DAILY,
-        smtp_alerts_configured,
-    )
-    from hedwig.delivery.slack import send_alert as slack_alert, send_daily_briefing as slack_daily
-    from hedwig.delivery.discord import send_alert as discord_alert, send_daily_briefing as discord_daily
-    from hedwig.delivery.email import (
-        send_alert as email_alert,
-        send_daily_briefing as email_daily,
-    )
-    smtp_enabled = smtp_alerts_configured()
-    for signal in alerts[:10]:
-        if SLACK_WEBHOOK_ALERTS:
-            await slack_alert(signal)
-        if DISCORD_WEBHOOK_ALERTS:
-            await discord_alert(signal)
-        if smtp_enabled:
-            await email_alert(signal)
+        # 3. Check keys for LLM scoring
+        mode = "score" if collect_only else "daily"
+        missing = check_required_keys(mode)
+        if missing:
+            message = f"Missing env vars: {', '.join(missing)}"
+            logger.error(message)
+            _finish_collection_progress(
+                progress_run_id,
+                status="failed",
+                error=message,
+            )
+            return
+        from hedwig.config import check_optional_keys
+        optional_gaps = check_optional_keys(mode)
+        for gap in optional_gaps:
+            logger.warning(f"Skipping optional capability — {gap}")
+        if optional_gaps:
+            _update_collection_progress(
+                progress_run_id,
+                metadata={"optional_gaps": optional_gaps},
+            )
 
-    # 7. Daily briefing
-    from hedwig.engine.briefing import generate_daily_briefing
-    briefing_signals = alerts + digest[:15]
-    if briefing_signals:
-        logger.info("Generating daily briefing...")
-        briefing_text = await generate_daily_briefing(briefing_signals)
+        # 4. Scoring — ensemble (default) or legacy single-stage LLM
+        pipeline_mode = os.getenv("HEDWIG_PIPELINE", "ensemble").lower()
+        if pipeline_mode == "ensemble":
+            # normalize_and_prescore already ran retrieval (pre_filter + history enrichment).
+            # rank_and_build_signals runs only the Stage B ranking so we don't duplicate work.
+            from hedwig.engine.ensemble.combine import rank_and_build_signals
+            logger.info(f"Ensemble ranking {len(posts)} retrieved candidates...")
+            scored, ensemble_stats = await rank_and_build_signals(posts, focus_keywords)
+            logger.info(
+                "Ensemble stats: %s components=%s",
+                {k: ensemble_stats[k] for k in ("retrieval_kept", "ranking_kept", "top_k")},
+                ensemble_stats["components_used"],
+            )
+            _update_collection_progress(
+                progress_run_id,
+                metadata={"ensemble_stats": ensemble_stats},
+            )
+        else:
+            from hedwig.engine.scorer import score_posts
+            logger.info(f"LLM scoring {len(posts)} pre-filtered posts (legacy single-stage)...")
+            scored = await score_posts(posts)
+        _update_collection_progress(
+            progress_run_id,
+            status="scored",
+            counts={"signals_scored": len(scored)},
+            metadata={"pipeline_mode": pipeline_mode},
+        )
 
-        # Persist first — the web /brief page must show it even when no
-        # webhook is configured. Delivery happens after.
-        try:
-            from hedwig.storage import save_briefing
-            save_briefing("daily", briefing_text, signal_count=len(briefing_signals))
-        except Exception as e:
-            logger.warning("save_briefing(daily) failed: %s", e)
+        # 5. Filter into channels
+        alerts, digest = filter_signals(scored)
+        skipped = len(scored) - len(alerts) - len(digest)
+        logger.info(f"Results: {len(alerts)} alerts, {len(digest)} digest, {skipped} skipped")
+        _update_collection_progress(
+            progress_run_id,
+            status="routed",
+            counts={
+                "alerts_count": len(alerts),
+                "digest_count": len(digest),
+                "skipped_count": skipped,
+            },
+        )
 
-        if SLACK_WEBHOOK_DAILY:
-            await slack_daily(briefing_text)
-        if DISCORD_WEBHOOK_DAILY:
-            await discord_daily(briefing_text)
-        if smtp_enabled:
-            await email_daily(briefing_text)
-        logger.info("Daily briefing generated + persisted")
+        if collect_only:
+            for s in alerts[:10]:
+                print_signal(s, "ALERT")
+            for s in digest[:15]:
+                print_signal(s, "DIGEST")
+            _finish_collection_progress(
+                progress_run_id,
+                status="completed",
+                counts={"signals_scored": len(scored)},
+                metadata={"collect_only": True},
+            )
+            return
 
-    # 8. Save signals
-    from hedwig.storage import save_signals, get_backend_name
-    relevant = [s for s in scored if s.relevance_score >= 0.3]
-    saved = save_signals(relevant)
-    logger.info(f"Saved {saved} signals to {get_backend_name()}")
+        # 6. Deliver to Slack + Discord + SMTP email (only configured channels)
+        from hedwig.config import (
+            SLACK_WEBHOOK_ALERTS,
+            SLACK_WEBHOOK_DAILY,
+            DISCORD_WEBHOOK_ALERTS,
+            DISCORD_WEBHOOK_DAILY,
+            smtp_alerts_configured,
+        )
+        from hedwig.delivery.slack import send_alert as slack_alert, send_daily_briefing as slack_daily
+        from hedwig.delivery.discord import send_alert as discord_alert, send_daily_briefing as discord_daily
+        from hedwig.delivery.email import (
+            send_alert as email_alert,
+            send_daily_briefing as email_daily,
+        )
+        smtp_enabled = smtp_alerts_configured()
+        for signal in alerts[:10]:
+            if SLACK_WEBHOOK_ALERTS:
+                await slack_alert(signal)
+            if DISCORD_WEBHOOK_ALERTS:
+                await discord_alert(signal)
+            if smtp_enabled:
+                await email_alert(signal)
 
-    # 9. Daily evolution (self-improvement)
-    await run_evolution_daily()
+        # 7. Daily briefing
+        from hedwig.engine.briefing import generate_daily_briefing
+        briefing_signals = alerts + digest[:15]
+        if briefing_signals:
+            logger.info("Generating daily briefing...")
+            briefing_text = await generate_daily_briefing(briefing_signals)
 
-    logger.info("━━━ Hedwig v2.0 Daily Run Complete ━━━")
+            # Persist first — the web /brief page must show it even when no
+            # webhook is configured. Delivery happens after.
+            try:
+                from hedwig.storage import save_briefing
+                save_briefing("daily", briefing_text, signal_count=len(briefing_signals))
+            except Exception as e:
+                logger.warning("save_briefing(daily) failed: %s", e)
+
+            if SLACK_WEBHOOK_DAILY:
+                await slack_daily(briefing_text)
+            if DISCORD_WEBHOOK_DAILY:
+                await discord_daily(briefing_text)
+            if smtp_enabled:
+                await email_daily(briefing_text)
+            logger.info("Daily briefing generated + persisted")
+
+        # 8. Save signals
+        from hedwig.storage import save_signals, get_backend_name
+        relevant = [s for s in scored if s.relevance_score >= 0.3]
+        saved = save_signals(relevant)
+        logger.info(f"Saved {saved} signals to {get_backend_name()}")
+        _update_collection_progress(
+            progress_run_id,
+            status="saved",
+            counts={"signals_saved": saved},
+            metadata={"storage_backend": get_backend_name()},
+        )
+
+        # 9. Daily evolution (self-improvement)
+        await run_evolution_daily()
+
+        _finish_collection_progress(
+            progress_run_id,
+            status="completed",
+            counts={"signals_saved": saved},
+        )
+        logger.info("━━━ Hedwig v2.0 Daily Run Complete ━━━")
+    except Exception as exc:
+        _finish_collection_progress(progress_run_id, status="failed", error=exc)
+        raise
 
 
 def _extract_keywords_from_criteria() -> list[str]:
@@ -437,7 +593,15 @@ def _extract_keywords_from_criteria() -> list[str]:
     ctx = criteria.get("context", {})
     keywords.extend(ctx.get("interests", []))
     # Flatten any nested structures to strings
-    return [str(k) for k in keywords if k]
+    return _normalize_keywords(keywords)
+
+
+def _normalize_keywords(values: object) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return []
+    return [str(k).strip() for k in values if str(k).strip()]
 
 
 # ---------------------------------------------------------------------------

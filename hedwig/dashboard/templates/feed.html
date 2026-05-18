@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Feed — Hedwig{% endblock %}
 {% block content %}
+{% set current_stream = current_stream or request.query_params.get('stream', first_feed_config.default_stream) %}
 
-<div class="feed-shell" data-stream="{{ request.query_params.get('stream', 'default') }}" data-mode="{{ feed_mode }}">
+<div
+  class="feed-shell"
+  data-stream="{{ current_stream }}"
+  data-mode="{{ feed_mode }}"
+  data-default-stream="{{ first_feed_config.default_stream }}"
+  data-default-mode="{{ first_feed_config.default_mode }}"
+  data-first-feed-config-version="{{ first_feed_config.schema_version }}"
+>
   <div class="feed-head">
     <div>
       <h1>Feed</h1>
@@ -15,20 +23,149 @@
     </div>
   </div>
 
+  <nav
+    class="setup-primary-nav ready"
+    aria-label="Post-setup feed navigation"
+    data-post-setup-feed-nav
+  >
+    <p class="setup-primary-nav-lead">
+      Your first feed is the starting point. Continue with Hedwig's primary surfaces when you are ready.
+    </p>
+    <div class="setup-primary-nav-links">
+      <a href="/chat" data-feed-nav-target="chat">
+        <strong>Chat</strong>
+        <span>Steer Hedwig in natural language.</span>
+      </a>
+      <a href="/profile" data-feed-nav-target="profile">
+        <strong>Profile</strong>
+        <span>Review preferences and export surfaces.</span>
+      </a>
+      <a href="/status" data-feed-nav-target="status">
+        <strong>Status</strong>
+        <span>Check readiness and runtime health.</span>
+      </a>
+    </div>
+  </nav>
+
+  <section
+    class="feed-action-bar"
+    aria-label="Feed actions"
+    data-post-setup-feed-actions
+  >
+    <div>
+      <strong>Feed controls</strong>
+      <span>Refresh, sync, filter, and navigate without leaving the post-setup feed.</span>
+    </div>
+    <div class="feed-action-controls">
+      <form action="/run/daily" method="post" data-feed-action="refresh-sync">
+        <button type="submit">Refresh / sync now</button>
+      </form>
+      <a href="/feed?stream={{ current_stream }}&mode={{ feed_mode }}" data-feed-action="reload">Reload feed</a>
+      <a href="/feed?stream={{ current_stream }}&mode=grid" data-feed-filter="mode-grid">Grid</a>
+      <a href="/feed?stream={{ current_stream }}&mode=detail_swipe" data-feed-filter="mode-detail-swipe">Detail Swipe</a>
+      <a href="/feed?stream={{ current_stream }}&mode=dense_reader" data-feed-filter="mode-dense-reader">Dense Reader</a>
+    </div>
+  </section>
+
   <div class="feed-tabs">
     {% for f in feeds_list %}
-    <a class="feed-tab{% if f.id == request.query_params.get('stream', 'default') %} active{% endif %}"
+    <a class="feed-tab{% if f.id == current_stream %} active{% endif %}"
+       data-feed-filter="stream-{{ f.id }}"
        href="/feed?stream={{ f.id }}&mode={{ feed_mode }}" title="{{ f.description or '' }}">{{ f.name }}</a>
     {% endfor %}
   </div>
 
-  <div id="feed-list" class="feed-list {{ feed_mode_class }}-mode" tabindex="0" aria-label="Hedwig feed"></div>
+  <div
+    class="feed-source-readiness {% if source_readiness.default_sources_available %}ready{% else %}needs-sources{% endif %}"
+    data-default-sources-available="{{ 'true' if source_readiness.default_sources_available else 'false' }}"
+    data-enabled-source-count="{{ source_readiness.enabled_source_count }}"
+  >
+    {% if source_readiness.default_sources_available %}
+      <strong>Default sources ready</strong>
+      <span>
+        {{ source_readiness.enabled_source_count }} enabled registry/source_settings sources are available.
+        No manual source selection is required before using /feed.
+      </span>
+      <a href="/settings">Tune sources later</a>
+    {% else %}
+      <strong>No enabled sources detected</strong>
+      <span>Open source settings to re-enable collection sources before expecting new feed items.</span>
+      <a href="/settings">Open source settings</a>
+    {% endif %}
+  </div>
+
+  <div id="feed-list" class="feed-list {{ feed_mode_class }}-mode" tabindex="0" aria-label="Hedwig feed">
+    {% for item in initial_feed_items %}
+    {% set score = item.score or item.final_score or item.ensemble_score or 0 %}
+    {% set urgency = item.urgency or 'digest' %}
+    <article
+      class="feed-card"
+      data-signal-id="{{ item.id }}"
+      data-position="{{ item.feed_position }}"
+      data-url="{{ item.url or '' }}"
+      data-initial-feed-item="true"
+    >
+      <header class="card-head">
+        <span class="pill">{{ item.platform or '' }}</span>
+        <span class="pill urg-{{ urgency }}">{{ urgency }}</span>
+        <span class="muted">ensemble {{ "%.2f"|format(score|float) }}</span>
+      </header>
+      {% if item.thumbnail_url %}
+      <img class="media-thumbnail" src="{{ item.thumbnail_url }}" alt="" loading="lazy">
+      {% endif %}
+      <h2 class="card-title">
+        <a href="{{ item.url or '#' }}" target="_blank" rel="noopener">{{ item.title or '' }}</a>
+      </h2>
+      {% if item.why_relevant %}<p class="card-why">{{ item.why_relevant }}</p>{% endif %}
+      {% if item.content_excerpt %}<p class="card-excerpt">{{ item.content_excerpt }}</p>{% endif %}
+      {% if item.transcript_excerpt %}<p class="card-transcript">Transcript: {{ item.transcript_excerpt }}</p>{% endif %}
+      {% if item.devils_advocate %}<p class="card-devil"><em>{{ item.devils_advocate }}</em></p>{% endif %}
+      <div class="card-meta muted">{{ item.author or '' }} · delivery dashboard via local SQLite</div>
+      <div class="card-actions">
+        <button data-act="open" data-feed-item-action="open" aria-label="Open item source">Open</button>
+        <button data-act="read" data-feed-item-action="read-state" aria-label="Mark item as read">Mark read</button>
+        <button data-act="save" data-feed-item-action="save" aria-label="Save item for later">Left: save/later</button>
+        <button data-act="dismiss" data-feed-item-action="dismiss" aria-label="Dismiss item">Dismiss</button>
+        <button data-act="next">Right/next: skip</button>
+        <button data-act="not_interested">Not interested</button>
+        <button data-act="dense">Dense</button>
+        <button data-act="qa">Ask</button>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <div
+    id="feed-empty"
+    class="feed-empty"
+    data-default-sources-available="{{ 'true' if source_readiness.default_sources_available else 'false' }}"
+    hidden
+  >
+    {% if initial_feed_items %}
+      <strong>First local feed loaded</strong>
+      <p>
+        Your first SQLite-backed feed is available. No source selection, Supabase setup, or delivery channel configuration is required.
+      </p>
+      <a href="/setup?review=1">Review setup status</a>
+    {% elif source_readiness.default_sources_available %}
+      <strong>Waiting for first feed items</strong>
+      <p>
+        Enabled default sources are already available. If the first collection is still running,
+        keep this page open or check setup progress; source selection is optional.
+      </p>
+      <a href="/setup">Check setup progress</a>
+    {% else %}
+      <strong>Feed is empty because no sources are enabled</strong>
+      <p>Source settings remain optional during one-shot setup, but at least one enabled source is needed for new collection.</p>
+      <a href="/settings">Enable sources</a>
+    {% endif %}
+  </div>
   <div id="feed-end" class="feed-end muted">Scroll to load more…</div>
 </div>
 
 <script>
 const feedEl = document.getElementById('feed-list');
 const endEl = document.getElementById('feed-end');
+const emptyEl = document.getElementById('feed-empty');
 const shell = document.querySelector('.feed-shell');
 const stream = shell.dataset.stream || 'default';
 let mode = shell.dataset.mode || 'grid';
@@ -40,6 +177,7 @@ const eventQueue = [];
 const viewStarts = new Map();
 const sessionViewed = new Set();
 const sessionId = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`;
+const renderedSignalIds = new Set([...feedEl.querySelectorAll('.feed-card')].map(card => String(card.dataset.signalId || '')));
 
 function enqueue(ev) {
   ev.captured_at = Date.now();
@@ -112,10 +250,12 @@ function makeCard(item) {
     ${item.devils_advocate ? `<p class="card-devil"><em>${escapeHtml(item.devils_advocate)}</em></p>` : ''}
     <div class="card-meta muted">${escapeHtml(item.author || '')} · delivery ${escapeHtml(item.delivery_policy?.surface || 'daily')} via ${escapeHtml(item.delivery_policy?.channel || 'dashboard')}</div>
     <div class="card-actions">
-      <button data-act="save">Left: save/later</button>
+      <button data-act="open" data-feed-item-action="open" aria-label="Open item source">Open</button>
+      <button data-act="read" data-feed-item-action="read-state" aria-label="Mark item as read">Mark read</button>
+      <button data-act="save" data-feed-item-action="save" aria-label="Save item for later">Left: save/later</button>
+      <button data-act="dismiss" data-feed-item-action="dismiss" aria-label="Dismiss item">Dismiss</button>
       <button data-act="next">Right/next: skip</button>
       <button data-act="not_interested">Not interested</button>
-      <button data-act="open">Open</button>
       <button data-act="dense">Dense</button>
       <button data-act="qa">Ask</button>
     </div>
@@ -133,6 +273,17 @@ function makeCard(item) {
   enqueue({signal_id: item.id, event_type: 'card_impression', position_in_feed: item.feed_position, feed_id: stream});
   return el;
 }
+function bindCardActions(card) {
+  if (!card || card.dataset.feedActionsBound === 'true') return;
+  card.dataset.feedActionsBound = 'true';
+  card.addEventListener('click', e => {
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    setMode('detail_swipe', card);
+  });
+  card.querySelectorAll('button[data-act]').forEach(b => {
+    b.addEventListener('click', e => onAction(card, e.currentTarget.dataset.act));
+  });
+}
 function escapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -148,10 +299,25 @@ async function loadPage() {
   try {
     const r = await fetch(url);
     const data = await r.json();
-    (data.items || []).forEach(it => feedEl.appendChild(makeCard(it)));
+    const items = data.items || [];
+    items.forEach(it => {
+      const signalId = String(it.id || '');
+      if (signalId && renderedSignalIds.has(signalId)) return;
+      const card = makeCard(it);
+      feedEl.appendChild(card);
+      if (signalId) renderedSignalIds.add(signalId);
+    });
     nextCursor = data.next_cursor || '';
     hasMore = !!data.has_more;
-    endEl.textContent = hasMore ? 'Scroll to load more…' : 'End';
+    if (!feedEl.children.length && !hasMore) {
+      emptyEl.hidden = false;
+      endEl.textContent = emptyEl.dataset.defaultSourcesAvailable === 'true'
+        ? 'Waiting for collection results…'
+        : 'No enabled sources';
+    } else {
+      emptyEl.hidden = true;
+      endEl.textContent = hasMore ? 'Scroll to load more…' : 'End';
+    }
     bindObserver();
   } catch (e) {
     endEl.textContent = `Load failed: ${e}`;
@@ -202,6 +368,19 @@ async function onAction(card, act) {
     enqueue({...base, event_type: 'swipe_left'});
     return;
   }
+  if (act === 'read') {
+    card.classList.add('read');
+    enqueue({...base, event_type: 'viewed_card'});
+    enqueue({...base, event_type: 'view_end', dwell_ms: 0});
+    return;
+  }
+  if (act === 'dismiss') {
+    card.classList.add('dimmed');
+    enqueue({...base, event_type: 'dismissed'});
+    enqueue({...base, event_type: 'skip'});
+    focusNext();
+    return;
+  }
   if (act === 'next') {
     card.classList.add('dimmed');
     enqueue({...base, event_type: 'skip'});
@@ -244,6 +423,8 @@ document.addEventListener('keydown', e => {
   } else if (focusIdx >= 0 && focusIdx < cards.length) {
     const card = cards[focusIdx];
     if (e.key === 's' || e.key === 'ArrowLeft') onAction(card, 'save');
+    else if (e.key === 'r') onAction(card, 'read');
+    else if (e.key === 'x') onAction(card, 'dismiss');
     else if (e.key === 'ArrowRight' || e.key === 'n') onAction(card, 'next');
     else if (e.key === 'd') onAction(card, 'not_interested');
     else if (e.key === 'o') onAction(card, 'open');
@@ -269,6 +450,7 @@ feedEl.addEventListener('touchend', e => {
 }, {passive: true});
 
 loadPage();
+document.querySelectorAll('.feed-card').forEach(bindCardActions);
 </script>
 
 <style>
@@ -278,7 +460,19 @@ loadPage();
 .mode-switch { display: flex; gap: 8px; flex-wrap: wrap; }
 .mode-btn { border: 1px solid #d1d5db; border-radius: 999px; background: #fff; padding: 7px 12px; cursor: pointer; }
 .mode-btn.active { background: #111827; color: #fff; border-color: #111827; }
+.feed-action-bar { margin-top: 16px; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 16px; background: #fff; display: flex; gap: 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.feed-action-bar span { display: block; margin-top: 3px; color: #6b7280; font-size: 13px; }
+.feed-action-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.feed-action-controls form { margin: 0; }
+.feed-action-controls a, .feed-action-controls button { display: inline-flex; align-items: center; min-height: 34px; padding: 7px 11px; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; color: #111827; text-decoration: none; font: inherit; font-size: 13px; cursor: pointer; }
+.feed-action-controls button { background: #111827; color: #fff; border-color: #111827; }
 .feed-list { margin-top: 16px; }
+.feed-source-readiness, .feed-empty { margin-top: 14px; padding: 12px 14px; border: 1px solid #dbeafe; border-radius: 14px; background: #eff6ff; color: #1e3a8a; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.feed-source-readiness.needs-sources, .feed-empty[data-default-sources-available="false"] { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
+.feed-source-readiness a, .feed-empty a { color: inherit; font-weight: 700; }
+.feed-empty { display: block; }
+.feed-empty[hidden] { display: none; }
+.feed-empty p { margin: 6px 0 8px; color: inherit; }
 .grid-mode { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .detail-swipe-mode { display: flex; overflow-x: auto; gap: 18px; scroll-snap-type: x mandatory; padding-bottom: 20px; }
 .detail-swipe-mode .feed-card { min-width: min(680px, 88vw); scroll-snap-align: center; }
@@ -288,6 +482,7 @@ loadPage();
 .feed-card:hover, .feed-card.focused { border-color: #111827; box-shadow: 0 10px 30px rgba(17,24,39,.08); }
 .feed-card.voted-up { background: #ecfdf5; }
 .feed-card.voted-down { background: #fef2f2; opacity: .75; }
+.feed-card.read { border-color: #bfdbfe; background: #eff6ff; }
 .feed-card.dimmed { opacity: .62; }
 .card-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px; }
 .card-title { font-size: 17px; margin: 10px 0 6px; line-height: 1.35; }

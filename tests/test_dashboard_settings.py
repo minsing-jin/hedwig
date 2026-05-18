@@ -4,6 +4,7 @@ AC-7: /settings persists source plugin toggles in local and SaaS modes.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -172,6 +173,9 @@ async def test_settings_page_lists_registered_sources_and_saved_states(
 
     assert resp.status_code == 200
     assert "Source Settings" in resp.text
+    assert 'href="/settings"' in resp.text
+    assert 'data-settings-source-toggle-surface' in resp.text
+    assert "outside the one-shot /setup flow" in resp.text
     assert str(config_path) in resp.text
     assert "GitHub Trending" in resp.text
     assert "arXiv" in resp.text
@@ -210,6 +214,131 @@ async def test_settings_save_writes_local_source_toggle_config(
     assert saved["sources"]["youtube"] is True
     assert saved["sources"]["arxiv"] is False
     assert all(isinstance(value, bool) for value in saved["sources"].values())
+
+
+@pytest.mark.asyncio
+async def test_settings_can_override_source_toggles_saved_from_setup(
+    monkeypatch, tmp_path, single_user_app
+):
+    """The one-shot setup source surface must not replace /settings control."""
+    from hedwig.sources import settings as source_settings
+    from httpx import ASGITransport, AsyncClient
+
+    config_path = tmp_path / "source_settings.json"
+    monkeypatch.setattr(source_settings, "SOURCE_SETTINGS_PATH", config_path)
+
+    transport = ASGITransport(app=single_user_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        setup_resp = await client.post(
+            "/setup/source-settings/save",
+            data={"enabled_sources": ["github_trending", "youtube"]},
+        )
+        settings_resp = await client.get("/settings")
+        save_resp = await client.post(
+            "/settings/save",
+            data={"enabled_sources": ["arxiv"]},
+            follow_redirects=False,
+        )
+        rerender_resp = await client.get("/settings")
+
+    assert setup_resp.status_code == 200
+    assert settings_resp.status_code == 200
+    assert "checked" in _extract_checkbox(settings_resp.text, "github_trending")
+    assert "checked" in _extract_checkbox(settings_resp.text, "youtube")
+    assert "checked" not in _extract_checkbox(settings_resp.text, "arxiv")
+
+    assert save_resp.status_code == 303
+    assert save_resp.headers["location"] == "/settings?saved=1"
+
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["sources"]["github_trending"] is False
+    assert saved["sources"]["youtube"] is False
+    assert saved["sources"]["arxiv"] is True
+    assert rerender_resp.status_code == 200
+    assert "checked" not in _extract_checkbox(rerender_resp.text, "github_trending")
+    assert "checked" not in _extract_checkbox(rerender_resp.text, "youtube")
+    assert "checked" in _extract_checkbox(rerender_resp.text, "arxiv")
+
+
+@pytest.mark.asyncio
+async def test_settings_model_backend_surface_preserves_advanced_controls(
+    monkeypatch, tmp_path
+):
+    from hedwig.dashboard.app import create_app
+    from httpx import ASGITransport, AsyncClient
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HEDWIG_DB_PATH", str(tmp_path / "hedwig.db"))
+    monkeypatch.delenv("OPENAI_MODEL_FAST", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL_DEEP", raising=False)
+    monkeypatch.delenv("HEDWIG_PIPELINE", raising=False)
+    monkeypatch.delenv("HEDWIG_DISABLE_EMBEDDINGS", raising=False)
+
+    transport = ASGITransport(app=create_app(saas_mode=False))
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        settings_resp = await client.get("/settings")
+        save_resp = await client.post(
+            "/settings/model-backend/save",
+            data={
+                "OPENAI_MODEL_FAST": "gpt-4o-mini",
+                "OPENAI_MODEL_DEEP": "gpt-4o",
+                "HEDWIG_PIPELINE": "ensemble",
+                "HEDWIG_DISABLE_EMBEDDINGS": "0",
+            },
+            follow_redirects=False,
+        )
+
+    assert settings_resp.status_code == 200
+    assert 'id="model-backend-settings"' in settings_resp.text
+    assert "data-settings-model-backend-surface" in settings_resp.text
+    assert 'action="/settings/model-backend/save"' in settings_resp.text
+    assert "OPENAI_MODEL_FAST" in settings_resp.text
+    assert "OPENAI_MODEL_DEEP" in settings_resp.text
+    assert "HEDWIG_PIPELINE" in settings_resp.text
+    assert "HEDWIG_DISABLE_EMBEDDINGS" in settings_resp.text
+    assert "Open backend health status" in settings_resp.text
+    assert save_resp.status_code == 303
+    assert save_resp.headers["location"] == "/settings?saved=model-backend"
+
+    env_text = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "OPENAI_MODEL_FAST=gpt-4o-mini" in env_text
+    assert "OPENAI_MODEL_DEEP=gpt-4o" in env_text
+    assert "HEDWIG_PIPELINE=ensemble" in env_text
+    assert "HEDWIG_DISABLE_EMBEDDINGS=0" in env_text
+    assert os.environ["HEDWIG_PIPELINE"] == "ensemble"
+    assert os.environ["HEDWIG_DISABLE_EMBEDDINGS"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_settings_model_backend_save_validates_backend_values(
+    monkeypatch, tmp_path
+):
+    from hedwig.dashboard.app import create_app
+    from httpx import ASGITransport, AsyncClient
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HEDWIG_DB_PATH", str(tmp_path / "hedwig.db"))
+
+    transport = ASGITransport(app=create_app(saas_mode=False))
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        resp = await client.post(
+            "/settings/model-backend/save",
+            data={
+                "HEDWIG_PIPELINE": "manus",
+                "HEDWIG_DISABLE_EMBEDDINGS": "sometimes",
+            },
+            follow_redirects=False,
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == {
+        "message": "Invalid model/backend settings",
+        "errors": {
+            "HEDWIG_PIPELINE": "Use single or ensemble.",
+            "HEDWIG_DISABLE_EMBEDDINGS": "Use 0 or 1.",
+        },
+    }
+    assert not (tmp_path / ".env").exists()
 
 
 @pytest.mark.asyncio

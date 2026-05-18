@@ -94,6 +94,24 @@ def init_db():
             run_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS collection_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_type TEXT NOT NULL DEFAULT 'daily',
+            status TEXT NOT NULL DEFAULT 'queued',
+            posts_collected INTEGER DEFAULT 0,
+            posts_filtered INTEGER DEFAULT 0,
+            signals_scored INTEGER DEFAULT 0,
+            signals_saved INTEGER DEFAULT 0,
+            alerts_count INTEGER DEFAULT 0,
+            digest_count INTEGER DEFAULT 0,
+            skipped_count INTEGER DEFAULT 0,
+            errors TEXT DEFAULT '[]',
+            metadata TEXT DEFAULT '{}',
+            started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            completed_at TEXT DEFAULT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS criteria_versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             version INTEGER NOT NULL UNIQUE,
@@ -267,6 +285,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_feedback_captured ON feedback(captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_run_history_run_at ON run_history(run_at DESC);
         CREATE INDEX IF NOT EXISTS idx_run_history_cycle_type ON run_history(cycle_type);
+        CREATE INDEX IF NOT EXISTS idx_collection_runs_updated ON collection_runs(last_updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_collection_runs_status ON collection_runs(status);
         CREATE INDEX IF NOT EXISTS idx_source_reliability_updated_at ON source_reliability(updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_evolution_signal_captured ON evolution_signal(captured_at DESC);
         CREATE INDEX IF NOT EXISTS idx_evolution_signal_channel ON evolution_signal(channel);
@@ -356,6 +376,30 @@ def _now() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
+def _json_dict(value: object) -> dict:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(str(value))
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _json_list(value: object) -> list:
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    try:
+        parsed = json.loads(str(value))
+    except Exception:
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
 def _coerce_timestamp(value: object) -> datetime | None:
     if value is None:
         return None
@@ -424,6 +468,175 @@ def _summarize_run_rows(rows: list[dict]) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 # Signals
 # ---------------------------------------------------------------------------
+
+_COLLECTION_RUN_COUNT_FIELDS = {
+    "posts_collected",
+    "posts_filtered",
+    "signals_scored",
+    "signals_saved",
+    "alerts_count",
+    "digest_count",
+    "skipped_count",
+}
+_COLLECTION_RUN_TERMINAL_STATUSES = {"completed", "failed", "no_items"}
+
+
+def _collection_run_from_row(row: sqlite3.Row | None) -> dict:
+    if row is None:
+        return {}
+    data = dict(row)
+    data["errors"] = _json_list(data.get("errors"))
+    data["metadata"] = _json_dict(data.get("metadata"))
+    data["last_updated_at"] = data.get("last_updated_at") or data.get("started_at")
+    data["feed_items_available"] = int(data.get("signals_saved") or 0) > 0
+    return data
+
+
+def start_collection_run(
+    run_type: str = "daily",
+    *,
+    status: str = "queued",
+    metadata: dict | None = None,
+) -> int:
+    """Create a backend-visible collection progress record."""
+    init_db()
+    now = _now()
+    with _conn() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO collection_runs (
+                run_type, status, metadata, started_at, last_updated_at
+            ) VALUES (?,?,?,?,?)
+            """,
+            (
+                str(run_type or "daily"),
+                str(status or "queued"),
+                json.dumps(metadata or {}),
+                now,
+                now,
+            ),
+        )
+        return int(cursor.lastrowid)
+
+
+def update_collection_run(
+    run_id: int | str | None,
+    *,
+    status: str | None = None,
+    counts: dict[str, int] | None = None,
+    error: str | Exception | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    """Update collection progress with counts, errors, and fresh timestamp."""
+    if not run_id:
+        return {}
+    try:
+        normalized_run_id = int(run_id)
+    except (TypeError, ValueError):
+        return {}
+
+    init_db()
+    now = _now()
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM collection_runs WHERE id = ?",
+            (normalized_run_id,),
+        ).fetchone()
+        if row is None:
+            return {}
+
+        existing = _collection_run_from_row(row)
+        merged_metadata = existing["metadata"]
+        if metadata:
+            merged_metadata.update(metadata)
+        errors = existing["errors"]
+        if error:
+            errors.append(
+                {
+                    "message": str(error),
+                    "captured_at": now,
+                }
+            )
+
+        assignments = [
+            "last_updated_at = ?",
+            "metadata = ?",
+            "errors = ?",
+        ]
+        values: list[object] = [
+            now,
+            json.dumps(merged_metadata),
+            json.dumps(errors),
+        ]
+        if status:
+            assignments.append("status = ?")
+            values.append(str(status))
+            if status in _COLLECTION_RUN_TERMINAL_STATUSES:
+                assignments.append("completed_at = COALESCE(completed_at, ?)")
+                values.append(now)
+        for key, value in (counts or {}).items():
+            if key not in _COLLECTION_RUN_COUNT_FIELDS:
+                continue
+            assignments.append(f"{key} = ?")
+            values.append(max(0, int(value or 0)))
+
+        values.append(normalized_run_id)
+        conn.execute(
+            f"""
+            UPDATE collection_runs
+            SET {", ".join(assignments)}
+            WHERE id = ?
+            """,
+            values,
+        )
+        updated = conn.execute(
+            "SELECT * FROM collection_runs WHERE id = ?",
+            (normalized_run_id,),
+        ).fetchone()
+        return _collection_run_from_row(updated)
+
+
+def finish_collection_run(
+    run_id: int | str | None,
+    *,
+    status: str = "completed",
+    counts: dict[str, int] | None = None,
+    error: str | Exception | None = None,
+    metadata: dict | None = None,
+) -> dict:
+    return update_collection_run(
+        run_id,
+        status=status,
+        counts=counts,
+        error=error,
+        metadata=metadata,
+    )
+
+
+def get_latest_collection_progress(run_type: str | None = None) -> dict:
+    """Return the latest collection run for setup/feed progress polling."""
+    init_db()
+    with _conn() as conn:
+        if run_type:
+            row = conn.execute(
+                """
+                SELECT * FROM collection_runs
+                WHERE run_type = ?
+                ORDER BY last_updated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (str(run_type),),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT * FROM collection_runs
+                ORDER BY last_updated_at DESC, id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+    return _collection_run_from_row(row)
+
 
 def save_signals(signals: list[ScoredSignal], user_id: str | None = None) -> int:
     if not signals:
