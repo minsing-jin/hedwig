@@ -231,3 +231,19 @@ The formal `ouroboros_evaluate` call was attempted twice after the successful
 run and timed out after 120 seconds both times without recording evaluation
 events. As a bounded fallback, `ouroboros_qa` was run against code-level
 evidence for the same acceptance criteria and returned `0.92 / 1.00 [PASS]`.
+
+Post-run evolve/Ralph recovery was attempted with low-resource settings after
+the verified implementation commit:
+
+| Step | Result |
+| --- | --- |
+| `ouroboros_start_evolve_step` with `execute=true`, `parallel=false` on lineage `lin_hedwig_issue34_pr35_recovery_20260519` | Started `job_418b74fd2095`, but it stayed at generation 0 with unchanged cursor `941956`; cancelled as stale to avoid an orphan job. |
+| `ouroboros_start_evolve_step` with `execute=false`, `parallel=false` on the same lineage | Started `job_845646d7a7d4`, then failed because events existed but no completed generations were available after the stale cancellation. |
+| `ouroboros_start_evolve_step` with `execute=false`, `parallel=false` on fresh lineage `lin_hedwig_issue34_pr35_recovery_serial_20260519` | Started `job_be0afb63df62`, but it stayed at start cursor `942189`; cancelled as stale. |
+| Direct `ouroboros_evolve_step` on lineage `lin_hedwig_issue34_pr35_recovery_direct_20260519` | Timed out after 120 seconds; subsequent lineage status queries failed with SQLAlchemy `QueuePool limit of size 5 overflow 10 reached`. |
+| `ouroboros_ralph` with `max_generations=1`, `parallel=false` on lineage `lin_hedwig_issue34_pr35_ralph_20260519` | Failed before job creation because the MCP event store could not append `mcp.job.created` due to the same SQLAlchemy `QueuePool` exhaustion. |
+
+No unrelated processes were killed during recovery. Memory pressure was checked
+throughout and stayed in the safe range, so the remaining blocker is the
+Ouroboros MCP event-store connection pool, not repository test failures or
+system OOM.
