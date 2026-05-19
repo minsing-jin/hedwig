@@ -39,6 +39,75 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    return {
+        str(row[1])
+        for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    column_definition: str,
+) -> None:
+    if column_name in _table_columns(conn, table_name):
+        return
+    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+
+
+def _run_schema_migrations(conn: sqlite3.Connection) -> None:
+    """Idempotently add columns introduced after the first SQLite schema."""
+    migrations = (
+        ("feedback", "attribution", "attribution TEXT DEFAULT NULL"),
+        (
+            "feedback",
+            "delivered_signal_id",
+            "delivered_signal_id INTEGER DEFAULT NULL",
+        ),
+        ("evolution_logs", "scope", "scope TEXT DEFAULT NULL"),
+        ("evolution_logs", "axis", "axis TEXT DEFAULT NULL"),
+        ("evolution_logs", "inputs", "inputs TEXT DEFAULT '{}'"),
+        ("evolution_logs", "outputs", "outputs TEXT DEFAULT '{}'"),
+        (
+            "evolution_logs",
+            "evaluator_verdict",
+            "evaluator_verdict TEXT DEFAULT NULL",
+        ),
+        ("briefings", "structured", "structured TEXT DEFAULT '{}'"),
+        ("signals", "judgment_id", "judgment_id INTEGER DEFAULT NULL"),
+        ("behavior_events", "feed_mode", "feed_mode TEXT DEFAULT 'grid'"),
+        ("behavior_rewards", "polarity", "polarity TEXT DEFAULT 'neutral'"),
+        (
+            "behavior_rewards",
+            "strength_class",
+            "strength_class TEXT DEFAULT 'weak'",
+        ),
+        ("behavior_rewards", "confidence", "confidence REAL DEFAULT 0.0"),
+        (
+            "behavior_rewards",
+            "uncertainty_reason",
+            "uncertainty_reason TEXT DEFAULT ''",
+        ),
+        (
+            "behavior_rewards",
+            "derivation_rule_version",
+            "derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1'",
+        ),
+        (
+            "behavior_rewards",
+            "source_event_ids",
+            "source_event_ids TEXT DEFAULT '[]'",
+        ),
+        ("behavior_rewards", "policy_version", "policy_version INTEGER DEFAULT 1"),
+        ("behavior_rewards", "feed_mode", "feed_mode TEXT DEFAULT 'grid'"),
+        ("behavior_rewards", "source", "source TEXT DEFAULT 'personal_algorithm'"),
+    )
+    for table_name, column_name, column_definition in migrations:
+        _ensure_column(conn, table_name, column_name, column_definition)
+
+
 def init_db():
     """Create all required tables if they don't exist."""
     with _conn() as conn:
@@ -279,7 +348,13 @@ def init_db():
             fitness_score REAL,
             origin TEXT DEFAULT 'manual'   -- manual | meta_evolution | paper_absorb
         );
+        """)
 
+        # Migrations must run before indexes because older local databases may
+        # miss columns (for example behavior_events.feed_mode) used by indexes.
+        _run_schema_migrations(conn)
+
+        conn.executescript("""
         CREATE INDEX IF NOT EXISTS idx_signals_collected ON signals(collected_at DESC);
         CREATE INDEX IF NOT EXISTS idx_signals_relevance ON signals(relevance_score DESC);
         CREATE INDEX IF NOT EXISTS idx_feedback_captured ON feedback(captured_at DESC);
@@ -303,73 +378,6 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_judgments_signal ON judgments(signal_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_judgments_versions ON judgments(criteria_version, interpretation_style_id);
         """)
-        # G5 — feedback.attribution column (added separately so older
-        # databases get the column without dropping data).
-        try:
-            with _conn() as alter_conn:
-                alter_conn.execute("ALTER TABLE feedback ADD COLUMN attribution TEXT DEFAULT NULL")
-        except Exception:
-            pass  # column already exists
-        # G6 — feedback.delivered_signal_id column for cross-channel binding
-        try:
-            with _conn() as alter_conn:
-                alter_conn.execute(
-                    "ALTER TABLE feedback ADD COLUMN delivered_signal_id INTEGER DEFAULT NULL"
-                )
-        except Exception:
-            pass
-        # G7 — evolution_logs structured fields
-        for stmt in (
-            "ALTER TABLE evolution_logs ADD COLUMN scope TEXT DEFAULT NULL",
-            "ALTER TABLE evolution_logs ADD COLUMN axis TEXT DEFAULT NULL",
-            "ALTER TABLE evolution_logs ADD COLUMN inputs TEXT DEFAULT '{}'",
-            "ALTER TABLE evolution_logs ADD COLUMN outputs TEXT DEFAULT '{}'",
-            "ALTER TABLE evolution_logs ADD COLUMN evaluator_verdict TEXT DEFAULT NULL",
-        ):
-            try:
-                with _conn() as alter_conn:
-                    alter_conn.execute(stmt)
-            except Exception:
-                pass
-        # G10 — briefings structured-fields column
-        try:
-            with _conn() as alter_conn:
-                alter_conn.execute(
-                    "ALTER TABLE briefings ADD COLUMN structured TEXT DEFAULT '{}'"
-                )
-        except Exception:
-            pass
-        # G1 — signals.judgment_id FK to first-class judgments
-        try:
-            with _conn() as alter_conn:
-                alter_conn.execute(
-                    "ALTER TABLE signals ADD COLUMN judgment_id INTEGER DEFAULT NULL"
-                )
-        except Exception:
-            pass
-        try:
-            with _conn() as alter_conn:
-                alter_conn.execute(
-                    "ALTER TABLE behavior_events ADD COLUMN feed_mode TEXT DEFAULT 'grid'"
-                )
-        except Exception:
-            pass
-        for stmt in (
-            "ALTER TABLE behavior_rewards ADD COLUMN polarity TEXT DEFAULT 'neutral'",
-            "ALTER TABLE behavior_rewards ADD COLUMN strength_class TEXT DEFAULT 'weak'",
-            "ALTER TABLE behavior_rewards ADD COLUMN confidence REAL DEFAULT 0.0",
-            "ALTER TABLE behavior_rewards ADD COLUMN uncertainty_reason TEXT DEFAULT ''",
-            "ALTER TABLE behavior_rewards ADD COLUMN derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1'",
-            "ALTER TABLE behavior_rewards ADD COLUMN source_event_ids TEXT DEFAULT '[]'",
-            "ALTER TABLE behavior_rewards ADD COLUMN policy_version INTEGER DEFAULT 1",
-            "ALTER TABLE behavior_rewards ADD COLUMN feed_mode TEXT DEFAULT 'grid'",
-            "ALTER TABLE behavior_rewards ADD COLUMN source TEXT DEFAULT 'personal_algorithm'",
-        ):
-            try:
-                with _conn() as alter_conn:
-                    alter_conn.execute(stmt)
-            except Exception:
-                pass
 
 
 def _now() -> str:

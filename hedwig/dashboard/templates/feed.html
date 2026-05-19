@@ -13,8 +13,8 @@
 >
   <div class="feed-head">
     <div>
-      <h1>Feed</h1>
-      <span class="muted">Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.</span>
+      <h1 data-i18n="feed.title">Feed</h1>
+      <span class="muted" data-i18n="feed.subtitle">Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.</span>
     </div>
     <div class="mode-switch" role="tablist" aria-label="Feed mode">
       <button class="mode-btn{% if feed_mode == 'grid' %} active{% endif %}" data-mode="grid">Grid</button>
@@ -28,7 +28,7 @@
     aria-label="Post-setup feed navigation"
     data-post-setup-feed-nav
   >
-    <p class="setup-primary-nav-lead">
+    <p class="setup-primary-nav-lead" data-i18n="feed.nav_lead">
       Your first feed is the starting point. Continue with Hedwig's primary surfaces when you are ready.
     </p>
     <div class="setup-primary-nav-links">
@@ -53,8 +53,8 @@
     data-post-setup-feed-actions
   >
     <div>
-      <strong>Feed controls</strong>
-      <span>Refresh, sync, filter, and navigate without leaving the post-setup feed.</span>
+      <strong data-i18n="feed.controls">Feed controls</strong>
+      <span data-i18n="feed.controls_help">Refresh, sync, filter, and navigate without leaving the post-setup feed.</span>
     </div>
     <div class="feed-action-controls">
       <form action="/run/daily" method="post" data-feed-action="refresh-sync">

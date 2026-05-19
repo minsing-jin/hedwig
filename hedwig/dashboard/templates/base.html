@@ -19,33 +19,61 @@
   </script>
 </head>
 <body>
-  <nav class="nav">
-    <div class="nav-brand">
-      <span class="logo">🦉</span>
-      <span class="name">Hedwig</span>
-      <span class="version">v3.0</span>
+  <nav class="nav" data-dashboard-nav-grouped="true">
+    <div class="nav-left-rail">
+      <div class="nav-brand">
+        <span class="logo">🦉</span>
+        <span class="name">Hedwig</span>
+        <span class="version">v3.0</span>
+      </div>
+      <div class="language-rail" aria-label="Language selector">
+        <label for="hedwig-language" data-i18n="language.label">Language</label>
+        <select id="hedwig-language" data-language-selector>
+          <option value="ko" data-i18n="language.ko">한국어</option>
+          <option value="zh" data-i18n="language.zh">中文</option>
+          <option value="en" data-i18n="language.en">English</option>
+        </select>
+      </div>
     </div>
     <div class="nav-links">
-      <a href="/chat" style="font-weight: 700;">💬 Chat</a>
-      <a href="/demo">🎯 Demo</a>
-      <a href="/">Home</a>
-      <a href="/ambient/pwa">Ambient</a>
-      <a href="/feed">📱 Feed</a>
-      <a href="/brief">Brief</a>
-      <a href="/profile">👤 Profile</a>
-      <a href="/signals">Signals</a>
-      <a href="/evolution">Evolution</a>
-      <a href="/sandbox">Sandbox</a>
-      <a href="/meta">Meta</a>
-      <a href="/status">Status</a>
-      <a href="/sovereignty">Sovereignty</a>
-      <a href="/sources">Sources</a>
-      <a href="/settings">Settings</a>
-      <a href="/criteria">Criteria</a>
-      <a href="/setup">Setup</a>
-      <a href="/onboarding">Onboarding</a>
-      <a href="/onboarding/auto">Auto Onboarding</a>
-      <a href="/admin" style="color:#dc2626;">🔧 Reset</a>
+      <a href="/setup" class="nav-primary" data-i18n="nav.setup">Setup</a>
+      <a href="/feed" class="nav-primary" data-i18n="nav.feed">Feed</a>
+      <a href="/brief" class="nav-primary" data-i18n="nav.brief">Brief</a>
+      <a href="/chat" class="nav-primary" data-i18n="nav.chat">Chat</a>
+
+      <details class="nav-group">
+        <summary data-i18n="nav.group.read">Read</summary>
+        <menu class="nav-menu">
+          <a href="/" data-i18n="nav.home">Home</a>
+          <a href="/ambient/pwa" data-i18n="nav.ambient">Ambient</a>
+          <a href="/signals" data-i18n="nav.signals">Signals</a>
+          <a href="/profile" data-i18n="nav.profile">Profile</a>
+          <a href="/status" data-i18n="nav.status">Status</a>
+        </menu>
+      </details>
+
+      <details class="nav-group">
+        <summary data-i18n="nav.group.steer">Steer</summary>
+        <menu class="nav-menu">
+          <a href="/criteria" data-i18n="nav.criteria">Criteria</a>
+          <a href="/onboarding" data-i18n="nav.onboarding">Onboarding</a>
+          <a href="/onboarding/auto" data-i18n="nav.auto_onboarding">Auto Onboarding</a>
+          <a href="/sovereignty" data-i18n="nav.sovereignty">Sovereignty</a>
+        </menu>
+      </details>
+
+      <details class="nav-group">
+        <summary data-i18n="nav.group.system">System</summary>
+        <menu class="nav-menu">
+          <a href="/sources" data-i18n="nav.sources">Sources</a>
+          <a href="/settings" data-i18n="nav.settings">Settings</a>
+          <a href="/evolution" data-i18n="nav.evolution">Evolution</a>
+          <a href="/sandbox" data-i18n="nav.sandbox">Sandbox</a>
+          <a href="/meta" data-i18n="nav.meta">Meta</a>
+          <a href="/demo" data-i18n="nav.demo">Demo</a>
+          <a href="/admin" class="nav-danger" data-i18n="nav.reset">Reset</a>
+        </menu>
+      </details>
     </div>
   </nav>
 
@@ -54,7 +82,170 @@
   </main>
 
   <footer class="footer">
-    <span>Algorithm sovereignty for individuals</span>
+    <span data-i18n="footer.tagline">Algorithm steering for individuals</span>
   </footer>
+  <script>
+    const HEDWIG_I18N = {
+      ko: {
+        "language.label": "언어",
+        "language.ko": "한국어",
+        "language.zh": "중국어",
+        "language.en": "영어",
+        "nav.setup": "설정",
+        "nav.feed": "피드",
+        "nav.brief": "브리프",
+        "nav.chat": "채팅",
+        "nav.group.read": "보기",
+        "nav.group.steer": "스티어링",
+        "nav.group.system": "시스템",
+        "nav.home": "홈",
+        "nav.ambient": "앰비언트",
+        "nav.signals": "시그널",
+        "nav.profile": "프로필",
+        "nav.status": "상태",
+        "nav.criteria": "기준",
+        "nav.onboarding": "온보딩",
+        "nav.auto_onboarding": "자동 온보딩",
+        "nav.sovereignty": "소유권",
+        "nav.sources": "소스",
+        "nav.settings": "설정값",
+        "nav.evolution": "진화",
+        "nav.sandbox": "샌드박스",
+        "nav.meta": "메타",
+        "nav.demo": "데모",
+        "nav.reset": "리셋",
+        "footer.tagline": "개인이 소유하고 방향 조정하는 알고리즘",
+        "setup.eyebrow": "원큐 로컬 온보딩",
+        "setup.title": "Hedwig을 설정하고 첫 피드를 여세요.",
+        "setup.subtitle": "OpenAI API 키 하나로 시작합니다. Hedwig은 로컬 SQLite, 기본 기준 프로필, 기본 소스, 대시보드 피드를 자동으로 준비합니다.",
+        "setup.primary": "첫 로컬 피드에 필요한 것은 이 페이지에 모았습니다.",
+        "setup.advanced": "고급 설정은 선택 사항입니다",
+        "feed.title": "피드",
+        "feed.subtitle": "기본은 한눈에 보는 그리드입니다. 카드를 선택해 스와이프하거나 Dense Reader로 전환하세요.",
+        "feed.nav_lead": "첫 피드가 시작점입니다. 준비되면 핵심 화면으로 이어가세요.",
+        "feed.controls": "피드 컨트롤",
+        "feed.controls_help": "이 페이지를 떠나지 않고 새로고침, 동기화, 필터를 조정합니다.",
+        "brief.title": "브리프",
+        "brief.subtitle": "매일/주간 LLM 브리핑 보관소입니다. Slack/Discord 없이도 여기서 읽습니다.",
+        "brief.all": "전체",
+        "brief.daily": "일간",
+        "brief.weekly": "주간",
+        "brief.empty": "아직 브리핑이 없습니다."
+      },
+      zh: {
+        "language.label": "语言",
+        "language.ko": "韩语",
+        "language.zh": "中文",
+        "language.en": "英语",
+        "nav.setup": "设置",
+        "nav.feed": "信息流",
+        "nav.brief": "简报",
+        "nav.chat": "聊天",
+        "nav.group.read": "阅读",
+        "nav.group.steer": "调校",
+        "nav.group.system": "系统",
+        "nav.home": "首页",
+        "nav.ambient": "环境触达",
+        "nav.signals": "信号",
+        "nav.profile": "个人资料",
+        "nav.status": "状态",
+        "nav.criteria": "标准",
+        "nav.onboarding": "引导",
+        "nav.auto_onboarding": "自动引导",
+        "nav.sovereignty": "所有权",
+        "nav.sources": "来源",
+        "nav.settings": "设置项",
+        "nav.evolution": "演化",
+        "nav.sandbox": "沙盒",
+        "nav.meta": "元学习",
+        "nav.demo": "演示",
+        "nav.reset": "重置",
+        "footer.tagline": "个人拥有并可调校的算法",
+        "setup.eyebrow": "一页式本地引导",
+        "setup.title": "设置 Hedwig，然后打开你的第一个信息流。",
+        "setup.subtitle": "只需 OpenAI API key 即可开始。Hedwig 默认准备本地 SQLite、标准画像、默认来源和仪表盘信息流。",
+        "setup.primary": "第一个本地信息流所需的内容都在这一页。",
+        "setup.advanced": "高级设置是可选项",
+        "feed.title": "信息流",
+        "feed.subtitle": "默认是总览网格。选择卡片进入滑动阅读，或切换到 Dense Reader。",
+        "feed.nav_lead": "第一个信息流是起点。准备好后继续进入 Hedwig 的核心界面。",
+        "feed.controls": "信息流控制",
+        "feed.controls_help": "无需离开页面即可刷新、同步、筛选和导航。",
+        "brief.title": "简报",
+        "brief.subtitle": "每日/每周 LLM 简报归档。即使未连接 Slack/Discord，也可在这里阅读。",
+        "brief.all": "全部",
+        "brief.daily": "每日",
+        "brief.weekly": "每周",
+        "brief.empty": "还没有简报。"
+      },
+      en: {
+        "language.label": "Language",
+        "language.ko": "Korean",
+        "language.zh": "Chinese",
+        "language.en": "English",
+        "nav.setup": "Setup",
+        "nav.feed": "Feed",
+        "nav.brief": "Brief",
+        "nav.chat": "Chat",
+        "nav.group.read": "Read",
+        "nav.group.steer": "Steer",
+        "nav.group.system": "System",
+        "nav.home": "Home",
+        "nav.ambient": "Ambient",
+        "nav.signals": "Signals",
+        "nav.profile": "Profile",
+        "nav.status": "Status",
+        "nav.criteria": "Criteria",
+        "nav.onboarding": "Onboarding",
+        "nav.auto_onboarding": "Auto Onboarding",
+        "nav.sovereignty": "Sovereignty",
+        "nav.sources": "Sources",
+        "nav.settings": "Settings",
+        "nav.evolution": "Evolution",
+        "nav.sandbox": "Sandbox",
+        "nav.meta": "Meta",
+        "nav.demo": "Demo",
+        "nav.reset": "Reset",
+        "footer.tagline": "Algorithm steering for individuals",
+        "setup.eyebrow": "One-page local setup",
+        "setup.title": "Setup Hedwig, then open your first feed.",
+        "setup.subtitle": "Start with only an OpenAI API key. Hedwig defaults to local SQLite, a criteria profile, source defaults, and the dashboard feed.",
+        "setup.primary": "Everything required for the first local feed is on this page.",
+        "setup.advanced": "Advanced setup is optional",
+        "feed.title": "Feed",
+        "feed.subtitle": "Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.",
+        "feed.nav_lead": "Your first feed is the starting point. Continue with Hedwig's primary surfaces when you are ready.",
+        "feed.controls": "Feed controls",
+        "feed.controls_help": "Refresh, sync, filter, and navigate without leaving the feed.",
+        "brief.title": "Brief",
+        "brief.subtitle": "Daily and weekly LLM briefings. Read them here even without Slack or Discord.",
+        "brief.all": "All",
+        "brief.daily": "Daily",
+        "brief.weekly": "Weekly",
+        "brief.empty": "No briefings yet."
+      }
+    };
+
+    function applyHedwigLanguage(nextLanguage) {
+      const supported = ["ko", "zh", "en"];
+      const language = supported.includes(nextLanguage) ? nextLanguage : "ko";
+      const dictionary = HEDWIG_I18N[language] || HEDWIG_I18N.ko;
+      document.documentElement.lang = language;
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        const key = node.dataset.i18n;
+        if (dictionary[key]) node.textContent = dictionary[key];
+      });
+      localStorage.setItem("hedwig.language", language);
+      const selector = document.querySelector("[data-language-selector]");
+      if (selector) selector.value = language;
+    }
+
+    const languageFromQuery = new URLSearchParams(window.location.search).get("lang");
+    const savedLanguage = localStorage.getItem("hedwig.language");
+    applyHedwigLanguage(languageFromQuery || savedLanguage || "ko");
+    document.querySelector("[data-language-selector]")?.addEventListener("change", (event) => {
+      applyHedwigLanguage(event.target.value);
+    });
+  </script>
 </body>
 </html>

@@ -3,15 +3,15 @@
 {% block content %}
 
 <div class="hero">
-  <h1>📰 Briefings</h1>
-  <p class="subtitle muted">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
+  <h1 data-i18n="brief.title">Briefings</h1>
+  <p class="subtitle muted" data-i18n="brief.subtitle">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
 </div>
 
 <div class="section">
   <div class="button-row" style="margin-bottom: 14px;">
-    <button class="btn{% if cycle == 'all' %} btn-primary{% endif %}" onclick="location='/brief'">All</button>
-    <button class="btn{% if cycle == 'daily' %} btn-primary{% endif %}" onclick="location='/brief?cycle=daily'">Daily</button>
-    <button class="btn{% if cycle == 'weekly' %} btn-primary{% endif %}" onclick="location='/brief?cycle=weekly'">Weekly</button>
+    <button class="btn{% if cycle == 'all' %} btn-primary{% endif %}" onclick="location='/brief'" data-i18n="brief.all">All</button>
+    <button class="btn{% if cycle == 'daily' %} btn-primary{% endif %}" onclick="location='/brief?cycle=daily'" data-i18n="brief.daily">Daily</button>
+    <button class="btn{% if cycle == 'weekly' %} btn-primary{% endif %}" onclick="location='/brief?cycle=weekly'" data-i18n="brief.weekly">Weekly</button>
   </div>
 
   {% if briefings %}
@@ -77,7 +77,7 @@
     {% endfor %}
   {% else %}
     <div class="empty-state">
-      <p class="muted">아직 브리핑이 없습니다.</p>
+      <p class="muted" data-i18n="brief.empty">아직 브리핑이 없습니다.</p>
       <ol class="muted">
         <li>홈 또는 Chat에서 "daily 파이프라인 실행" 요청</li>
         <li>또는 <code>python -m hedwig</code> 1회 실행 → daily brief 생성</li>
