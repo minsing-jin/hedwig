@@ -17,32 +17,34 @@
       <span class="muted" data-i18n="feed.subtitle">Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.</span>
     </div>
     <div class="mode-switch" role="tablist" aria-label="Feed mode">
-      <button class="mode-btn{% if feed_mode == 'grid' %} active{% endif %}" data-mode="grid">Grid</button>
-      <button class="mode-btn{% if feed_mode == 'detail_swipe' %} active{% endif %}" data-mode="detail_swipe">Detail Swipe</button>
-      <button class="mode-btn{% if feed_mode == 'dense_reader' %} active{% endif %}" data-mode="dense_reader">Dense Reader</button>
+      <button class="mode-btn{% if feed_mode == 'grid' %} active{% endif %}" data-mode="grid" data-i18n="feed.mode.grid">Grid</button>
+      <button class="mode-btn{% if feed_mode == 'detail_swipe' %} active{% endif %}" data-mode="detail_swipe" data-i18n="feed.mode.detail_swipe">Detail Swipe</button>
+      <button class="mode-btn{% if feed_mode == 'dense_reader' %} active{% endif %}" data-mode="dense_reader" data-i18n="feed.mode.dense_reader">Dense Reader</button>
     </div>
   </div>
 
   <nav
     class="setup-primary-nav ready"
     aria-label="Post-setup feed navigation"
+    data-i18n-aria-label="feed.entry.nav_label"
     data-post-setup-feed-nav
+    data-feed-entrypoint-i18n="HEDWIG_LANGUAGE_STATE"
   >
     <p class="setup-primary-nav-lead" data-i18n="feed.nav_lead">
       Your first feed is the starting point. Continue with Hedwig's primary surfaces when you are ready.
     </p>
     <div class="setup-primary-nav-links">
       <a href="/chat" data-feed-nav-target="chat">
-        <strong>Chat</strong>
-        <span>Steer Hedwig in natural language.</span>
+        <strong data-i18n="feed.entry.chat.label">Chat</strong>
+        <span data-i18n="feed.entry.chat.description">Steer Hedwig in natural language.</span>
       </a>
       <a href="/profile" data-feed-nav-target="profile">
-        <strong>Profile</strong>
-        <span>Review preferences and export surfaces.</span>
+        <strong data-i18n="feed.entry.profile.label">Profile</strong>
+        <span data-i18n="feed.entry.profile.description">Review preferences and export surfaces.</span>
       </a>
       <a href="/status" data-feed-nav-target="status">
-        <strong>Status</strong>
-        <span>Check readiness and runtime health.</span>
+        <strong data-i18n="feed.entry.status.label">Status</strong>
+        <span data-i18n="feed.entry.status.description">Check readiness and runtime health.</span>
       </a>
     </div>
   </nav>
@@ -50,6 +52,7 @@
   <section
     class="feed-action-bar"
     aria-label="Feed actions"
+    data-i18n-aria-label="feed.actions_label"
     data-post-setup-feed-actions
   >
     <div>
@@ -58,12 +61,12 @@
     </div>
     <div class="feed-action-controls">
       <form action="/run/daily" method="post" data-feed-action="refresh-sync">
-        <button type="submit">Refresh / sync now</button>
+        <button type="submit" data-i18n="feed.action.refresh_sync">Refresh / sync now</button>
       </form>
-      <a href="/feed?stream={{ current_stream }}&mode={{ feed_mode }}" data-feed-action="reload">Reload feed</a>
-      <a href="/feed?stream={{ current_stream }}&mode=grid" data-feed-filter="mode-grid">Grid</a>
-      <a href="/feed?stream={{ current_stream }}&mode=detail_swipe" data-feed-filter="mode-detail-swipe">Detail Swipe</a>
-      <a href="/feed?stream={{ current_stream }}&mode=dense_reader" data-feed-filter="mode-dense-reader">Dense Reader</a>
+      <a href="/feed?stream={{ current_stream }}&mode={{ feed_mode }}" data-feed-action="reload" data-i18n="feed.action.reload">Reload feed</a>
+      <a href="/feed?stream={{ current_stream }}&mode=grid" data-feed-filter="mode-grid" data-i18n="feed.mode.grid">Grid</a>
+      <a href="/feed?stream={{ current_stream }}&mode=detail_swipe" data-feed-filter="mode-detail-swipe" data-i18n="feed.mode.detail_swipe">Detail Swipe</a>
+      <a href="/feed?stream={{ current_stream }}&mode=dense_reader" data-feed-filter="mode-dense-reader" data-i18n="feed.mode.dense_reader">Dense Reader</a>
     </div>
   </section>
 
@@ -122,14 +125,14 @@
       {% if item.devils_advocate %}<p class="card-devil"><em>{{ item.devils_advocate }}</em></p>{% endif %}
       <div class="card-meta muted">{{ item.author or '' }} · delivery dashboard via local SQLite</div>
       <div class="card-actions">
-        <button data-act="open" data-feed-item-action="open" aria-label="Open item source">Open</button>
-        <button data-act="read" data-feed-item-action="read-state" aria-label="Mark item as read">Mark read</button>
-        <button data-act="save" data-feed-item-action="save" aria-label="Save item for later">Left: save/later</button>
-        <button data-act="dismiss" data-feed-item-action="dismiss" aria-label="Dismiss item">Dismiss</button>
-        <button data-act="next">Right/next: skip</button>
-        <button data-act="not_interested">Not interested</button>
-        <button data-act="dense">Dense</button>
-        <button data-act="qa">Ask</button>
+        <button data-act="open" data-feed-item-action="open" data-i18n="feed.item.open" data-i18n-aria-label="feed.item.open_label" aria-label="Open item source">Open</button>
+        <button data-act="read" data-feed-item-action="read-state" data-i18n="feed.item.read" data-i18n-aria-label="feed.item.read_label" aria-label="Mark item as read">Mark read</button>
+        <button data-act="save" data-feed-item-action="save" data-i18n="feed.item.save" data-i18n-aria-label="feed.item.save_label" aria-label="Save item for later">Left: save/later</button>
+        <button data-act="dismiss" data-feed-item-action="dismiss" data-i18n="feed.item.dismiss" data-i18n-aria-label="feed.item.dismiss_label" aria-label="Dismiss item">Dismiss</button>
+        <button data-act="next" data-i18n="feed.item.next">Right/next: skip</button>
+        <button data-act="not_interested" data-i18n="feed.item.not_interested">Not interested</button>
+        <button data-act="dense" data-i18n="feed.item.dense">Dense</button>
+        <button data-act="qa" data-i18n="feed.item.qa">Ask</button>
       </div>
     </article>
     {% endfor %}
@@ -178,6 +181,24 @@ const viewStarts = new Map();
 const sessionViewed = new Set();
 const sessionId = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`;
 const renderedSignalIds = new Set([...feedEl.querySelectorAll('.feed-card')].map(card => String(card.dataset.signalId || '')));
+
+function renderFeedLocalizedContent() {
+  const dictionary = window.HEDWIG_LANGUAGE_STATE?.dictionary || window.HEDWIG_I18N?.ko || {};
+  document
+    .querySelectorAll('[data-feed-entrypoint-i18n] [data-i18n], [data-post-setup-feed-actions] [data-i18n], .feed-head [data-i18n], .card-actions [data-i18n]')
+    .forEach((node) => {
+      const text = dictionary[node.dataset.i18n];
+      if (text) node.textContent = text;
+    });
+  document
+    .querySelectorAll('[data-feed-entrypoint-i18n][data-i18n-aria-label], [data-post-setup-feed-actions][data-i18n-aria-label], .card-actions [data-i18n-aria-label]')
+    .forEach((node) => {
+      const text = dictionary[node.dataset.i18nAriaLabel];
+      if (text) node.setAttribute('aria-label', text);
+    });
+  if (typeof renderHedwigLocalizedShell === 'function') renderHedwigLocalizedShell();
+}
+window.addEventListener('hedwig:languagechange', renderFeedLocalizedContent);
 
 function enqueue(ev) {
   ev.captured_at = Date.now();
@@ -250,14 +271,14 @@ function makeCard(item) {
     ${item.devils_advocate ? `<p class="card-devil"><em>${escapeHtml(item.devils_advocate)}</em></p>` : ''}
     <div class="card-meta muted">${escapeHtml(item.author || '')} · delivery ${escapeHtml(item.delivery_policy?.surface || 'daily')} via ${escapeHtml(item.delivery_policy?.channel || 'dashboard')}</div>
     <div class="card-actions">
-      <button data-act="open" data-feed-item-action="open" aria-label="Open item source">Open</button>
-      <button data-act="read" data-feed-item-action="read-state" aria-label="Mark item as read">Mark read</button>
-      <button data-act="save" data-feed-item-action="save" aria-label="Save item for later">Left: save/later</button>
-      <button data-act="dismiss" data-feed-item-action="dismiss" aria-label="Dismiss item">Dismiss</button>
-      <button data-act="next">Right/next: skip</button>
-      <button data-act="not_interested">Not interested</button>
-      <button data-act="dense">Dense</button>
-      <button data-act="qa">Ask</button>
+      <button data-act="open" data-feed-item-action="open" data-i18n="feed.item.open" data-i18n-aria-label="feed.item.open_label" aria-label="Open item source">Open</button>
+      <button data-act="read" data-feed-item-action="read-state" data-i18n="feed.item.read" data-i18n-aria-label="feed.item.read_label" aria-label="Mark item as read">Mark read</button>
+      <button data-act="save" data-feed-item-action="save" data-i18n="feed.item.save" data-i18n-aria-label="feed.item.save_label" aria-label="Save item for later">Left: save/later</button>
+      <button data-act="dismiss" data-feed-item-action="dismiss" data-i18n="feed.item.dismiss" data-i18n-aria-label="feed.item.dismiss_label" aria-label="Dismiss item">Dismiss</button>
+      <button data-act="next" data-i18n="feed.item.next">Right/next: skip</button>
+      <button data-act="not_interested" data-i18n="feed.item.not_interested">Not interested</button>
+      <button data-act="dense" data-i18n="feed.item.dense">Dense</button>
+      <button data-act="qa" data-i18n="feed.item.qa">Ask</button>
     </div>
   `;
   if (item.delivery_decision?.emitted_event) {
@@ -307,6 +328,7 @@ async function loadPage() {
       feedEl.appendChild(card);
       if (signalId) renderedSignalIds.add(signalId);
     });
+    renderFeedLocalizedContent();
     nextCursor = data.next_cursor || '';
     hasMore = !!data.has_more;
     if (!feedEl.children.length && !hasMore) {

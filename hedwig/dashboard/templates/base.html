@@ -19,16 +19,32 @@
   </script>
 </head>
 <body>
-  <nav class="nav" data-dashboard-nav-grouped="true">
+  {% set nav_current_path = request.url.path if request is defined else "" %}
+  {% set nav_read_routes = ["/", "/dashboard/generative", "/ambient/pwa", "/signals", "/profile", "/status"] %}
+  {% set nav_steer_routes = ["/criteria", "/onboarding", "/onboarding/auto", "/sovereignty"] %}
+  {% set nav_advanced_routes = ["/sources", "/settings", "/evolution", "/sandbox", "/meta", "/demo", "/admin"] %}
+  {% set nav_saas_routes = ["/landing", "/ko", "/zh", "/signup", "/login", "/auth/callback", "/billing", "/invite", "/terms", "/privacy", "/about"] %}
+  {% set nav_saas_enabled = request is defined and request.app.state.saas_mode|default(false) %}
+  <nav class="nav" role="navigation" aria-label="Hedwig dashboard" data-dashboard-nav-grouped="true" data-i18n-aria-label="nav.dashboard_label">
     <div class="nav-left-rail">
       <div class="nav-brand">
         <span class="logo">🦉</span>
         <span class="name">Hedwig</span>
         <span class="version">v3.0</span>
       </div>
-      <div class="language-rail" aria-label="Language selector">
-        <label for="hedwig-language" data-i18n="language.label">Language</label>
-        <select id="hedwig-language" data-language-selector>
+      <div
+        class="language-rail"
+        role="group"
+        aria-label="Language selector"
+        data-i18n-aria-label="language.selector_label"
+        data-dashboard-language-selector="left-rail"
+      >
+        <label id="hedwig-language-label" for="hedwig-language" data-i18n="language.label">Language</label>
+        <select
+          id="hedwig-language"
+          data-language-selector
+          data-language-storage-key="hedwig.language"
+        >
           <option value="ko" data-i18n="language.ko">한국어</option>
           <option value="zh" data-i18n="language.zh">中文</option>
           <option value="en" data-i18n="language.en">English</option>
@@ -39,45 +55,169 @@
       class="nav-links"
       aria-label="Dashboard navigation"
       data-primary-navigation="/setup /feed /brief /chat"
+      data-i18n-aria-label="nav.dashboard_navigation_label"
     >
       <!-- Core high-frequency destinations for first-time dashboard use. -->
-      <a href="/setup" class="nav-primary" data-i18n="nav.setup">Setup</a>
-      <a href="/feed" class="nav-primary" data-i18n="nav.feed">Feed</a>
-      <a href="/brief" class="nav-primary" data-i18n="nav.brief">Brief</a>
-      <a href="/chat" class="nav-primary" data-i18n="nav.chat">Chat</a>
+      <ul
+        class="nav-primary-list"
+        role="list"
+        aria-label="Primary dashboard navigation"
+        data-navigation-tier="primary"
+        data-primary-navigation-group="most-used"
+        data-primary-navigation-routes="/setup /feed /brief /chat"
+        data-i18n-aria-label="nav.primary_navigation_label"
+      >
+        <li><a href="/setup" class="nav-primary" data-i18n="nav.setup" data-i18n-aria-label="nav.setup" aria-label="Setup"{% if nav_current_path == "/setup" %} aria-current="page"{% endif %}>Setup</a></li>
+        <li><a href="/feed" class="nav-primary" data-i18n="nav.feed" data-i18n-aria-label="nav.feed" aria-label="Feed"{% if nav_current_path == "/feed" %} aria-current="page"{% endif %}>Feed</a></li>
+        <li><a href="/brief" class="nav-primary" data-i18n="nav.brief" data-i18n-aria-label="nav.brief" aria-label="Brief"{% if nav_current_path == "/brief" %} aria-current="page"{% endif %}>Brief</a></li>
+        <li><a href="/chat" class="nav-primary" data-i18n="nav.chat" data-i18n-aria-label="nav.chat" aria-label="Chat"{% if nav_current_path == "/chat" %} aria-current="page"{% endif %}>Chat</a></li>
+      </ul>
 
-      <details class="nav-group" data-secondary-navigation="read">
-        <summary data-i18n="nav.group.read">Read</summary>
-        <menu class="nav-menu" aria-label="Secondary navigation: read">
-          <a href="/" data-i18n="nav.home">Home</a>
-          <a href="/ambient/pwa" data-i18n="nav.ambient">Ambient</a>
-          <a href="/signals" data-i18n="nav.signals">Signals</a>
-          <a href="/profile" data-i18n="nav.profile">Profile</a>
-          <a href="/status" data-i18n="nav.status">Status</a>
-        </menu>
-      </details>
+      <div
+        class="nav-secondary-surface"
+        role="group"
+        aria-label="Secondary dashboard access"
+        data-i18n-aria-label="nav.secondary_surface_label"
+        data-dashboard-secondary-surface="true"
+        data-secondary-access-surface="disclosure-menu"
+        data-secondary-access-routes="/ /dashboard/generative /ambient/pwa /signals /profile /status /criteria /onboarding /onboarding/auto /sovereignty /sources /settings /evolution /sandbox /meta /demo /admin"
+      >
+        <details
+          class="nav-group"
+          role="group"
+          aria-labelledby="nav-read-summary"
+          data-navigation-tier="secondary"
+          data-secondary-navigation="read"
+          data-secondary-navigation-routes="/ /dashboard/generative /ambient/pwa /signals /profile /status"
+          {% if nav_current_path in nav_read_routes %}open data-current-navigation="true"{% endif %}
+        >
+          <summary id="nav-read-summary" aria-controls="nav-read-menu" data-i18n-aria-label="nav.group.read_label" aria-label="Secondary navigation: Read">
+            <span class="nav-group-label">
+              <span class="nav-group-kicker" data-i18n="nav.tier.secondary">Secondary</span>
+              <span class="nav-group-title" data-i18n="nav.group.read">Read</span>
+            </span>
+          </summary>
+          <ul id="nav-read-menu" class="nav-menu" role="list" aria-labelledby="nav-read-summary" data-i18n-aria-label="nav.menu.read_label" aria-label="Secondary navigation: read">
+            <li><a href="/" data-i18n="nav.home" data-i18n-aria-label="nav.home" aria-label="Home"{% if nav_current_path == "/" %} aria-current="page"{% endif %}>Home</a></li>
+            <li><a href="/dashboard/generative" data-i18n="nav.generative" data-i18n-aria-label="nav.generative" aria-label="Generative"{% if nav_current_path == "/dashboard/generative" %} aria-current="page"{% endif %}>Generative</a></li>
+            <li><a href="/ambient/pwa" data-i18n="nav.ambient" data-i18n-aria-label="nav.ambient" aria-label="Ambient"{% if nav_current_path == "/ambient/pwa" %} aria-current="page"{% endif %}>Ambient</a></li>
+            <li><a href="/signals" data-i18n="nav.signals" data-i18n-aria-label="nav.signals" aria-label="Signals"{% if nav_current_path == "/signals" %} aria-current="page"{% endif %}>Signals</a></li>
+            <li><a href="/profile" data-i18n="nav.profile" data-i18n-aria-label="nav.profile" aria-label="Profile"{% if nav_current_path == "/profile" %} aria-current="page"{% endif %}>Profile</a></li>
+            <li><a href="/status" data-i18n="nav.status" data-i18n-aria-label="nav.status" aria-label="Status"{% if nav_current_path == "/status" %} aria-current="page"{% endif %}>Status</a></li>
+          </ul>
+        </details>
 
-      <details class="nav-group" data-secondary-navigation="steer">
-        <summary data-i18n="nav.group.steer">Steer</summary>
-        <menu class="nav-menu" aria-label="Secondary navigation: steer">
-          <a href="/criteria" data-i18n="nav.criteria">Criteria</a>
-          <a href="/onboarding" data-i18n="nav.onboarding">Onboarding</a>
-          <a href="/onboarding/auto" data-i18n="nav.auto_onboarding">Auto Onboarding</a>
-          <a href="/sovereignty" data-i18n="nav.sovereignty">Sovereignty</a>
-        </menu>
-      </details>
+        <details
+          class="nav-group"
+          role="group"
+          aria-labelledby="nav-steer-summary"
+          data-navigation-tier="secondary"
+          data-secondary-navigation="steer"
+          data-secondary-navigation-routes="/criteria /onboarding /onboarding/auto /sovereignty"
+          {% if nav_current_path in nav_steer_routes %}open data-current-navigation="true"{% endif %}
+        >
+          <summary id="nav-steer-summary" aria-controls="nav-steer-menu" data-i18n-aria-label="nav.group.steer_label" aria-label="Secondary navigation: Steer">
+            <span class="nav-group-label">
+              <span class="nav-group-kicker" data-i18n="nav.tier.secondary">Secondary</span>
+              <span class="nav-group-title" data-i18n="nav.group.steer">Steer</span>
+            </span>
+          </summary>
+          <ul id="nav-steer-menu" class="nav-menu" role="list" aria-labelledby="nav-steer-summary" data-i18n-aria-label="nav.menu.steer_label" aria-label="Secondary navigation: steer">
+            <li><a href="/criteria" data-i18n="nav.criteria" data-i18n-aria-label="nav.criteria" aria-label="Criteria"{% if nav_current_path == "/criteria" %} aria-current="page"{% endif %}>Criteria</a></li>
+            <li><a href="/onboarding" data-i18n="nav.onboarding" data-i18n-aria-label="nav.onboarding" aria-label="Onboarding"{% if nav_current_path == "/onboarding" %} aria-current="page"{% endif %}>Onboarding</a></li>
+            <li><a href="/onboarding/auto" data-i18n="nav.auto_onboarding" data-i18n-aria-label="nav.auto_onboarding" aria-label="Auto Onboarding"{% if nav_current_path == "/onboarding/auto" %} aria-current="page"{% endif %}>Auto Onboarding</a></li>
+            <li><a href="/sovereignty" data-i18n="nav.sovereignty" data-i18n-aria-label="nav.sovereignty" aria-label="Sovereignty"{% if nav_current_path == "/sovereignty" %} aria-current="page"{% endif %}>Sovereignty</a></li>
+          </ul>
+        </details>
 
-      <details class="nav-group" data-secondary-navigation="system">
-        <summary data-i18n="nav.group.system">System</summary>
-        <menu class="nav-menu" aria-label="Secondary navigation: system">
-          <a href="/sources" data-i18n="nav.sources">Sources</a>
-          <a href="/settings" data-i18n="nav.settings">Settings</a>
-          <a href="/evolution" data-i18n="nav.evolution">Evolution</a>
-          <a href="/sandbox" data-i18n="nav.sandbox">Sandbox</a>
-          <a href="/meta" data-i18n="nav.meta">Meta</a>
-          <a href="/demo" data-i18n="nav.demo">Demo</a>
-          <a href="/admin" class="nav-danger" data-i18n="nav.reset">Reset</a>
-        </menu>
+        <details
+          class="nav-group nav-group-advanced"
+          role="group"
+          aria-labelledby="nav-tools-summary"
+          data-navigation-tier="advanced"
+          data-advanced-navigation="advanced"
+          data-advanced-navigation-routes="/sources /settings /evolution /sandbox /meta /demo /admin"
+          {% if nav_current_path in nav_advanced_routes %}open data-current-navigation="true"{% endif %}
+        >
+          <summary id="nav-tools-summary" aria-controls="nav-tools-menu" data-i18n-aria-label="nav.group.tools_label" aria-label="Advanced navigation: Tools">
+            <span class="nav-group-label">
+              <span class="nav-group-kicker" data-i18n="nav.tier.advanced">Advanced</span>
+              <span class="nav-group-title" data-i18n="nav.group.tools">Tools</span>
+            </span>
+          </summary>
+          <ul id="nav-tools-menu" class="nav-menu" role="list" aria-labelledby="nav-tools-summary" data-i18n-aria-label="nav.menu.tools_label" aria-label="Advanced navigation">
+            <li><a href="/sources" data-i18n="nav.sources" data-i18n-aria-label="nav.sources" aria-label="Sources"{% if nav_current_path == "/sources" %} aria-current="page"{% endif %}>Sources</a></li>
+            <li><a href="/settings" data-i18n="nav.settings" data-i18n-aria-label="nav.settings" aria-label="Settings"{% if nav_current_path == "/settings" %} aria-current="page"{% endif %}>Settings</a></li>
+            <li><a href="/evolution" data-i18n="nav.evolution" data-i18n-aria-label="nav.evolution" aria-label="Evolution"{% if nav_current_path == "/evolution" %} aria-current="page"{% endif %}>Evolution</a></li>
+            <li><a href="/sandbox" data-i18n="nav.sandbox" data-i18n-aria-label="nav.sandbox" aria-label="Sandbox"{% if nav_current_path == "/sandbox" %} aria-current="page"{% endif %}>Sandbox</a></li>
+            <li><a href="/meta" data-i18n="nav.meta" data-i18n-aria-label="nav.meta" aria-label="Meta"{% if nav_current_path == "/meta" %} aria-current="page"{% endif %}>Meta</a></li>
+            <li><a href="/demo" data-i18n="nav.demo" data-i18n-aria-label="nav.demo" aria-label="Demo"{% if nav_current_path == "/demo" %} aria-current="page"{% endif %}>Demo</a></li>
+            <li><a href="/admin" class="nav-danger" data-i18n="nav.reset" data-i18n-aria-label="nav.reset" aria-label="Reset"{% if nav_current_path == "/admin" %} aria-current="page"{% endif %}>Reset</a></li>
+          </ul>
+        </details>
+
+        {% if nav_saas_enabled %}
+        <details
+          class="nav-group nav-group-saas"
+          role="group"
+          aria-labelledby="nav-saas-summary"
+          data-navigation-tier="saas"
+          data-saas-navigation="account"
+          data-saas-navigation-routes="/landing /ko /zh /signup /login /auth/callback /billing /invite /terms /privacy /about"
+          {% if nav_current_path in nav_saas_routes %}open data-current-navigation="true"{% endif %}
+        >
+          <summary id="nav-saas-summary" aria-controls="nav-saas-menu" data-i18n-aria-label="nav.group.account_label" aria-label="SaaS navigation: Account">
+            <span class="nav-group-label">
+              <span class="nav-group-kicker" data-i18n="nav.tier.saas">SaaS</span>
+              <span class="nav-group-title" data-i18n="nav.group.account">Account</span>
+            </span>
+          </summary>
+          <ul id="nav-saas-menu" class="nav-menu" role="list" aria-labelledby="nav-saas-summary" data-i18n-aria-label="nav.menu.account_label" aria-label="SaaS navigation">
+            <li><a href="/landing" data-i18n="nav.landing" data-i18n-aria-label="nav.landing" aria-label="Landing"{% if nav_current_path == "/landing" %} aria-current="page"{% endif %}>Landing</a></li>
+            <li><a href="/ko" data-i18n="nav.korean_landing" data-i18n-aria-label="nav.korean_landing" aria-label="Korean Landing"{% if nav_current_path == "/ko" %} aria-current="page"{% endif %}>Korean Landing</a></li>
+            <li><a href="/zh" data-i18n="nav.chinese_landing" data-i18n-aria-label="nav.chinese_landing" aria-label="Chinese Landing"{% if nav_current_path == "/zh" %} aria-current="page"{% endif %}>Chinese Landing</a></li>
+            <li><a href="/signup" data-i18n="nav.signup" data-i18n-aria-label="nav.signup" aria-label="Sign Up"{% if nav_current_path == "/signup" %} aria-current="page"{% endif %}>Sign Up</a></li>
+            <li><a href="/login" data-i18n="nav.login" data-i18n-aria-label="nav.login" aria-label="Sign In"{% if nav_current_path == "/login" %} aria-current="page"{% endif %}>Sign In</a></li>
+            <li><a href="/auth/callback" data-i18n="nav.auth_callback" data-i18n-aria-label="nav.auth_callback" aria-label="OAuth Callback"{% if nav_current_path == "/auth/callback" %} aria-current="page"{% endif %}>OAuth Callback</a></li>
+            <li><a href="/billing" data-i18n="nav.billing" data-i18n-aria-label="nav.billing" aria-label="Billing"{% if nav_current_path == "/billing" %} aria-current="page"{% endif %}>Billing</a></li>
+            <li><a href="/invite" data-i18n="nav.invite" data-i18n-aria-label="nav.invite" aria-label="Invite"{% if nav_current_path == "/invite" %} aria-current="page"{% endif %}>Invite</a></li>
+            <li><a href="/terms" data-i18n="nav.terms" data-i18n-aria-label="nav.terms" aria-label="Terms"{% if nav_current_path == "/terms" %} aria-current="page"{% endif %}>Terms</a></li>
+            <li><a href="/privacy" data-i18n="nav.privacy" data-i18n-aria-label="nav.privacy" aria-label="Privacy"{% if nav_current_path == "/privacy" %} aria-current="page"{% endif %}>Privacy</a></li>
+            <li><a href="/about" data-i18n="nav.about" data-i18n-aria-label="nav.about" aria-label="About"{% if nav_current_path == "/about" %} aria-current="page"{% endif %}>About</a></li>
+          </ul>
+        </details>
+        {% endif %}
+      </div>
+
+      <details
+        class="nav-overflow nav-group"
+        role="group"
+        aria-labelledby="nav-overflow-summary"
+        data-overflow-navigation="more"
+        data-overflow-access-surface="more-menu"
+        data-overflow-access-routes="/ /ambient/pwa /signals /profile /status /criteria /onboarding /onboarding/auto /sovereignty /sources /settings /evolution /sandbox /meta /demo /admin"
+      >
+        <summary id="nav-overflow-summary" aria-controls="nav-overflow-menu" data-i18n-aria-label="nav.overflow_label" aria-label="Overflow navigation: all preserved routes">
+          <span class="nav-overflow-label" data-i18n="nav.overflow">More</span>
+        </summary>
+        <ul id="nav-overflow-menu" class="nav-menu nav-overflow-menu" role="list" aria-labelledby="nav-overflow-summary" data-i18n-aria-label="nav.menu.overflow_label" aria-label="Overflow navigation">
+          <li><a href="/" data-i18n="nav.home" data-i18n-aria-label="nav.home" aria-label="Home">Home</a></li>
+          <li><a href="/ambient/pwa" data-i18n="nav.ambient" data-i18n-aria-label="nav.ambient" aria-label="Ambient">Ambient</a></li>
+          <li><a href="/signals" data-i18n="nav.signals" data-i18n-aria-label="nav.signals" aria-label="Signals">Signals</a></li>
+          <li><a href="/profile" data-i18n="nav.profile" data-i18n-aria-label="nav.profile" aria-label="Profile">Profile</a></li>
+          <li><a href="/status" data-i18n="nav.status" data-i18n-aria-label="nav.status" aria-label="Status">Status</a></li>
+          <li><a href="/criteria" data-i18n="nav.criteria" data-i18n-aria-label="nav.criteria" aria-label="Criteria">Criteria</a></li>
+          <li><a href="/onboarding" data-i18n="nav.onboarding" data-i18n-aria-label="nav.onboarding" aria-label="Onboarding">Onboarding</a></li>
+          <li><a href="/onboarding/auto" data-i18n="nav.auto_onboarding" data-i18n-aria-label="nav.auto_onboarding" aria-label="Auto Onboarding">Auto Onboarding</a></li>
+          <li><a href="/sovereignty" data-i18n="nav.sovereignty" data-i18n-aria-label="nav.sovereignty" aria-label="Sovereignty">Sovereignty</a></li>
+          <li><a href="/sources" data-i18n="nav.sources" data-i18n-aria-label="nav.sources" aria-label="Sources">Sources</a></li>
+          <li><a href="/settings" data-i18n="nav.settings" data-i18n-aria-label="nav.settings" aria-label="Settings">Settings</a></li>
+          <li><a href="/evolution" data-i18n="nav.evolution" data-i18n-aria-label="nav.evolution" aria-label="Evolution">Evolution</a></li>
+          <li><a href="/sandbox" data-i18n="nav.sandbox" data-i18n-aria-label="nav.sandbox" aria-label="Sandbox">Sandbox</a></li>
+          <li><a href="/meta" data-i18n="nav.meta" data-i18n-aria-label="nav.meta" aria-label="Meta">Meta</a></li>
+          <li><a href="/demo" data-i18n="nav.demo" data-i18n-aria-label="nav.demo" aria-label="Demo">Demo</a></li>
+          <li><a href="/admin" class="nav-danger" data-i18n="nav.reset" data-i18n-aria-label="nav.reset" aria-label="Reset">Reset</a></li>
+        </ul>
       </details>
     </div>
   </nav>
@@ -93,6 +233,7 @@
     const HEDWIG_I18N = {
       ko: {
         "language.label": "언어",
+        "language.selector_label": "언어 선택",
         "language.ko": "한국어",
         "language.zh": "중국어",
         "language.en": "영어",
@@ -100,10 +241,30 @@
         "nav.feed": "피드",
         "nav.brief": "브리프",
         "nav.chat": "채팅",
+        "nav.dashboard_label": "Hedwig 대시보드",
+        "nav.dashboard_navigation_label": "대시보드 내비게이션",
+        "nav.primary_navigation_label": "주요 대시보드 내비게이션",
+        "nav.secondary_surface_label": "보조 대시보드 접근",
+        "nav.overflow": "더 보기",
+        "nav.overflow_label": "오버플로 내비게이션: 보존된 모든 경로",
+        "nav.tier.secondary": "보조",
+        "nav.tier.advanced": "고급",
+        "nav.tier.saas": "SaaS",
         "nav.group.read": "보기",
+        "nav.group.read_label": "보조 내비게이션: 보기",
         "nav.group.steer": "스티어링",
-        "nav.group.system": "시스템",
+        "nav.group.steer_label": "보조 내비게이션: 스티어링",
+        "nav.group.tools": "도구",
+        "nav.group.tools_label": "고급 내비게이션: 도구",
+        "nav.group.account": "계정",
+        "nav.group.account_label": "SaaS 내비게이션: 계정",
+        "nav.menu.read_label": "보조 내비게이션: 보기",
+        "nav.menu.steer_label": "보조 내비게이션: 스티어링",
+        "nav.menu.tools_label": "고급 내비게이션",
+        "nav.menu.account_label": "SaaS 내비게이션",
+        "nav.menu.overflow_label": "오버플로 내비게이션",
         "nav.home": "홈",
+        "nav.generative": "생성형",
         "nav.ambient": "앰비언트",
         "nav.signals": "시그널",
         "nav.profile": "프로필",
@@ -119,6 +280,17 @@
         "nav.meta": "메타",
         "nav.demo": "데모",
         "nav.reset": "리셋",
+        "nav.landing": "랜딩",
+        "nav.korean_landing": "한국어 랜딩",
+        "nav.chinese_landing": "중국어 랜딩",
+        "nav.signup": "가입",
+        "nav.login": "로그인",
+        "nav.auth_callback": "OAuth 콜백",
+        "nav.billing": "결제",
+        "nav.invite": "초대",
+        "nav.terms": "약관",
+        "nav.privacy": "개인정보",
+        "nav.about": "소개",
         "footer.tagline": "개인이 소유하고 방향 조정하는 알고리즘",
         "setup.eyebrow": "원큐 로컬 온보딩",
         "setup.title": "Hedwig을 설정하고 첫 피드를 여세요.",
@@ -127,18 +299,61 @@
         "setup.advanced": "고급 설정은 선택 사항입니다",
         "feed.title": "피드",
         "feed.subtitle": "기본은 한눈에 보는 그리드입니다. 카드를 선택해 스와이프하거나 Dense Reader로 전환하세요.",
+        "feed.entry.nav_label": "피드 이후 주요 경로",
         "feed.nav_lead": "첫 피드가 시작점입니다. 준비되면 핵심 화면으로 이어가세요.",
+        "feed.entry.chat.label": "채팅",
+        "feed.entry.chat.description": "자연어로 Hedwig의 방향을 조정합니다.",
+        "feed.entry.profile.label": "프로필",
+        "feed.entry.profile.description": "선호도와 내보내기 화면을 확인합니다.",
+        "feed.entry.status.label": "상태",
+        "feed.entry.status.description": "준비 상태와 런타임 상태를 확인합니다.",
+        "feed.actions_label": "피드 작업",
         "feed.controls": "피드 컨트롤",
         "feed.controls_help": "이 페이지를 떠나지 않고 새로고침, 동기화, 필터를 조정합니다.",
+        "feed.mode.grid": "그리드",
+        "feed.mode.detail_swipe": "상세 스와이프",
+        "feed.mode.dense_reader": "Dense Reader",
+        "feed.action.refresh_sync": "지금 새로고침/동기화",
+        "feed.action.reload": "피드 다시 불러오기",
+        "feed.item.open": "열기",
+        "feed.item.open_label": "항목 원본 열기",
+        "feed.item.read": "읽음 표시",
+        "feed.item.read_label": "항목을 읽음으로 표시",
+        "feed.item.save": "왼쪽: 저장/나중에",
+        "feed.item.save_label": "나중에 볼 항목으로 저장",
+        "feed.item.dismiss": "숨기기",
+        "feed.item.dismiss_label": "항목 숨기기",
+        "feed.item.next": "오른쪽/다음: 건너뛰기",
+        "feed.item.not_interested": "관심 없음",
+        "feed.item.dense": "Dense",
+        "feed.item.qa": "질문",
         "brief.title": "브리프",
         "brief.subtitle": "매일/주간 LLM 브리핑 보관소입니다. Slack/Discord 없이도 여기서 읽습니다.",
+        "brief.entry.nav_label": "브리프 이후 주요 경로",
+        "brief.nav_lead": "브리프는 요약 소비 화면입니다. 더 읽거나 질문하거나 변화 흐름을 확인하세요.",
+        "brief.entry.feed.label": "피드",
+        "brief.entry.feed.description": "브리프를 만든 원본 시그널 카드로 돌아갑니다.",
+        "brief.entry.chat.label": "채팅",
+        "brief.entry.chat.description": "브리핑 내용을 자연어로 더 파고듭니다.",
+        "brief.entry.evolution.label": "진화",
+        "brief.entry.evolution.description": "추천 방향이 시간에 따라 어떻게 바뀌는지 봅니다.",
+        "brief.actions_label": "브리프 작업",
+        "brief.controls": "브리프 컨트롤",
+        "brief.controls_help": "전체, 일간, 주간 브리프를 빠르게 전환합니다.",
         "brief.all": "전체",
         "brief.daily": "일간",
         "brief.weekly": "주간",
-        "brief.empty": "아직 브리핑이 없습니다."
+        "brief.full_text": "원문 전체 보기",
+        "brief.action.deep_chat": "Chat에서 더 깊이",
+        "brief.action.evolution": "evolution timeline",
+        "brief.empty": "아직 브리핑이 없습니다.",
+        "brief.empty.run_daily": "홈 또는 Chat에서 daily 파이프라인 실행을 요청하세요.",
+        "brief.empty.run_local": "또는 python -m hedwig를 1회 실행해 daily brief를 생성하세요.",
+        "brief.empty.run_weekly": "주간은 python -m hedwig --weekly를 실행하세요."
       },
       zh: {
         "language.label": "语言",
+        "language.selector_label": "语言选择",
         "language.ko": "韩语",
         "language.zh": "中文",
         "language.en": "英语",
@@ -146,10 +361,30 @@
         "nav.feed": "信息流",
         "nav.brief": "简报",
         "nav.chat": "聊天",
+        "nav.dashboard_label": "Hedwig 仪表盘",
+        "nav.dashboard_navigation_label": "仪表盘导航",
+        "nav.primary_navigation_label": "主要仪表盘导航",
+        "nav.secondary_surface_label": "次级仪表盘访问",
+        "nav.overflow": "更多",
+        "nav.overflow_label": "溢出导航：所有保留路线",
+        "nav.tier.secondary": "次级",
+        "nav.tier.advanced": "高级",
+        "nav.tier.saas": "SaaS",
         "nav.group.read": "阅读",
+        "nav.group.read_label": "次级导航：阅读",
         "nav.group.steer": "调校",
-        "nav.group.system": "系统",
+        "nav.group.steer_label": "次级导航：调校",
+        "nav.group.tools": "工具",
+        "nav.group.tools_label": "高级导航：工具",
+        "nav.group.account": "账户",
+        "nav.group.account_label": "SaaS 导航：账户",
+        "nav.menu.read_label": "次级导航：阅读",
+        "nav.menu.steer_label": "次级导航：调校",
+        "nav.menu.tools_label": "高级导航",
+        "nav.menu.account_label": "SaaS 导航",
+        "nav.menu.overflow_label": "溢出导航",
         "nav.home": "首页",
+        "nav.generative": "生成式",
         "nav.ambient": "环境触达",
         "nav.signals": "信号",
         "nav.profile": "个人资料",
@@ -165,6 +400,17 @@
         "nav.meta": "元学习",
         "nav.demo": "演示",
         "nav.reset": "重置",
+        "nav.landing": "落地页",
+        "nav.korean_landing": "韩文落地页",
+        "nav.chinese_landing": "中文落地页",
+        "nav.signup": "注册",
+        "nav.login": "登录",
+        "nav.auth_callback": "OAuth 回调",
+        "nav.billing": "账单",
+        "nav.invite": "邀请",
+        "nav.terms": "条款",
+        "nav.privacy": "隐私",
+        "nav.about": "关于",
         "footer.tagline": "个人拥有并可调校的算法",
         "setup.eyebrow": "一页式本地引导",
         "setup.title": "设置 Hedwig，然后打开你的第一个信息流。",
@@ -173,18 +419,61 @@
         "setup.advanced": "高级设置是可选项",
         "feed.title": "信息流",
         "feed.subtitle": "默认是总览网格。选择卡片进入滑动阅读，或切换到 Dense Reader。",
+        "feed.entry.nav_label": "信息流后的主要路径",
         "feed.nav_lead": "第一个信息流是起点。准备好后继续进入 Hedwig 的核心界面。",
+        "feed.entry.chat.label": "聊天",
+        "feed.entry.chat.description": "用自然语言调校 Hedwig。",
+        "feed.entry.profile.label": "个人资料",
+        "feed.entry.profile.description": "查看偏好和导出界面。",
+        "feed.entry.status.label": "状态",
+        "feed.entry.status.description": "检查准备情况和运行状态。",
+        "feed.actions_label": "信息流操作",
         "feed.controls": "信息流控制",
         "feed.controls_help": "无需离开页面即可刷新、同步、筛选和导航。",
+        "feed.mode.grid": "网格",
+        "feed.mode.detail_swipe": "滑动详情",
+        "feed.mode.dense_reader": "Dense Reader",
+        "feed.action.refresh_sync": "立即刷新/同步",
+        "feed.action.reload": "重新加载信息流",
+        "feed.item.open": "打开",
+        "feed.item.open_label": "打开条目来源",
+        "feed.item.read": "标记已读",
+        "feed.item.read_label": "将条目标记为已读",
+        "feed.item.save": "左滑：保存/稍后",
+        "feed.item.save_label": "保存条目稍后查看",
+        "feed.item.dismiss": "忽略",
+        "feed.item.dismiss_label": "忽略条目",
+        "feed.item.next": "右滑/下一个：跳过",
+        "feed.item.not_interested": "不感兴趣",
+        "feed.item.dense": "Dense",
+        "feed.item.qa": "提问",
         "brief.title": "简报",
         "brief.subtitle": "每日/每周 LLM 简报归档。即使未连接 Slack/Discord，也可在这里阅读。",
+        "brief.entry.nav_label": "简报后的主要路径",
+        "brief.nav_lead": "简报是摘要阅读界面。继续阅读、提问，或查看变化趋势。",
+        "brief.entry.feed.label": "信息流",
+        "brief.entry.feed.description": "回到生成简报的原始信号卡片。",
+        "brief.entry.chat.label": "聊天",
+        "brief.entry.chat.description": "用自然语言深入追问这份简报。",
+        "brief.entry.evolution.label": "演化",
+        "brief.entry.evolution.description": "查看推荐方向如何随时间变化。",
+        "brief.actions_label": "简报操作",
+        "brief.controls": "简报控制",
+        "brief.controls_help": "快速切换全部、每日和每周简报。",
         "brief.all": "全部",
         "brief.daily": "每日",
         "brief.weekly": "每周",
-        "brief.empty": "还没有简报。"
+        "brief.full_text": "查看完整原文",
+        "brief.action.deep_chat": "在聊天中深入",
+        "brief.action.evolution": "演化时间线",
+        "brief.empty": "还没有简报。",
+        "brief.empty.run_daily": "在首页或聊天中请求运行 daily 流水线。",
+        "brief.empty.run_local": "或运行一次 python -m hedwig 来生成 daily brief。",
+        "brief.empty.run_weekly": "每周简报请运行 python -m hedwig --weekly。"
       },
       en: {
         "language.label": "Language",
+        "language.selector_label": "Language selector",
         "language.ko": "Korean",
         "language.zh": "Chinese",
         "language.en": "English",
@@ -192,10 +481,30 @@
         "nav.feed": "Feed",
         "nav.brief": "Brief",
         "nav.chat": "Chat",
+        "nav.dashboard_label": "Hedwig dashboard",
+        "nav.dashboard_navigation_label": "Dashboard navigation",
+        "nav.primary_navigation_label": "Primary dashboard navigation",
+        "nav.secondary_surface_label": "Secondary dashboard access",
+        "nav.overflow": "More",
+        "nav.overflow_label": "Overflow navigation: all preserved routes",
+        "nav.tier.secondary": "Secondary",
+        "nav.tier.advanced": "Advanced",
+        "nav.tier.saas": "SaaS",
         "nav.group.read": "Read",
+        "nav.group.read_label": "Secondary navigation: Read",
         "nav.group.steer": "Steer",
-        "nav.group.system": "System",
+        "nav.group.steer_label": "Secondary navigation: Steer",
+        "nav.group.tools": "Tools",
+        "nav.group.tools_label": "Advanced navigation: Tools",
+        "nav.group.account": "Account",
+        "nav.group.account_label": "SaaS navigation: Account",
+        "nav.menu.read_label": "Secondary navigation: read",
+        "nav.menu.steer_label": "Secondary navigation: steer",
+        "nav.menu.tools_label": "Advanced navigation",
+        "nav.menu.account_label": "SaaS navigation",
+        "nav.menu.overflow_label": "Overflow navigation",
         "nav.home": "Home",
+        "nav.generative": "Generative",
         "nav.ambient": "Ambient",
         "nav.signals": "Signals",
         "nav.profile": "Profile",
@@ -211,6 +520,17 @@
         "nav.meta": "Meta",
         "nav.demo": "Demo",
         "nav.reset": "Reset",
+        "nav.landing": "Landing",
+        "nav.korean_landing": "Korean Landing",
+        "nav.chinese_landing": "Chinese Landing",
+        "nav.signup": "Sign Up",
+        "nav.login": "Sign In",
+        "nav.auth_callback": "OAuth Callback",
+        "nav.billing": "Billing",
+        "nav.invite": "Invite",
+        "nav.terms": "Terms",
+        "nav.privacy": "Privacy",
+        "nav.about": "About",
         "footer.tagline": "Algorithm steering for individuals",
         "setup.eyebrow": "One-page local setup",
         "setup.title": "Setup Hedwig, then open your first feed.",
@@ -219,35 +539,117 @@
         "setup.advanced": "Advanced setup is optional",
         "feed.title": "Feed",
         "feed.subtitle": "Grid overview is default. Select a card for Detail Swipe, or switch to Dense Reader.",
+        "feed.entry.nav_label": "Post-setup feed navigation",
         "feed.nav_lead": "Your first feed is the starting point. Continue with Hedwig's primary surfaces when you are ready.",
+        "feed.entry.chat.label": "Chat",
+        "feed.entry.chat.description": "Steer Hedwig in natural language.",
+        "feed.entry.profile.label": "Profile",
+        "feed.entry.profile.description": "Review preferences and export surfaces.",
+        "feed.entry.status.label": "Status",
+        "feed.entry.status.description": "Check readiness and runtime health.",
+        "feed.actions_label": "Feed actions",
         "feed.controls": "Feed controls",
         "feed.controls_help": "Refresh, sync, filter, and navigate without leaving the feed.",
+        "feed.mode.grid": "Grid",
+        "feed.mode.detail_swipe": "Detail Swipe",
+        "feed.mode.dense_reader": "Dense Reader",
+        "feed.action.refresh_sync": "Refresh / sync now",
+        "feed.action.reload": "Reload feed",
+        "feed.item.open": "Open",
+        "feed.item.open_label": "Open item source",
+        "feed.item.read": "Mark read",
+        "feed.item.read_label": "Mark item as read",
+        "feed.item.save": "Left: save/later",
+        "feed.item.save_label": "Save item for later",
+        "feed.item.dismiss": "Dismiss",
+        "feed.item.dismiss_label": "Dismiss item",
+        "feed.item.next": "Right/next: skip",
+        "feed.item.not_interested": "Not interested",
+        "feed.item.dense": "Dense",
+        "feed.item.qa": "Ask",
         "brief.title": "Brief",
         "brief.subtitle": "Daily and weekly LLM briefings. Read them here even without Slack or Discord.",
+        "brief.entry.nav_label": "Post-brief navigation",
+        "brief.nav_lead": "Brief is the summary surface. Continue reading, ask questions, or review how recommendations are shifting.",
+        "brief.entry.feed.label": "Feed",
+        "brief.entry.feed.description": "Return to the source signal cards behind the briefing.",
+        "brief.entry.chat.label": "Chat",
+        "brief.entry.chat.description": "Ask natural-language follow-up questions about a briefing.",
+        "brief.entry.evolution.label": "Evolution",
+        "brief.entry.evolution.description": "Review how recommendation direction changes over time.",
+        "brief.actions_label": "Brief actions",
+        "brief.controls": "Brief controls",
+        "brief.controls_help": "Switch quickly between all, daily, and weekly briefs.",
         "brief.all": "All",
         "brief.daily": "Daily",
         "brief.weekly": "Weekly",
-        "brief.empty": "No briefings yet."
+        "brief.full_text": "View full original",
+        "brief.action.deep_chat": "Go deeper in Chat",
+        "brief.action.evolution": "Evolution timeline",
+        "brief.empty": "No briefings yet.",
+        "brief.empty.run_daily": "Ask Home or Chat to run the daily pipeline.",
+        "brief.empty.run_local": "Or run python -m hedwig once to generate a daily brief.",
+        "brief.empty.run_weekly": "For weekly briefings, run python -m hedwig --weekly."
       }
     };
 
-    function applyHedwigLanguage(nextLanguage) {
-      const supported = ["ko", "zh", "en"];
-      const language = supported.includes(nextLanguage) ? nextLanguage : "ko";
-      const dictionary = HEDWIG_I18N[language] || HEDWIG_I18N.ko;
+    const HEDWIG_SUPPORTED_LANGUAGES = ["ko", "zh", "en"];
+    const HEDWIG_LANGUAGE_STORAGE_KEY = "hedwig.language";
+    const HEDWIG_LANGUAGE_STATE = {
+      current: "ko",
+      dictionary: HEDWIG_I18N.ko
+    };
+    window.HEDWIG_I18N = HEDWIG_I18N;
+    window.HEDWIG_LANGUAGE_STATE = HEDWIG_LANGUAGE_STATE;
+
+    function normalizeHedwigLanguage(nextLanguage) {
+      return HEDWIG_SUPPORTED_LANGUAGES.includes(nextLanguage) ? nextLanguage : "";
+    }
+
+    function loadHedwigLanguagePreference() {
+      try {
+        return normalizeHedwigLanguage(window.localStorage.getItem(HEDWIG_LANGUAGE_STORAGE_KEY));
+      } catch {
+        return "";
+      }
+    }
+
+    function persistHedwigLanguagePreference(language) {
+      try {
+        window.localStorage.setItem(HEDWIG_LANGUAGE_STORAGE_KEY, language);
+      } catch {
+        // Language switching still works for the current page if browser storage is unavailable.
+      }
+    }
+
+    function renderHedwigLocalizedShell() {
+      const language = HEDWIG_LANGUAGE_STATE.current;
+      const dictionary = HEDWIG_LANGUAGE_STATE.dictionary;
       document.documentElement.lang = language;
       document.querySelectorAll("[data-i18n]").forEach((node) => {
         const key = node.dataset.i18n;
         if (dictionary[key]) node.textContent = dictionary[key];
       });
-      localStorage.setItem("hedwig.language", language);
+      document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+        const key = node.dataset.i18nAriaLabel;
+        if (dictionary[key]) node.setAttribute("aria-label", dictionary[key]);
+      });
       const selector = document.querySelector("[data-language-selector]");
       if (selector) selector.value = language;
     }
 
+    function applyHedwigLanguage(nextLanguage) {
+      const language = normalizeHedwigLanguage(nextLanguage) || "ko";
+      HEDWIG_LANGUAGE_STATE.current = language;
+      HEDWIG_LANGUAGE_STATE.dictionary = HEDWIG_I18N[language] || HEDWIG_I18N.ko;
+      renderHedwigLocalizedShell();
+      persistHedwigLanguagePreference(language);
+      window.dispatchEvent(new CustomEvent("hedwig:languagechange", { detail: { language } }));
+    }
+
     const languageFromQuery = new URLSearchParams(window.location.search).get("lang");
-    const savedLanguage = localStorage.getItem("hedwig.language");
-    applyHedwigLanguage(languageFromQuery || savedLanguage || "ko");
+    const savedLanguage = loadHedwigLanguagePreference();
+    applyHedwigLanguage(normalizeHedwigLanguage(languageFromQuery) || savedLanguage || "ko");
     document.querySelector("[data-language-selector]")?.addEventListener("change", (event) => {
       applyHedwigLanguage(event.target.value);
     });

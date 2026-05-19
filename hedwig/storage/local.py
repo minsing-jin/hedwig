@@ -46,66 +46,242 @@ def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
     }
 
 
-def _ensure_column(
+_REQUIRED_COLUMN_MIGRATIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "signals": (
+        ("platform", "platform TEXT DEFAULT ''"),
+        ("external_id", "external_id TEXT DEFAULT ''"),
+        ("title", "title TEXT DEFAULT ''"),
+        ("url", "url TEXT DEFAULT NULL"),
+        ("content", "content TEXT DEFAULT NULL"),
+        ("author", "author TEXT DEFAULT NULL"),
+        ("platform_score", "platform_score INTEGER DEFAULT 0"),
+        ("comments_count", "comments_count INTEGER DEFAULT 0"),
+        ("published_at", "published_at TEXT DEFAULT NULL"),
+        ("relevance_score", "relevance_score REAL DEFAULT 0"),
+        ("urgency", "urgency TEXT DEFAULT 'skip'"),
+        ("why_relevant", "why_relevant TEXT DEFAULT NULL"),
+        ("devils_advocate", "devils_advocate TEXT DEFAULT NULL"),
+        ("opportunity_note", "opportunity_note TEXT DEFAULT NULL"),
+        ("exploration_tags", "exploration_tags TEXT DEFAULT '[]'"),
+        ("extra", "extra TEXT DEFAULT '{}'"),
+        ("collected_at", "collected_at TEXT DEFAULT ''"),
+        ("judgment_id", "judgment_id INTEGER DEFAULT NULL"),
+    ),
+    "feedback": (
+        ("signal_id", "signal_id TEXT DEFAULT ''"),
+        ("vote", "vote TEXT DEFAULT 'up'"),
+        ("natural_language", "natural_language TEXT DEFAULT NULL"),
+        ("source_channel", "source_channel TEXT DEFAULT ''"),
+        ("captured_at", "captured_at TEXT DEFAULT ''"),
+        ("attribution", "attribution TEXT DEFAULT NULL"),
+        ("delivered_signal_id", "delivered_signal_id INTEGER DEFAULT NULL"),
+    ),
+    "evolution_logs": (
+        ("cycle_type", "cycle_type TEXT DEFAULT 'daily'"),
+        ("cycle_number", "cycle_number INTEGER DEFAULT 0"),
+        ("criteria_version_before", "criteria_version_before INTEGER DEFAULT NULL"),
+        ("criteria_version_after", "criteria_version_after INTEGER DEFAULT NULL"),
+        ("mutations_applied", "mutations_applied TEXT DEFAULT '[]'"),
+        ("fitness_before", "fitness_before REAL DEFAULT NULL"),
+        ("fitness_after", "fitness_after REAL DEFAULT NULL"),
+        ("kept", "kept INTEGER DEFAULT 1"),
+        ("analysis_summary", "analysis_summary TEXT DEFAULT NULL"),
+        ("timestamp", "timestamp TEXT DEFAULT ''"),
+        ("scope", "scope TEXT DEFAULT NULL"),
+        ("axis", "axis TEXT DEFAULT NULL"),
+        ("inputs", "inputs TEXT DEFAULT '{}'"),
+        ("outputs", "outputs TEXT DEFAULT '{}'"),
+        ("evaluator_verdict", "evaluator_verdict TEXT DEFAULT NULL"),
+    ),
+    "run_history": (
+        ("cycle_type", "cycle_type TEXT DEFAULT 'daily'"),
+        ("run_at", "run_at TEXT DEFAULT ''"),
+    ),
+    "collection_runs": (
+        ("run_type", "run_type TEXT DEFAULT 'daily'"),
+        ("status", "status TEXT DEFAULT 'queued'"),
+        ("posts_collected", "posts_collected INTEGER DEFAULT 0"),
+        ("posts_filtered", "posts_filtered INTEGER DEFAULT 0"),
+        ("signals_scored", "signals_scored INTEGER DEFAULT 0"),
+        ("signals_saved", "signals_saved INTEGER DEFAULT 0"),
+        ("alerts_count", "alerts_count INTEGER DEFAULT 0"),
+        ("digest_count", "digest_count INTEGER DEFAULT 0"),
+        ("skipped_count", "skipped_count INTEGER DEFAULT 0"),
+        ("errors", "errors TEXT DEFAULT '[]'"),
+        ("metadata", "metadata TEXT DEFAULT '{}'"),
+        ("started_at", "started_at TEXT DEFAULT ''"),
+        ("last_updated_at", "last_updated_at TEXT DEFAULT ''"),
+        ("completed_at", "completed_at TEXT DEFAULT NULL"),
+    ),
+    "criteria_versions": (
+        ("version", "version INTEGER DEFAULT 0"),
+        ("criteria", "criteria TEXT DEFAULT '{}'"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+        ("created_by", "created_by TEXT DEFAULT 'system'"),
+        ("diff_from_previous", "diff_from_previous TEXT DEFAULT NULL"),
+        ("fitness_score", "fitness_score REAL DEFAULT NULL"),
+    ),
+    "user_memory": (
+        ("snapshot_week", "snapshot_week TEXT DEFAULT ''"),
+        ("confirmed_interests", "confirmed_interests TEXT DEFAULT '[]'"),
+        ("rejected_topics", "rejected_topics TEXT DEFAULT '[]'"),
+        ("taste_trajectory", "taste_trajectory TEXT DEFAULT NULL"),
+        ("context", "context TEXT DEFAULT '{}'"),
+        ("natural_language_feedback", "natural_language_feedback TEXT DEFAULT '[]'"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+    ),
+    "source_reliability": (
+        ("reliability_score", "reliability_score REAL DEFAULT 0"),
+        ("updated_at", "updated_at TEXT DEFAULT ''"),
+    ),
+    "evolution_signal": (
+        ("channel", "channel TEXT DEFAULT 'explicit'"),
+        ("kind", "kind TEXT DEFAULT ''"),
+        ("payload", "payload TEXT DEFAULT '{}'"),
+        ("weight", "weight REAL DEFAULT 1.0"),
+        ("captured_at", "captured_at TEXT DEFAULT ''"),
+    ),
+    "chat_conversations": (
+        ("title", "title TEXT DEFAULT 'New chat'"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+        ("last_message_at", "last_message_at TEXT DEFAULT ''"),
+    ),
+    "chat_messages": (
+        ("conversation_id", "conversation_id TEXT DEFAULT ''"),
+        ("role", "role TEXT DEFAULT 'user'"),
+        ("content", "content TEXT DEFAULT ''"),
+        ("tool_calls", "tool_calls TEXT DEFAULT NULL"),
+        ("tool_name", "tool_name TEXT DEFAULT NULL"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+    ),
+    "judgments": (
+        ("signal_id", "signal_id TEXT DEFAULT ''"),
+        ("score", "score REAL DEFAULT 0"),
+        ("urgency", "urgency TEXT DEFAULT 'skip'"),
+        ("rationale", "rationale TEXT DEFAULT NULL"),
+        ("devil_advocate", "devil_advocate TEXT DEFAULT NULL"),
+        ("opportunity_note", "opportunity_note TEXT DEFAULT NULL"),
+        ("confidence", "confidence REAL DEFAULT NULL"),
+        ("exploration_tags", "exploration_tags TEXT DEFAULT '[]'"),
+        ("criteria_version", "criteria_version INTEGER DEFAULT NULL"),
+        ("interpretation_style_id", "interpretation_style_id TEXT DEFAULT NULL"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+    ),
+    "briefings": (
+        ("cycle_type", "cycle_type TEXT DEFAULT 'daily'"),
+        ("content", "content TEXT DEFAULT ''"),
+        ("signal_count", "signal_count INTEGER DEFAULT 0"),
+        ("generated_at", "generated_at TEXT DEFAULT ''"),
+        ("structured", "structured TEXT DEFAULT '{}'"),
+    ),
+    "algorithm_versions": (
+        ("version", "version INTEGER DEFAULT 0"),
+        ("config", "config TEXT DEFAULT '{}'"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+        ("created_by", "created_by TEXT DEFAULT 'system'"),
+        ("diff_from_previous", "diff_from_previous TEXT DEFAULT NULL"),
+        ("fitness_score", "fitness_score REAL DEFAULT NULL"),
+        ("origin", "origin TEXT DEFAULT 'manual'"),
+    ),
+    "behavior_events": (
+        ("signal_id", "signal_id TEXT DEFAULT ''"),
+        ("event_type", "event_type TEXT DEFAULT 'view_start'"),
+        ("dwell_ms", "dwell_ms INTEGER DEFAULT NULL"),
+        ("position_in_feed", "position_in_feed INTEGER DEFAULT NULL"),
+        ("feed_id", "feed_id TEXT DEFAULT 'default'"),
+        ("feed_mode", "feed_mode TEXT DEFAULT 'grid'"),
+        ("device", "device TEXT DEFAULT NULL"),
+        ("captured_at", "captured_at TEXT DEFAULT ''"),
+    ),
+    "behavior_rewards": (
+        ("signal_id", "signal_id TEXT DEFAULT ''"),
+        ("raw_event_id", "raw_event_id INTEGER DEFAULT NULL"),
+        ("event_type", "event_type TEXT DEFAULT ''"),
+        ("reward_value", "reward_value REAL DEFAULT 0"),
+        ("signal_strength", "signal_strength TEXT DEFAULT 'weak'"),
+        ("polarity", "polarity TEXT DEFAULT 'neutral'"),
+        ("strength_class", "strength_class TEXT DEFAULT 'weak'"),
+        ("confidence", "confidence REAL DEFAULT 0.0"),
+        ("uncertainty_reason", "uncertainty_reason TEXT DEFAULT ''"),
+        (
+            "derivation_rule_version",
+            "derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1'",
+        ),
+        ("source_event_ids", "source_event_ids TEXT DEFAULT '[]'"),
+        ("policy_version", "policy_version INTEGER DEFAULT 1"),
+        ("feed_mode", "feed_mode TEXT DEFAULT 'grid'"),
+        ("source", "source TEXT DEFAULT 'personal_algorithm'"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+    ),
+    "delivered_signals": (
+        ("signal_id", "signal_id TEXT DEFAULT ''"),
+        ("channel", "channel TEXT DEFAULT 'dashboard'"),
+        ("delivered_at", "delivered_at TEXT DEFAULT ''"),
+        ("message_ref", "message_ref TEXT DEFAULT NULL"),
+        ("acknowledged", "acknowledged INTEGER DEFAULT 0"),
+    ),
+    "interpretation_styles": (
+        ("version", "version INTEGER DEFAULT 0"),
+        ("tone", "tone TEXT DEFAULT 'mixed'"),
+        ("depth", "depth TEXT DEFAULT 'deep'"),
+        ("jargon_level", "jargon_level TEXT DEFAULT 'medium'"),
+        ("prompt_template", "prompt_template TEXT DEFAULT ''"),
+        ("parent_version", "parent_version INTEGER DEFAULT NULL"),
+        ("created_at", "created_at TEXT DEFAULT ''"),
+        ("is_active", "is_active INTEGER DEFAULT 0"),
+    ),
+}
+
+
+_MIGRATION_DEFAULT_BACKFILLS: dict[tuple[str, str], object] = {
+    ("behavior_events", "feed_mode"): "grid",
+    ("behavior_rewards", "feed_mode"): "grid",
+    ("briefings", "structured"): "{}",
+}
+
+
+def _ensure_missing_columns(
     conn: sqlite3.Connection,
     table_name: str,
-    column_name: str,
-    column_definition: str,
+    column_definitions: tuple[tuple[str, str], ...],
 ) -> None:
-    if column_name in _table_columns(conn, table_name):
+    existing_columns = _table_columns(conn, table_name)
+    if not existing_columns:
         return
-    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+
+    for column_name, column_definition in column_definitions:
+        if column_name in existing_columns:
+            continue
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+        existing_columns.add(column_name)
+
+
+def _backfill_migration_defaults(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_definitions: tuple[tuple[str, str], ...],
+) -> None:
+    existing_columns = _table_columns(conn, table_name)
+    if not existing_columns:
+        return
+
+    for column_name, _column_definition in column_definitions:
+        if column_name not in existing_columns:
+            continue
+        backfill_value = _MIGRATION_DEFAULT_BACKFILLS.get((table_name, column_name))
+        if backfill_value is None:
+            continue
+        conn.execute(
+            f"UPDATE {table_name} SET {column_name} = ? WHERE {column_name} IS NULL",
+            (backfill_value,),
+        )
 
 
 def _run_schema_migrations(conn: sqlite3.Connection) -> None:
     """Idempotently add columns introduced after the first SQLite schema."""
-    migrations = (
-        ("feedback", "attribution", "attribution TEXT DEFAULT NULL"),
-        (
-            "feedback",
-            "delivered_signal_id",
-            "delivered_signal_id INTEGER DEFAULT NULL",
-        ),
-        ("evolution_logs", "scope", "scope TEXT DEFAULT NULL"),
-        ("evolution_logs", "axis", "axis TEXT DEFAULT NULL"),
-        ("evolution_logs", "inputs", "inputs TEXT DEFAULT '{}'"),
-        ("evolution_logs", "outputs", "outputs TEXT DEFAULT '{}'"),
-        (
-            "evolution_logs",
-            "evaluator_verdict",
-            "evaluator_verdict TEXT DEFAULT NULL",
-        ),
-        ("briefings", "structured", "structured TEXT DEFAULT '{}'"),
-        ("signals", "judgment_id", "judgment_id INTEGER DEFAULT NULL"),
-        ("behavior_events", "feed_mode", "feed_mode TEXT DEFAULT 'grid'"),
-        ("behavior_rewards", "polarity", "polarity TEXT DEFAULT 'neutral'"),
-        (
-            "behavior_rewards",
-            "strength_class",
-            "strength_class TEXT DEFAULT 'weak'",
-        ),
-        ("behavior_rewards", "confidence", "confidence REAL DEFAULT 0.0"),
-        (
-            "behavior_rewards",
-            "uncertainty_reason",
-            "uncertainty_reason TEXT DEFAULT ''",
-        ),
-        (
-            "behavior_rewards",
-            "derivation_rule_version",
-            "derivation_rule_version TEXT DEFAULT 'personal_algorithm_reward_v1'",
-        ),
-        (
-            "behavior_rewards",
-            "source_event_ids",
-            "source_event_ids TEXT DEFAULT '[]'",
-        ),
-        ("behavior_rewards", "policy_version", "policy_version INTEGER DEFAULT 1"),
-        ("behavior_rewards", "feed_mode", "feed_mode TEXT DEFAULT 'grid'"),
-        ("behavior_rewards", "source", "source TEXT DEFAULT 'personal_algorithm'"),
-    )
-    for table_name, column_name, column_definition in migrations:
-        _ensure_column(conn, table_name, column_name, column_definition)
+    for table_name, column_definitions in _REQUIRED_COLUMN_MIGRATIONS.items():
+        _ensure_missing_columns(conn, table_name, column_definitions)
+        _backfill_migration_defaults(conn, table_name, column_definitions)
 
 
 def init_db():
@@ -334,7 +510,8 @@ def init_db():
             cycle_type TEXT NOT NULL CHECK (cycle_type IN ('daily','weekly','critical')),
             content TEXT NOT NULL,
             signal_count INTEGER DEFAULT 0,
-            generated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            generated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            structured TEXT DEFAULT '{}'
         );
 
         -- v3: Algorithm config version history (peer to criteria_versions)
@@ -406,6 +583,25 @@ def _json_list(value: object) -> list:
     except Exception:
         return []
     return parsed if isinstance(parsed, list) else []
+
+
+def _sqlite_literal(value: object) -> str:
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _coalesced_column(
+    columns: set[str],
+    column_name: str,
+    default_value: object,
+) -> str:
+    default_literal = _sqlite_literal(default_value)
+    if column_name in columns:
+        return f"COALESCE({column_name}, {default_literal}) AS {column_name}"
+    return f"{default_literal} AS {column_name}"
 
 
 def _coerce_timestamp(value: object) -> datetime | None:
@@ -1458,28 +1654,45 @@ def get_behavior_events(
     limit: int = 200,
 ) -> list[dict]:
     init_db()
-    q = "SELECT * FROM behavior_events"
-    conds = []
-    params: list = []
-    if signal_id:
-        conds.append("signal_id = ?")
-        params.append(str(signal_id))
-    if event_types:
-        placeholders = ",".join("?" for _ in event_types)
-        conds.append(f"event_type IN ({placeholders})")
-        params.extend(event_types)
-    if feed_mode:
-        conds.append("feed_mode = ?")
-        params.append(feed_mode)
-    if conds:
-        q += " WHERE " + " AND ".join(conds)
-    q += " ORDER BY captured_at DESC, id DESC LIMIT ?"
-    params.append(limit)
     with _conn() as conn:
+        columns = _table_columns(conn, "behavior_events")
+        if not {"id", "signal_id", "event_type"} <= columns:
+            return []
+        q = "SELECT * FROM behavior_events"
+        conds = []
+        params: list = []
+        if signal_id:
+            conds.append("signal_id = ?")
+            params.append(str(signal_id))
+        if event_types:
+            placeholders = ",".join("?" for _ in event_types)
+            conds.append(f"event_type IN ({placeholders})")
+            params.extend(event_types)
+        if feed_mode:
+            normalized_mode = str(feed_mode)
+            if "feed_mode" in columns:
+                conds.append("COALESCE(feed_mode, 'grid') = ?")
+                params.append(normalized_mode)
+            elif normalized_mode != "grid":
+                return []
+        if conds:
+            q += " WHERE " + " AND ".join(conds)
+        order_columns = []
+        if "captured_at" in columns:
+            order_columns.append("captured_at DESC")
+        order_columns.append("id DESC")
+        q += f" ORDER BY {', '.join(order_columns)} LIMIT ?"
+        params.append(max(0, int(limit or 0)))
         rows = conn.execute(q, params).fetchall()
     out = []
     for row in rows:
         item = dict(row)
+        item.setdefault("dwell_ms", None)
+        item.setdefault("position_in_feed", None)
+        item["feed_id"] = str(item.get("feed_id") or "default")
+        item["feed_mode"] = str(item.get("feed_mode") or "grid")
+        item.setdefault("device", None)
+        item["captured_at"] = item.get("captured_at") or ""
         try:
             item["source_event_ids"] = json.loads(item.get("source_event_ids") or "[]")
         except Exception:
@@ -1537,27 +1750,59 @@ def get_behavior_rewards(
     limit: int = 200,
 ) -> list[dict]:
     init_db()
-    q = "SELECT * FROM behavior_rewards"
-    conds = []
-    params: list = []
-    if signal_id:
-        conds.append("signal_id = ?")
-        params.append(str(signal_id))
-    if signal_strength:
-        conds.append("signal_strength = ?")
-        params.append(str(signal_strength))
-    if feed_mode:
-        conds.append("feed_mode = ?")
-        params.append(str(feed_mode))
-    if conds:
-        q += " WHERE " + " AND ".join(conds)
-    q += " ORDER BY created_at DESC, id DESC LIMIT ?"
-    params.append(limit)
     with _conn() as conn:
+        columns = _table_columns(conn, "behavior_rewards")
+        required_columns = {
+            "id",
+            "signal_id",
+            "event_type",
+            "reward_value",
+            "signal_strength",
+        }
+        if not required_columns <= columns:
+            return []
+        q = "SELECT * FROM behavior_rewards"
+        conds = []
+        params: list = []
+        if signal_id:
+            conds.append("signal_id = ?")
+            params.append(str(signal_id))
+        if signal_strength:
+            conds.append("signal_strength = ?")
+            params.append(str(signal_strength))
+        if feed_mode:
+            normalized_mode = str(feed_mode)
+            if "feed_mode" in columns:
+                conds.append("COALESCE(feed_mode, 'grid') = ?")
+                params.append(normalized_mode)
+            elif normalized_mode != "grid":
+                return []
+        if conds:
+            q += " WHERE " + " AND ".join(conds)
+        order_columns = []
+        if "created_at" in columns:
+            order_columns.append("created_at DESC")
+        order_columns.append("id DESC")
+        q += f" ORDER BY {', '.join(order_columns)} LIMIT ?"
+        params.append(max(0, int(limit or 0)))
         rows = conn.execute(q, params).fetchall()
     out = []
     for row in rows:
         item = dict(row)
+        item.setdefault("raw_event_id", None)
+        item["polarity"] = str(item.get("polarity") or "neutral")
+        item["strength_class"] = str(
+            item.get("strength_class") or item.get("signal_strength") or "weak"
+        )
+        item["confidence"] = float(item.get("confidence") or 0)
+        item["uncertainty_reason"] = str(item.get("uncertainty_reason") or "")
+        item["derivation_rule_version"] = str(
+            item.get("derivation_rule_version") or "personal_algorithm_reward_v1"
+        )
+        item["policy_version"] = int(item.get("policy_version") or 1)
+        item["feed_mode"] = str(item.get("feed_mode") or "grid")
+        item["source"] = str(item.get("source") or "personal_algorithm")
+        item["created_at"] = item.get("created_at") or ""
         try:
             item["source_event_ids"] = json.loads(item.get("source_event_ids") or "[]")
         except Exception:
@@ -1570,14 +1815,26 @@ def get_usage_metrics_by_mode(days: int = 7) -> dict:
     init_db()
     cutoff = (datetime.now(tz=timezone.utc) - timedelta(days=days)).isoformat()
     with _conn() as conn:
-        rows = conn.execute(
-            """SELECT feed_mode, event_type, COUNT(*) AS count,
-                      COALESCE(SUM(dwell_ms), 0) AS dwell_ms
-               FROM behavior_events
-               WHERE captured_at >= ?
-               GROUP BY feed_mode, event_type""",
-            (cutoff,),
-        ).fetchall()
+        columns = _table_columns(conn, "behavior_events")
+        if "event_type" not in columns:
+            rows = []
+        else:
+            feed_mode_expr = (
+                "COALESCE(feed_mode, 'grid')" if "feed_mode" in columns else "'grid'"
+            )
+            dwell_expr = (
+                "COALESCE(SUM(dwell_ms), 0)" if "dwell_ms" in columns else "0"
+            )
+            where_clause = "WHERE captured_at >= ?" if "captured_at" in columns else ""
+            params: tuple = (cutoff,) if where_clause else ()
+            rows = conn.execute(
+                f"""SELECT {feed_mode_expr} AS feed_mode, event_type, COUNT(*) AS count,
+                          {dwell_expr} AS dwell_ms
+                   FROM behavior_events
+                   {where_clause}
+                   GROUP BY 1, event_type""",
+                params,
+            ).fetchall()
     out: dict[str, dict[str, int]] = {}
     for row in rows:
         mode = row["feed_mode"] or "grid"
@@ -1813,40 +2070,81 @@ def save_briefing(cycle_type: str, content: str, signal_count: int = 0) -> int |
         return None
 
 
+def _briefing_select_clause(conn: sqlite3.Connection) -> str | None:
+    """Return a backwards-compatible briefing SELECT list, or None if absent."""
+    columns = _table_columns(conn, "briefings")
+    if not columns:
+        return None
+    if not {"id", "cycle_type", "content"} <= columns:
+        logger.warning("briefings table is missing required columns; treating as empty")
+        return None
+
+    select_columns = [
+        "id",
+        "cycle_type",
+        "content",
+        _coalesced_column(columns, "signal_count", 0),
+        _coalesced_column(columns, "generated_at", ""),
+        _coalesced_column(columns, "structured", "{}"),
+    ]
+    return ", ".join(select_columns)
+
+
+def _briefing_from_row(row: sqlite3.Row | None) -> dict | None:
+    if row is None:
+        return None
+
+    item = dict(row)
+    item["cycle_type"] = str(item.get("cycle_type") or "daily")
+    item["content"] = str(item.get("content") or "")
+    item["signal_count"] = int(item.get("signal_count") or 0)
+    item["generated_at"] = str(item.get("generated_at") or "")
+    try:
+        item["structured"] = json.loads(item.get("structured") or "{}")
+    except Exception:
+        item["structured"] = {}
+    if not isinstance(item["structured"], dict):
+        item["structured"] = {}
+    return item
+
+
 def get_briefings(cycle_type: str | None = None, limit: int = 30) -> list[dict]:
     init_db()
-    if cycle_type:
-        q = ("""SELECT id, cycle_type, content, signal_count, generated_at, structured
-               FROM briefings WHERE cycle_type = ?
-               ORDER BY generated_at DESC, id DESC LIMIT ?""")
-        params: tuple = (cycle_type, limit)
-    else:
-        q = ("""SELECT id, cycle_type, content, signal_count, generated_at, structured
-               FROM briefings
-               ORDER BY generated_at DESC, id DESC LIMIT ?""")
-        params = (limit,)
     with _conn() as conn:
+        select_clause = _briefing_select_clause(conn)
+        if select_clause is None:
+            return []
+
+        safe_limit = max(0, int(limit or 0))
+        if cycle_type:
+            q = (f"""SELECT {select_clause}
+                   FROM briefings WHERE cycle_type = ?
+                   ORDER BY generated_at DESC, id DESC LIMIT ?""")
+            params: tuple = (cycle_type, safe_limit)
+        else:
+            q = (f"""SELECT {select_clause}
+                   FROM briefings
+                   ORDER BY generated_at DESC, id DESC LIMIT ?""")
+            params = (safe_limit,)
         rows = conn.execute(q, params).fetchall()
-    out = []
-    for r in rows:
-        d = dict(r)
-        try:
-            d["structured"] = json.loads(d.get("structured") or "{}")
-        except Exception:
-            d["structured"] = {}
-        out.append(d)
-    return out
+
+    return [item for row in rows if (item := _briefing_from_row(row)) is not None]
 
 
 def get_briefing(briefing_id: int) -> dict | None:
     init_db()
     with _conn() as conn:
+        select_clause = _briefing_select_clause(conn)
+        if select_clause is None:
+            return None
         row = conn.execute(
-            """SELECT id, cycle_type, content, signal_count, generated_at
+            f"""SELECT {select_clause}
                FROM briefings WHERE id = ?""",
             (briefing_id,),
         ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    return _briefing_from_row(row)
 
 
 def get_algorithm_history(limit: int = 50) -> list[dict]:
