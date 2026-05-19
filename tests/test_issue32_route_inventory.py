@@ -94,7 +94,7 @@ def _literal_internal_template_refs() -> set[str]:
 def _base_header_links() -> dict[str, str]:
     source = BASE_TEMPLATE_PATH.read_text(encoding="utf-8")
     nav_match = re.search(
-        r"<div class=\"nav-links\">(?P<body>.*?)</div>",
+        r'<div\s+class="nav-links"[^>]*>(?P<body>.*?)\n    </div>\n  </nav>',
         source,
         flags=re.S,
     )

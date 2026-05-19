@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_TEMPLATE_PATH = ROOT / "hedwig" / "dashboard" / "templates" / "base.html"
+INVENTORY_PATH = ROOT / "docs" / "issue32-user-facing-route-inventory.md"
 SETUP_TEMPLATE_PATH = ROOT / "hedwig" / "dashboard" / "templates" / "setup.html"
 FEED_TEMPLATE_PATH = ROOT / "hedwig" / "dashboard" / "templates" / "feed.html"
 BRIEF_TEMPLATE_PATH = ROOT / "hedwig" / "dashboard" / "templates" / "brief.html"
@@ -18,40 +19,99 @@ def _base_template() -> str:
     return BASE_TEMPLATE_PATH.read_text(encoding="utf-8")
 
 
+def _dashboard_nav_body(source: str) -> str:
+    nav_match = re.search(
+        r'<div\s+class="nav-links"[^>]*>(?P<body>.*?)\n    </div>\n  </nav>',
+        source,
+        flags=re.S,
+    )
+    assert nav_match is not None
+    return nav_match.group("body")
+
+
+def _dashboard_nav_routes(source: str) -> set[str]:
+    return set(re.findall(r'href="([^"]+)"', _dashboard_nav_body(source)))
+
+
+def _issue32_preserved_dashboard_nav_routes() -> set[str]:
+    inventory = INVENTORY_PATH.read_text(encoding="utf-8")
+    section = inventory.split("## Global Header Navigation", 1)[1].split(
+        "\n## ",
+        1,
+    )[0]
+    routes: set[str] = set()
+    for line in section.splitlines():
+        if not line.startswith("| "):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) < 2 or not cells[1].startswith("`/"):
+            continue
+        routes.add(cells[1].strip("`"))
+    return routes
+
+
+def _route_path_is_registered(path: str, registered_route_paths: set[str]) -> bool:
+    if path in registered_route_paths:
+        return True
+    return any(
+        "{" in route_path
+        and re.fullmatch(re.sub(r"\{[^/]+\}", r"[^/]+", route_path), path)
+        for route_path in registered_route_paths
+    )
+
+
 def test_issue34_navigation_groups_routes_without_removing_existing_links():
     source = _base_template()
 
     assert 'data-dashboard-nav-grouped="true"' in source
+    assert 'aria-label="Dashboard navigation"' in source
+    assert 'data-primary-navigation="/setup /feed /brief /chat"' in source
     assert source.count('class="nav-primary"') == 4
     assert source.count('class="nav-group"') == 3
+    assert source.count("data-secondary-navigation=") == 3
     assert 'data-i18n="nav.group.read"' in source
     assert 'data-i18n="nav.group.steer"' in source
     assert 'data-i18n="nav.group.system"' in source
 
-    expected_routes = {
-        "/chat",
-        "/demo",
-        "/",
-        "/ambient/pwa",
-        "/feed",
-        "/brief",
-        "/profile",
-        "/signals",
-        "/evolution",
-        "/sandbox",
-        "/meta",
-        "/status",
-        "/sovereignty",
-        "/sources",
-        "/settings",
-        "/criteria",
-        "/setup",
-        "/onboarding",
-        "/onboarding/auto",
-        "/admin",
-    }
-    linked_routes = set(re.findall(r'href="([^"]+)"', source))
+    expected_routes = _issue32_preserved_dashboard_nav_routes()
+    linked_routes = _dashboard_nav_routes(source)
     assert expected_routes <= linked_routes
+
+
+def test_issue34_dashboard_navigation_routes_are_registered_and_reachable(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HEDWIG_STORAGE", "sqlite")
+    monkeypatch.setenv("HEDWIG_DB_PATH", str(tmp_path / "hedwig.db"))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+
+    from hedwig.dashboard.app import create_app
+
+    client = TestClient(create_app())
+    registered_route_paths = {
+        getattr(route, "path", "") for route in client.app.routes
+    }
+    nav_routes = _dashboard_nav_routes(_base_template())
+
+    missing_registered_paths = sorted(
+        path
+        for path in nav_routes
+        if not _route_path_is_registered(path, registered_route_paths)
+    )
+    assert missing_registered_paths == []
+
+    for path in sorted(nav_routes):
+        response = client.get(path, follow_redirects=False)
+        if path == "/":
+            assert response.status_code == 303
+            assert response.headers["location"] == "/setup"
+        else:
+            assert response.status_code == 200, path
+            assert "Hedwig" in response.text
 
 
 def test_issue34_language_selector_supports_ko_zh_en_and_persists_locally():
