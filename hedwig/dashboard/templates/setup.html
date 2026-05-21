@@ -59,14 +59,15 @@
 
 <div
   class="setup-shell"
+  data-setup-language-renderer="HEDWIG_LANGUAGE_STATE"
   data-setup-navigation-locked="{% if setup_navigation_locked %}true{% else %}false{% endif %}"
   data-navigation-lock-target="{{ setup_state.navigation_lock_target or '/setup#setup-progress' }}"
 >
   <section class="setup-hero">
     <div>
-      <p class="eyebrow">One-shot local onboarding</p>
-      <h1>Setup Hedwig, then open your first feed.</h1>
-      <p class="subtitle">
+      <p class="eyebrow" data-i18n="setup.eyebrow">One-shot local onboarding</p>
+      <h1 data-i18n="setup.title">Setup Hedwig, then open your first feed.</h1>
+      <p class="subtitle" data-i18n="setup.subtitle">
         Start with only an OpenAI API key. Hedwig defaults to local SQLite,
         the current AI-builder criteria profile, enabled source registry defaults,
         and the dashboard feed as the delivery target.
@@ -104,13 +105,13 @@
     <div class="setup-primary-path-heading">
       <div>
         <p class="eyebrow">Primary /setup path</p>
-        <h2 id="setup-primary-path-heading">Everything required for the first local feed is on this page.</h2>
+        <h2 id="setup-primary-path-heading" data-i18n="setup.primary">Everything required for the first local feed is on this page.</h2>
       </div>
-      <a href="#setup-essential" class="btn btn-primary btn-large" data-primary-setup-start>
+      <a href="#setup-essential" class="btn btn-primary btn-large" data-primary-setup-start data-setup-i18n="setup.primary_path.start">
         Start required setup
       </a>
     </div>
-    <p class="muted">
+    <p class="muted" data-setup-i18n="setup.primary_path.instructions">
       Use this consolidated path for first-run onboarding. It keeps required setup
       OpenAI-only and local, while existing storage, delivery, source, profile,
       import/export, settings, and meta controls remain reachable below as
@@ -143,15 +144,15 @@
       </li>
     </ol>
     <div class="setup-primary-path-actions">
-      <a href="#setup-criteria" class="btn">Optional interest</a>
-      <a href="#setup-progress" class="btn">First-run progress</a>
+      <a href="#setup-criteria" class="btn" data-setup-i18n="setup.action.optional_interest">Optional interest</a>
+      <a href="#setup-progress" class="btn" data-setup-i18n="setup.action.first_run_progress">First-run progress</a>
       <a
         href="{{ feed_navigation_href }}"
         class="btn {% if not feed_navigation_available %}is-waiting{% endif %}"
         data-setup-feed-navigation
         aria-disabled="{% if feed_navigation_available %}false{% else %}true{% endif %}"
       >{% if feed_navigation_available %}View /feed{% else %}Feed opens after readiness{% endif %}</a>
-      <a href="#setup-advanced" class="btn" data-primary-advanced-preservation-link>
+      <a href="#setup-advanced" class="btn" data-primary-advanced-preservation-link data-setup-i18n="setup.action.optional_advanced_controls">
         Optional advanced controls
       </a>
     </div>
@@ -183,10 +184,10 @@
       </div>
     </div>
     <div class="setup-success-actions">
-      <a href="{{ feed_navigation_href }}" class="btn btn-primary btn-large" data-setup-success-feed-link data-setup-feed-navigation aria-label="View feed">
+      <a href="{{ feed_navigation_href }}" class="btn btn-primary btn-large" data-setup-success-feed-link data-setup-feed-navigation aria-label="View feed" data-setup-i18n="setup.action.view_feed">
         View feed
       </a>
-      <a href="#setup-completion" class="btn">Review setup summary</a>
+      <a href="#setup-completion" class="btn" data-setup-i18n="setup.action.review_setup_summary">Review setup summary</a>
     </div>
   </section>
 
@@ -217,36 +218,36 @@
       >
         Feed unlocks after collection
       </a>
-      <a href="#setup-progress" class="btn">Keep watching progress</a>
+      <a href="#setup-progress" class="btn" data-setup-i18n="setup.action.keep_watching_progress">Keep watching progress</a>
     </div>
   </section>
 
   <details class="setup-details setup-advanced-entrypoint" data-advanced-setup-entrypoint>
-    <summary>Advanced setup (optional)</summary>
+    <summary data-i18n="setup.advanced">Advanced setup (optional)</summary>
     <p class="muted">
       Keep this collapsed for the one-shot OpenAI + local SQLite path. Expand it only
       if you want optional Supabase-backed storage, delivery, source/API keys,
       profile, export/import, or model/backend settings before the first feed.
     </p>
     <div class="button-row">
-      <a href="#setup-advanced" class="btn" data-advanced-setup-link>
+      <a href="#setup-advanced" class="btn" data-advanced-setup-link data-setup-i18n="setup.action.open_advanced_controls">
         Open advanced setup controls
       </a>
-      <a href="#setup-delivery-configuration" class="btn" data-delivery-setup-link>
+      <a href="#setup-delivery-configuration" class="btn" data-delivery-setup-link data-setup-i18n="setup.action.configure_delivery">
         Configure delivery channels
       </a>
-      <a href="#setup-source-api-keys" class="btn" data-source-api-key-setup-link>
+      <a href="#setup-source-api-keys" class="btn" data-source-api-key-setup-link data-setup-i18n="setup.action.configure_source_keys">
         Configure source API keys
       </a>
-      <a href="#setup-model-backend-settings" class="btn" data-model-backend-setup-link>
+      <a href="#setup-model-backend-settings" class="btn" data-model-backend-setup-link data-setup-i18n="setup.action.configure_model_backend">
         Configure model/backend settings
       </a>
-      <a href="#setup-general-settings" class="btn" data-general-settings-setup-link>
+      <a href="#setup-general-settings" class="btn" data-general-settings-setup-link data-setup-i18n="setup.action.open_general_settings">
         Open general settings section
       </a>
-      <a href="/settings" class="btn">Open detailed source settings</a>
-      <a href="/profile" class="btn">Open profile and export</a>
-      <a href="#setup-export-import" class="btn" data-export-import-setup-link>
+      <a href="/settings" class="btn" data-setup-i18n="setup.action.open_detailed_source_settings">Open detailed source settings</a>
+      <a href="/profile" class="btn" data-setup-i18n="setup.action.open_profile_export">Open profile and export</a>
+      <a href="#setup-export-import" class="btn" data-export-import-setup-link data-setup-i18n="setup.action.export_import_algorithm">
         Export/import algorithm
       </a>
     </div>
@@ -350,12 +351,12 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Essential</p>
-            <h2>OpenAI key + local SQLite</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.essential.eyebrow">Essential</p>
+            <h2 data-setup-i18n="setup.step.essential.title">OpenAI key + local SQLite</h2>
           </div>
-          <span class="setup-badge">Minimum setup</span>
+          <span class="setup-badge" data-setup-i18n="setup.step.essential.badge">Minimum setup</span>
         </div>
-        <p class="muted">
+        <p class="muted" data-setup-i18n="setup.step.essential.instructions">
           This is the only blocking step. Local SQLite is the default storage mode,
           and no external delivery channel is required to complete setup.
         </p>
@@ -459,11 +460,12 @@
             class="btn btn-primary btn-large"
             id="save-required-setup-btn"
             data-required-onboarding-save-control
+            data-setup-i18n="setup.action.save_required_inputs"
             onclick="saveRequiredOnboardingInputs()"
           >
             Save required inputs
           </button>
-          <a href="#setup-criteria" class="btn btn-primary btn-large">Continue to optional interests</a>
+          <a href="#setup-criteria" class="btn btn-primary btn-large" data-setup-i18n="setup.action.continue_optional_interests">Continue to optional interests</a>
           <a
             href="{{ feed_navigation_href }}"
             class="btn btn-large {% if setup_navigation_locked %}is-locked{% elif not feed_navigation_available %}is-waiting{% endif %}"
@@ -480,12 +482,12 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Optional interests</p>
-            <h2>Use default criteria or add one line of steering</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.criteria.eyebrow">Optional interests</p>
+            <h2 data-setup-i18n="setup.step.criteria.title">Use default criteria or add one line of steering</h2>
           </div>
-          <span class="setup-badge">Optional</span>
+          <span class="setup-badge" data-setup-i18n="setup.step.criteria.badge">Optional</span>
         </div>
-        <p class="muted">
+        <p class="muted" data-setup-i18n="setup.step.criteria.instructions">
           Interest selection is not mandatory. If you skip this card, Hedwig keeps
           the quickstart default criteria for an AI builder focused on AI agents,
           LLM tooling, and research papers.
@@ -548,7 +550,7 @@
         </details>
 
         <div class="button-row">
-          <button type="button" class="btn" id="skip-criteria-btn" onclick="skipCriteriaStep()">
+          <button type="button" class="btn" id="skip-criteria-btn" data-setup-i18n="setup.action.skip_default_criteria" onclick="skipCriteriaStep()">
             Skip and use default criteria
           </button>
           <button
@@ -559,6 +561,9 @@
             data-ready-label="Continue with these interests"
             data-missing-key-label="Enter OpenAI key to continue"
             data-unsaved-label="Save required inputs to continue"
+            data-ready-i18n="setup.action.continue_with_interests"
+            data-missing-key-i18n="setup.action.enter_key_continue"
+            data-unsaved-i18n="setup.action.save_required_continue"
             aria-disabled="{% if required_onboarding_saved %}false{% else %}true{% endif %}"
             {% if not required_onboarding_saved %}disabled{% endif %}
           >
@@ -574,12 +579,12 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Automatic sources</p>
-            <h2>Default source configuration is applied automatically</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.sources.eyebrow">Automatic sources</p>
+            <h2 data-setup-i18n="setup.step.sources.title">Default source configuration is applied automatically</h2>
           </div>
-          <span class="setup-badge">No action needed</span>
+          <span class="setup-badge" data-setup-i18n="setup.step.sources.badge">No action needed</span>
         </div>
-        <p class="muted">
+        <p class="muted" data-setup-i18n="setup.step.sources.instructions">
           One-shot setup uses the currently enabled source set from
           registry/source_settings automatically. Source selection is not a required
           setup step; expand the optional controls only if you want to override the
@@ -678,11 +683,11 @@
               {% endfor %}
             </div>
             <div class="button-row">
-              <button type="button" class="btn" id="setup-source-toggle-save-btn" onclick="saveSetupSourceToggles()">
+              <button type="button" class="btn" id="setup-source-toggle-save-btn" data-setup-i18n="setup.action.save_source_toggles" onclick="saveSetupSourceToggles()">
                 Save source toggles
               </button>
-              <a href="/settings" class="btn">Open detailed source settings</a>
-              <a href="/sources" class="btn">View source registry</a>
+              <a href="/settings" class="btn" data-setup-i18n="setup.action.open_detailed_source_settings">Open detailed source settings</a>
+              <a href="/sources" class="btn" data-setup-i18n="setup.action.view_source_registry">View source registry</a>
             </div>
             <div id="setup-source-toggle-results" class="setup-inline-result" aria-live="polite"></div>
           </fieldset>
@@ -725,16 +730,16 @@
             {% endfor %}
           </fieldset>
           <div class="button-row">
-            <a href="/settings" class="btn">Open detailed source settings</a>
-            <a href="/sources" class="btn">View source registry</a>
-            <a href="#setup-source-api-keys" class="btn" data-source-api-key-setup-link>
+            <a href="/settings" class="btn" data-setup-i18n="setup.action.open_detailed_source_settings">Open detailed source settings</a>
+            <a href="/sources" class="btn" data-setup-i18n="setup.action.view_source_registry">View source registry</a>
+            <a href="#setup-source-api-keys" class="btn" data-source-api-key-setup-link data-setup-i18n="setup.action.configure_source_keys">
               Configure source API keys
             </a>
           </div>
         </details>
 
         <div class="button-row">
-          <a href="#setup-progress" class="btn btn-primary">Continue to first run status</a>
+          <a href="#setup-progress" class="btn btn-primary" data-setup-i18n="setup.action.continue_first_run_status">Continue to first run status</a>
         </div>
       </div>
     </section>
@@ -744,14 +749,14 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Progress</p>
-            <h2>First run status</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.progress.eyebrow">Progress</p>
+            <h2 data-setup-i18n="setup.step.progress.title">First run status</h2>
           </div>
           <span id="first-run-pill" class="setup-badge {% if setup_state.feed_items_available %}ready{% endif %}">
             {{ first_run_status.replace('_', ' ') }}
           </span>
         </div>
-        <p class="muted">
+        <p class="muted" data-setup-i18n="setup.step.progress.instructions">
           Long first collections can take a while. This page stays useful while Hedwig
           collects and scores; /feed navigation appears after the readiness criteria pass.
         </p>
@@ -853,13 +858,16 @@
               data-ready-label="Retry first collection"
               data-missing-key-label="Enter OpenAI key to retry"
               data-unsaved-label="Save required inputs to retry"
+              data-ready-i18n="setup.action.retry_first_collection"
+              data-missing-key-i18n="setup.action.enter_key_retry"
+              data-unsaved-i18n="setup.action.save_required_retry"
               aria-disabled="{% if required_onboarding_saved %}false{% else %}true{% endif %}"
               {% if not required_onboarding_saved %}disabled{% endif %}
             >
               Retry first collection
             </button>
-            <button type="button" class="btn" onclick="refreshOneShotStatus()">Refresh status</button>
-            <a href="/status" class="btn">Open /status</a>
+            <button type="button" class="btn" data-setup-i18n="setup.action.refresh_status" onclick="refreshOneShotStatus()">Refresh status</button>
+            <a href="/status" class="btn" data-setup-i18n="setup.action.open_status">Open /status</a>
           </div>
         </div>
         <div
@@ -988,6 +996,9 @@
             data-ready-label="Start first collection"
             data-missing-key-label="Enter OpenAI key to start first collection"
             data-unsaved-label="Save required inputs to start first collection"
+            data-ready-i18n="setup.action.start_first_collection"
+            data-missing-key-i18n="setup.action.enter_key_start_collection"
+            data-unsaved-i18n="setup.action.save_required_start_collection"
             aria-disabled="{% if required_onboarding_saved %}false{% else %}true{% endif %}"
             {% if not required_onboarding_saved %}disabled{% endif %}
           >
@@ -995,14 +1006,14 @@
           </button>
         </div>
         <div class="button-row">
-          <button type="button" class="btn" onclick="refreshOneShotStatus()">Refresh status</button>
+          <button type="button" class="btn" data-setup-i18n="setup.action.refresh_status" onclick="refreshOneShotStatus()">Refresh status</button>
           <a
             href="{{ feed_navigation_href }}"
             class="btn btn-primary {% if setup_navigation_locked %}is-locked{% elif not feed_navigation_available %}is-waiting{% endif %}"
             data-setup-feed-navigation
             aria-disabled="{% if feed_navigation_available and not setup_navigation_locked %}false{% else %}true{% endif %}"
           >{% if feed_navigation_available %}Open /feed{% else %}Waiting for /feed readiness{% endif %}</a>
-          <a href="/status" class="btn">Open /status</a>
+          <a href="/status" class="btn" data-setup-i18n="setup.action.open_status">Open /status</a>
         </div>
         <details class="setup-progressive-details">
           <summary>Recovery if the first run is slow</summary>
@@ -1063,12 +1074,12 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Consume and operate</p>
-            <h2>Feed-first dashboard</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.feed.eyebrow">Consume and operate</p>
+            <h2 data-setup-i18n="setup.step.feed.title">Feed-first dashboard</h2>
           </div>
-          <span class="setup-badge">Default target</span>
+          <span class="setup-badge" data-setup-i18n="setup.step.feed.badge">Default target</span>
         </div>
-        <p class="muted">
+        <p class="muted" data-setup-i18n="setup.step.feed.instructions">
           Hedwig’s first delivery target is the dashboard feed. Monitoring and
           source review stay close at hand; power-user surfaces remain in Advanced.
         </p>
@@ -1172,8 +1183,8 @@
             the essential feed handoff.
           </p>
           <div class="button-row">
-            <a href="/sources" class="btn">View source registry</a>
-            <a href="/settings" class="btn">Open detailed source settings</a>
+            <a href="/sources" class="btn" data-setup-i18n="setup.action.view_source_registry">View source registry</a>
+            <a href="/settings" class="btn" data-setup-i18n="setup.action.open_detailed_source_settings">Open detailed source settings</a>
           </div>
         </details>
         <details class="setup-progressive-details" data-delivery-settings-entrypoint>
@@ -1185,8 +1196,8 @@
           </p>
           <div class="button-row">
             <a href="#setup-delivery-configuration" class="btn">Configure delivery channels</a>
-            <a href="/ambient/pwa" class="btn">Open ambient surface</a>
-            <a href="/brief" class="btn">Open brief surface</a>
+            <a href="/ambient/pwa" class="btn" data-setup-i18n="setup.action.open_ambient_surface">Open ambient surface</a>
+            <a href="/brief" class="btn" data-setup-i18n="setup.action.open_brief_surface">Open brief surface</a>
           </div>
         </details>
       </div>
@@ -1208,8 +1219,8 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Completion gate</p>
-            <h2>Feed-ready completion</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.completion.eyebrow">Completion gate</p>
+            <h2 data-setup-i18n="setup.step.completion.title">Feed-ready completion</h2>
           </div>
           <span id="setup-completion-pill" class="setup-badge {% if setup_completion_ready %}ready{% endif %}">
             {% if setup_completion_ready %}Complete{% elif first_feed_partially_ready %}Feed usable{% else %}Waiting{% endif %}
@@ -1360,8 +1371,8 @@
           >
             {% if setup_completion_ready %}Open completed /feed{% elif first_feed_partially_ready %}Feed unlocks after collection{% else %}Feed opens after readiness{% endif %}
           </a>
-          <button type="button" class="btn" onclick="refreshOneShotStatus()">Refresh until ready</button>
-          <a href="#setup-advanced" class="btn">Skip to Advanced</a>
+          <button type="button" class="btn" data-setup-i18n="setup.action.refresh_until_ready" onclick="refreshOneShotStatus()">Refresh until ready</button>
+          <a href="#setup-advanced" class="btn" data-setup-i18n="setup.action.skip_to_advanced">Skip to Advanced</a>
         </div>
       </div>
     </section>
@@ -1371,12 +1382,12 @@
       <div class="step-content">
         <div class="step-heading">
           <div>
-            <p class="eyebrow">Advanced</p>
-            <h2>Optional configuration</h2>
+            <p class="eyebrow" data-setup-i18n="setup.step.advanced.eyebrow">Advanced</p>
+            <h2 data-setup-i18n="setup.step.advanced.title">Optional configuration</h2>
           </div>
-          <span class="setup-badge">Collapsed by default</span>
+          <span class="setup-badge" data-setup-i18n="setup.step.advanced.badge">Collapsed by default</span>
         </div>
-        <p class="muted">
+        <p class="muted" data-setup-i18n="setup.step.advanced.instructions">
           These controls preserve the old setup wizard and power-user paths without
           blocking first-run setup.
         </p>
@@ -1485,6 +1496,7 @@
             {% endif %}
           {% endfor %}
           <button type="button" class="btn"
+                  data-setup-i18n="setup.action.create_supabase_tables"
                   data-supabase-create-tables-action
                   hx-post="/setup/create-tables"
                   hx-target="#db-results"
@@ -1561,6 +1573,7 @@
           {% endfor %}
           <div class="button-row">
             <button type="button" class="btn"
+                    data-setup-i18n="setup.action.save_delivery_settings"
                     hx-post="/setup/save"
                     hx-include="#setup-form"
                     hx-swap="none"
@@ -1568,18 +1581,19 @@
               Save delivery settings
             </button>
             <button type="button" class="btn"
+                    data-setup-i18n="setup.action.test_delivery_settings"
                     hx-post="/setup/test"
                     hx-include="#setup-form"
                     hx-target="#delivery-test-results"
                     hx-swap="innerHTML">
               Test delivery settings
             </button>
-            <a href="/ambient/pwa" class="btn">Open ambient delivery</a>
-            <a href="/brief" class="btn">Open brief delivery</a>
-            <a href="#setup-progress" class="btn btn-primary" data-skip-delivery-setup>
+            <a href="/ambient/pwa" class="btn" data-setup-i18n="setup.action.open_ambient_delivery">Open ambient delivery</a>
+            <a href="/brief" class="btn" data-setup-i18n="setup.action.open_brief_delivery">Open brief delivery</a>
+            <a href="#setup-progress" class="btn btn-primary" data-skip-delivery-setup data-setup-i18n="setup.action.skip_delivery">
               Skip delivery for now
             </a>
-            <a href="#setup-feed" class="btn" data-defer-delivery-setup>
+            <a href="#setup-feed" class="btn" data-defer-delivery-setup data-setup-i18n="setup.action.defer_delivery">
               Defer until after first feed
             </a>
           </div>
@@ -1606,14 +1620,15 @@
           {% endfor %}
           <div class="button-row">
             <button type="button" class="btn"
+                    data-setup-i18n="setup.action.save_source_api_keys"
                     hx-post="/setup/save"
                     hx-include="#setup-form"
                     hx-swap="none"
                     onclick="showToast('Source API key settings saved to .env')">
               Save source/API key settings
             </button>
-            <a href="/sources" class="btn">View source registry</a>
-            <a href="/settings" class="btn">Open source toggles</a>
+            <a href="/sources" class="btn" data-setup-i18n="setup.action.view_source_registry">View source registry</a>
+            <a href="/settings" class="btn" data-setup-i18n="setup.action.open_source_toggles">Open source toggles</a>
           </div>
         </details>
 
@@ -1652,6 +1667,7 @@
           {% endfor %}
           <div class="button-row">
             <button type="button" class="btn"
+                    data-setup-i18n="setup.action.save_model_backend_settings"
                     hx-post="/setup/model-backend/save"
                     hx-include="#setup-form"
                     hx-swap="none"
@@ -1659,11 +1675,11 @@
                     onclick="showToast('Model/backend settings saved using the settings save path')">
               Save model/backend settings
             </button>
-            <a href="/settings#model-backend-settings" class="btn btn-primary" data-existing-model-backend-settings-link>
+            <a href="/settings#model-backend-settings" class="btn btn-primary" data-existing-model-backend-settings-link data-setup-i18n="setup.action.open_model_backend_settings">
               Open existing model/backend settings
             </a>
-            <a href="/status" class="btn">Open backend health status</a>
-            <a href="/settings" class="btn">Open source settings</a>
+            <a href="/status" class="btn" data-setup-i18n="setup.action.open_backend_health_status">Open backend health status</a>
+            <a href="/settings" class="btn" data-setup-i18n="setup.action.open_source_settings">Open source settings</a>
           </div>
         </details>
 
@@ -1698,7 +1714,7 @@
             </div>
           </div>
           <div class="field">
-            <label for="algorithm_bundle_file">Import algorithm bundle</label>
+            <label for="algorithm_bundle_file" data-setup-i18n="setup.control.import_algorithm_bundle">Import algorithm bundle</label>
             <input
               type="file"
               id="algorithm_bundle_file"
@@ -1711,7 +1727,7 @@
             </small>
           </div>
           <div class="button-row">
-            <a href="/algorithm/export" class="btn btn-primary" download data-algorithm-export-control>
+            <a href="/algorithm/export" class="btn btn-primary" download data-algorithm-export-control data-setup-i18n="setup.action.download_algorithm_bundle">
               Download algorithm bundle
             </a>
             <button
@@ -1719,6 +1735,7 @@
               class="btn"
               onclick="dryRunAlgorithmImport()"
               data-algorithm-import-dry-run
+              data-setup-i18n="setup.action.dry_run_import"
             >
               Dry-run import
             </button>
@@ -1727,10 +1744,11 @@
               class="btn"
               onclick="confirmAlgorithmImport()"
               data-algorithm-import-confirm
+              data-setup-i18n="setup.action.confirm_import"
             >
               Confirm import
             </button>
-            <a href="/profile" class="btn">Open profile export surface</a>
+            <a href="/profile" class="btn" data-setup-i18n="setup.action.open_profile_export_surface">Open profile export surface</a>
           </div>
           <div
             id="algorithm-import-results"
@@ -1782,10 +1800,10 @@
             </div>
           </div>
           <div class="button-row">
-            <a href="/profile" class="btn btn-primary" data-profile-setup-link data-profile-polish-link>
+            <a href="/profile" class="btn btn-primary" data-profile-setup-link data-profile-polish-link data-setup-i18n="setup.action.open_existing_profile">
               Open existing profile page
             </a>
-            <a href="/algorithm/export" class="btn" download>
+            <a href="/algorithm/export" class="btn" download data-setup-i18n="setup.action.download_algorithm_bundle">
               Download algorithm bundle
             </a>
           </div>
@@ -1821,10 +1839,10 @@
             </div>
           </div>
           <div class="button-row">
-            <a href="/settings" class="btn btn-primary" data-general-settings-link>
+            <a href="/settings" class="btn btn-primary" data-general-settings-link data-setup-i18n="setup.action.open_existing_settings">
               Open existing settings page
             </a>
-            <a href="#setup-sources" class="btn">
+            <a href="#setup-sources" class="btn" data-setup-i18n="setup.action.back_to_source_defaults">
               Back to source defaults
             </a>
           </div>
@@ -1861,10 +1879,10 @@
             </div>
           </div>
           <div class="button-row">
-            <a href="/status" class="btn btn-primary" data-status-setup-link>
+            <a href="/status" class="btn btn-primary" data-status-setup-link data-setup-i18n="setup.action.open_existing_status">
               Open existing status page
             </a>
-            <a href="#setup-progress" class="btn">
+            <a href="#setup-progress" class="btn" data-setup-i18n="setup.action.back_to_first_run_progress">
               Back to first-run progress
             </a>
           </div>
@@ -1920,6 +1938,7 @@
           </p>
           <div class="button-row">
             <button type="button" class="btn btn-primary"
+                    data-setup-i18n="setup.action.test_all_keys"
                     hx-post="/setup/test"
                     hx-include="#setup-form"
                     hx-target="#test-results"
@@ -1927,13 +1946,14 @@
               Test All Keys
             </button>
             <button type="button" class="btn"
+                    data-setup-i18n="setup.action.save_all"
                     hx-post="/setup/save"
                     hx-include="#setup-form"
                     hx-swap="none"
                     onclick="showToast('Saved to .env')">
               Save All
             </button>
-            <a href="/" class="btn">Back to Dashboard</a>
+            <a href="/" class="btn" data-setup-i18n="setup.action.back_to_dashboard">Back to Dashboard</a>
           </div>
           <div id="test-results"></div>
         </details>
@@ -2009,8 +2029,550 @@ const setupClientState = {
   collectionLifecycleTerminal: false,
   lastCollectionStatus: {{ (setup_state.collection_progress_status or setup_state.first_run_status or 'not_started')|tojson }},
   feedNavigationAvailable: {{ 'true' if setup_state.feed_navigation_available else 'false' }},
-  setupNavigationLocked: {{ 'true' if setup_state.setup_navigation_locked else 'false' }}
+  setupNavigationLocked: {{ 'true' if setup_state.setup_navigation_locked else 'false' }},
+  latestSetupState: SETUP_INITIAL_COLLECTION_POLL.state,
+  latestCollectionProgress: SETUP_INITIAL_COLLECTION_POLL
 };
+const SETUP_PAGE_I18N = {
+  ko: {
+    'setup.status.openai_missing': '첫 로컬 설정을 시작하려면 OpenAI 키를 입력하세요. Supabase는 비워둘 수 있고, 로컬 SQLite가 기본 저장소입니다.',
+    'setup.status.openai_present': 'OpenAI 키가 있습니다. 첫 수집을 시작하면 로컬 SQLite 설정을 자동으로 저장합니다.',
+    'setup.status.supabase_selected': '고급 Supabase 호스팅/팀 모드를 선택했습니다. 이 모드에는 SUPABASE_URL과 SUPABASE_KEY가 필요합니다. 원큐 설정은 계속 로컬 SQLite 첫 피드를 만듭니다.',
+    'setup.status.ready': '원큐 로컬 설정 준비가 끝났습니다. API 키는 브라우저 저장소가 아니라 .env에 저장됩니다.',
+    'setup.supabase.selected': 'SUPABASE_URL과 SUPABASE_KEY는 여기서 선택한 고급 Supabase 호스팅/팀 모드에만 필요합니다.',
+    'setup.supabase.local': '로컬 SQLite 선택됨: Supabase는 비워둘 수 있습니다. SUPABASE_URL과 SUPABASE_KEY는 나중에 Supabase 호스팅/팀 모드를 선택할 때만 필요합니다.',
+    'setup.button.collection_running': '첫 수집 실행 중...',
+    'setup.button.start_collection': '첫 수집 시작',
+    'setup.button.enter_key': '시작하려면 OpenAI 키 입력',
+    'setup.criteria.custom': '이 한 줄 관심사가 생성되는 AI 빌더 기준 프로필의 씨앗이 됩니다.',
+    'setup.criteria.default': '관심사를 건너뛰어도 기본 기준으로 설정을 완료할 수 있습니다.',
+    'setup.step.status_prefix': '상태: {status}',
+    'setup.step.guidance_prefix': '가이드: {guidance}',
+    'setup.step.essential.ready': '준비됨',
+    'setup.step.essential.needs_key': 'OpenAI 키 필요',
+    'setup.step.essential.guidance': '키를 붙여넣고 계속하세요. SQLite는 자동 적용되고 Supabase와 delivery는 선택 사항입니다.',
+    'setup.step.progress.guidance': '느린 수집 중에는 여기서 새로고침하세요. 아직 아이템이 준비되지 않았다면 이 진행 카드에 머무르세요.',
+    'setup.step.feed.ready': '피드 아이템 준비됨',
+    'setup.step.feed.waiting': '첫 아이템 대기 중',
+    'setup.step.feed.guidance': '/feed가 기본 목적지입니다. 소스 검토, 시그널, 브리프, 앰비언트 화면은 계속 접근 가능합니다.',
+    'setup.step.completion.complete': '완료',
+    'setup.step.completion.partial': '피드 사용 가능, 수집 마무리 중',
+    'setup.step.completion.waiting': '피드 아이템 대기 중',
+    'setup.step.completion.guidance': '완료에는 최소 로컬 설정 확인, 읽을 수 있는 피드 데이터, 첫 수집 완료 신호가 필요합니다.',
+    'setup.feedback.first_run_succeeded': '첫 실행 성공',
+    'setup.feedback.feed_usable': '수집이 끝나는 동안 피드 사용 가능',
+    'setup.feedback.in_progress': '첫 실행 진행 중',
+    'setup.feedback.not_started': '첫 실행 전',
+    'setup.feedback.ready_count': '피드가 {count}개 아이템으로 준비되었습니다. /feed를 열어 개인 알고리즘을 읽기 시작하세요.',
+    'setup.feedback.partial_count': '로컬 SQLite에 읽을 수 있는 피드 아이템 {count}개가 있습니다. 수집 완료를 계속 확인하는 동안 /setup에 머무르세요.',
+    'setup.feedback.progress_ready': '필수 로컬 설정이 준비되었고 Hedwig이 첫 피드 아이템을 기다리고 있습니다. /feed가 열릴 때까지 이 페이지를 열어두세요.',
+    'setup.feedback.start_after_key': 'OpenAI 키를 저장한 뒤 첫 수집을 시작하세요. 진행, 성공, 실패 피드백이 여기에 표시됩니다.',
+    'setup.progress.complete_title': '설정/피드 초기화 완료',
+    'setup.progress.partial_title': '수집이 끝나는 동안 피드 사용 가능',
+    'setup.progress.running_title': '설정/피드 초기화 실행 중',
+    'setup.progress.idle_title': '설정/피드 초기화 전',
+    'setup.progress.complete_message': '피드 아이템이 준비되었습니다. /feed로 이동하세요.',
+    'setup.progress.partial_message': '피드 아이템을 로컬 SQLite에서 읽을 수 있습니다. 추적 중인 첫 수집이 끝날 때까지 설정은 피드 내비게이션을 잠급니다.',
+    'setup.progress.running_message': '기준과 로컬 SQLite가 준비되었습니다. Hedwig이 첫 피드를 수집하고 점수화하는 동안 이 페이지가 계속 확인합니다.',
+    'setup.progress.local_saved_message': '필수 로컬 설정이 저장되었습니다. 첫 수집을 시작해 피드 초기화를 시작하세요.',
+    'setup.progress.save_key_message': '로컬 설정과 첫 피드 초기화를 사용하려면 OPENAI_API_KEY를 저장하세요.',
+    'setup.result.feed_ready': '피드가 {count}개 아이템으로 준비되었습니다.',
+    'setup.result.open_feed': '/feed 열기',
+    'setup.result.progressing': '설정이 진행 중입니다. Hedwig이 첫 로컬 피드를 확인하는 동안 이 페이지에 머무르세요.',
+    'setup.success.copy': '첫 실행 설정이 OpenAI, 로컬 SQLite, 생성된 기준, 대시보드 피드의 {count}개 아이템으로 완료되었습니다.',
+    'setup.partial.copy': 'SQLite 기반 피드 아이템 {count}개를 읽을 수 있지만, 추적 중인 첫 수집이 끝날 때까지 /setup에 머무르세요. 완료 후 피드 내비게이션이 열립니다.',
+    'setup.completion.pill.complete': '완료',
+    'setup.completion.pill.partial': '피드 사용 가능',
+    'setup.completion.pill.waiting': '대기 중',
+    'setup.completion.message.complete': '첫 실행 설정이 완료되었습니다. 대시보드 피드를 열어 개인 알고리즘을 읽기 시작하세요.',
+    'setup.completion.message.partial': '로컬 SQLite 피드 데이터를 지금 사용할 수 있지만, 추적 중인 첫 수집이 끝날 때까지 설정은 피드 내비게이션을 잠급니다.',
+    'setup.completion.message.waiting': '첫 수집이 끝나는 동안 설정은 여기서 계속 진행될 수 있습니다. 피드는 대체 경로로 접근 가능하지만, 이 완료 게이트는 아이템이 준비된 뒤에만 초록색이 됩니다.',
+    'setup.completion.link.complete': '완료된 /feed 열기',
+    'setup.completion.link.partial': '수집 후 피드 열림',
+    'setup.completion.link.waiting': '준비 후 피드 열림',
+    'setup.completion.count_ready': '피드 아이템 {count}개',
+    'setup.completion.count_empty': '아직 피드 아이템 없음',
+    'setup.completion.pending': '준비 기준 대기 중',
+    'setup.completion.redirect_waiting': '피드 아이템 대기 중',
+    'setup.completion.nav.complete': '/feed 준비됨',
+    'setup.completion.nav.partial': '피드 사용 가능, 마무리 중',
+    'setup.completion.nav.waiting': '첫 피드 대기 중',
+    'setup.post_nav.complete': '설정이 완료되었습니다. Hedwig의 주요 화면으로 계속 진행하세요.',
+    'setup.post_nav.partial': '피드 데이터를 지금 사용할 수 있지만, 수집이 끝날 때까지 설정은 내비게이션을 여기에 둡니다.',
+    'setup.post_nav.waiting': '설정이 첫 피드 아이템을 기다리는 동안 이 주요 화면들은 계속 접근 가능합니다.',
+    'setup.progress_step.feed_items': '피드 아이템 사용 가능{countSuffix}',
+    'setup.preview.pending_title': '첫 피드 미리보기 대기 중',
+    'setup.preview.waiting_count': '대기 중',
+    'setup.preview.waiting_meta': '첫 수집이 아이템을 저장하면 로컬 SQLite 피드 데이터가 여기에 표시됩니다.',
+    'setup.preview.ready_summary': '이 아이템은 로컬 대시보드 피드에서 준비되었습니다.',
+    'setup.preview.waiting_summary': '이 인라인 미리보기는 /feed와 같은 로컬 SQLite 피드 데이터를 사용합니다. 첫 수집을 시작한 뒤 이 페이지를 열어 준비 상태와 복구를 확인하세요.',
+    'setup.preview.open_source': '원문 열기',
+    'setup.preview.open_feed': '/feed 열기',
+    'setup.preview.waiting_link': '/feed 준비 대기 중',
+    'setup.collection.status': '상태 {status}: 수집 {collected}, 필터 {filtered}, 점수화 {scored}, 저장 {saved}.',
+    'setup.primary_path.start': '필수 설정 시작',
+    'setup.primary_path.instructions': '첫 실행 온보딩에는 이 통합 경로를 사용하세요. 필수 설정은 OpenAI 전용과 로컬 상태로 유지되고, 기존 저장소, delivery, 소스, 프로필, 가져오기/내보내기, 설정, 메타 컨트롤은 아래의 접힌 선택 섹션에서 계속 접근할 수 있습니다.',
+    'setup.action.optional_interest': '선택 관심사',
+    'setup.action.first_run_progress': '첫 실행 진행',
+    'setup.action.view_feed': '피드 보기',
+    'setup.action.review_setup_summary': '설정 요약 검토',
+    'setup.action.keep_watching_progress': '진행 계속 보기',
+    'setup.action.optional_advanced_controls': '선택 고급 컨트롤',
+    'setup.action.open_advanced_controls': '고급 설정 컨트롤 열기',
+    'setup.action.configure_delivery': 'Delivery 채널 설정',
+    'setup.action.configure_source_keys': '소스 API 키 설정',
+    'setup.action.configure_model_backend': '모델/백엔드 설정',
+    'setup.action.open_general_settings': '일반 설정 섹션 열기',
+    'setup.action.open_detailed_source_settings': '자세한 소스 설정 열기',
+    'setup.action.open_profile_export': '프로필과 내보내기 열기',
+    'setup.action.export_import_algorithm': '알고리즘 내보내기/가져오기',
+    'setup.action.save_required_inputs': '필수 입력 저장',
+    'setup.action.continue_optional_interests': '선택 관심사로 계속',
+    'setup.action.skip_default_criteria': '건너뛰고 기본 기준 사용',
+    'setup.action.continue_with_interests': '이 관심사로 계속',
+    'setup.action.enter_key_continue': '계속하려면 OpenAI 키 입력',
+    'setup.action.save_required_continue': '계속하려면 필수 입력 저장',
+    'setup.action.save_source_toggles': '소스 토글 저장',
+    'setup.action.view_source_registry': '소스 레지스트리 보기',
+    'setup.action.continue_first_run_status': '첫 실행 상태로 계속',
+    'setup.action.retry_first_collection': '첫 수집 다시 시도',
+    'setup.action.enter_key_retry': '다시 시도하려면 OpenAI 키 입력',
+    'setup.action.save_required_retry': '다시 시도하려면 필수 입력 저장',
+    'setup.action.refresh_status': '상태 새로고침',
+    'setup.action.open_status': '/status 열기',
+    'setup.action.start_first_collection': '첫 수집 시작',
+    'setup.action.enter_key_start_collection': '첫 수집을 시작하려면 OpenAI 키 입력',
+    'setup.action.save_required_start_collection': '첫 수집을 시작하려면 필수 입력 저장',
+    'setup.action.open_ambient_surface': '앰비언트 화면 열기',
+    'setup.action.open_brief_surface': '브리프 화면 열기',
+    'setup.action.refresh_until_ready': '준비될 때까지 새로고침',
+    'setup.action.skip_to_advanced': '고급으로 건너뛰기',
+    'setup.action.create_supabase_tables': 'Supabase 테이블 만들기',
+    'setup.action.save_delivery_settings': 'Delivery 설정 저장',
+    'setup.action.test_delivery_settings': 'Delivery 설정 테스트',
+    'setup.action.open_ambient_delivery': '앰비언트 delivery 열기',
+    'setup.action.open_brief_delivery': '브리프 delivery 열기',
+    'setup.action.skip_delivery': '지금은 delivery 건너뛰기',
+    'setup.action.defer_delivery': '첫 피드 이후로 미루기',
+    'setup.action.save_source_api_keys': '소스/API 키 설정 저장',
+    'setup.action.open_source_toggles': '소스 토글 열기',
+    'setup.action.save_model_backend_settings': '모델/백엔드 설정 저장',
+    'setup.action.open_model_backend_settings': '기존 모델/백엔드 설정 열기',
+    'setup.action.open_backend_health_status': '백엔드 상태 열기',
+    'setup.action.open_source_settings': '소스 설정 열기',
+    'setup.control.import_algorithm_bundle': '알고리즘 번들 가져오기',
+    'setup.action.download_algorithm_bundle': '알고리즘 번들 다운로드',
+    'setup.action.dry_run_import': '가져오기 드라이런',
+    'setup.action.confirm_import': '가져오기 확정',
+    'setup.action.open_profile_export_surface': '프로필 내보내기 화면 열기',
+    'setup.action.open_existing_profile': '기존 프로필 페이지 열기',
+    'setup.action.open_existing_settings': '기존 설정 페이지 열기',
+    'setup.action.back_to_source_defaults': '소스 기본값으로 돌아가기',
+    'setup.action.open_existing_status': '기존 상태 페이지 열기',
+    'setup.action.back_to_first_run_progress': '첫 실행 진행으로 돌아가기',
+    'setup.action.test_all_keys': '모든 키 테스트',
+    'setup.action.save_all': '모두 저장',
+    'setup.action.back_to_dashboard': '대시보드로 돌아가기',
+    'setup.step.essential.eyebrow': '필수',
+    'setup.step.essential.title': 'OpenAI 키 + 로컬 SQLite',
+    'setup.step.essential.badge': '최소 설정',
+    'setup.step.essential.instructions': '이 단계만 차단 조건입니다. 로컬 SQLite가 기본 저장소이며, 설정 완료에 외부 delivery 채널은 필요하지 않습니다.',
+    'setup.step.criteria.eyebrow': '선택 관심사',
+    'setup.step.criteria.title': '기본 기준을 쓰거나 한 줄 스티어링을 추가하세요',
+    'setup.step.criteria.badge': '선택 사항',
+    'setup.step.criteria.instructions': '관심사 선택은 필수가 아닙니다. 이 카드를 건너뛰면 Hedwig은 AI 에이전트, LLM 도구, 연구 논문에 집중하는 AI 빌더용 빠른 시작 기본 기준을 유지합니다.',
+    'setup.step.sources.eyebrow': '자동 소스',
+    'setup.step.sources.title': '기본 소스 구성이 자동 적용됩니다',
+    'setup.step.sources.badge': '작업 필요 없음',
+    'setup.step.sources.instructions': '원큐 설정은 현재 활성화된 registry/source_settings 소스 세트를 자동으로 사용합니다. 소스 선택은 필수 설정 단계가 아니며, 첫 실행 프리셋을 바꾸고 싶을 때만 선택 컨트롤을 펼치세요.',
+    'setup.step.progress.eyebrow': '진행',
+    'setup.step.progress.title': '첫 실행 상태',
+    'setup.step.progress.instructions': '긴 첫 수집에는 시간이 걸릴 수 있습니다. Hedwig이 수집하고 점수화하는 동안 이 페이지가 계속 유용하며, 준비 기준을 통과하면 /feed 내비게이션이 나타납니다.',
+    'setup.step.feed.eyebrow': '소비와 운영',
+    'setup.step.feed.title': '피드 우선 대시보드',
+    'setup.step.feed.badge': '기본 목적지',
+    'setup.step.feed.instructions': 'Hedwig의 첫 delivery 대상은 대시보드 피드입니다. 모니터링과 소스 검토는 가까이 두고, 파워 유저 화면은 Advanced에 보존됩니다.',
+    'setup.step.completion.eyebrow': '완료 게이트',
+    'setup.step.completion.title': '피드 준비 완료',
+    'setup.step.advanced.eyebrow': '고급',
+    'setup.step.advanced.title': '선택 구성',
+    'setup.step.advanced.badge': '기본 접힘',
+    'setup.step.advanced.instructions': '이 컨트롤들은 첫 실행 설정을 막지 않으면서 기존 설정 마법사와 파워 유저 경로를 보존합니다.'
+  },
+  zh: {
+    'setup.status.openai_missing': '输入 OpenAI key 以启用首次本地设置。Supabase 可留空；本地 SQLite 是默认存储。',
+    'setup.status.openai_present': '已填写 OpenAI key。启动首次收集会自动保存本地 SQLite 设置。',
+    'setup.status.supabase_selected': '已选择高级 Supabase 托管/团队模式；该模式需要 SUPABASE_URL 和 SUPABASE_KEY。一次性设置仍会创建本地 SQLite 首个信息流。',
+    'setup.status.ready': '一次性本地设置已就绪。你的 API key 会保存到 .env，而不是浏览器存储。',
+    'setup.supabase.selected': 'SUPABASE_URL 和 SUPABASE_KEY 仅用于这里选择的高级 Supabase 托管/团队模式。',
+    'setup.supabase.local': '已选择本地 SQLite：Supabase 可留空。只有稍后选择 Supabase 托管/团队模式时才需要 SUPABASE_URL 和 SUPABASE_KEY。',
+    'setup.button.collection_running': '首次收集中...',
+    'setup.button.start_collection': '启动首次收集',
+    'setup.button.enter_key': '输入 OpenAI key 后启动',
+    'setup.criteria.custom': '这一行兴趣会作为生成 AI 构建者标准画像的种子。',
+    'setup.criteria.default': '可以跳过兴趣选择，并用默认标准完成设置。',
+    'setup.step.status_prefix': '状态：{status}',
+    'setup.step.guidance_prefix': '指引：{guidance}',
+    'setup.step.essential.ready': '就绪',
+    'setup.step.essential.needs_key': '需要 OpenAI key',
+    'setup.step.essential.guidance': '粘贴 key 后继续。SQLite 会自动应用；Supabase 和 delivery 是可选项。',
+    'setup.step.progress.guidance': '收集较慢时在这里刷新；如果项目尚未就绪，请留在此进度卡片。',
+    'setup.step.feed.ready': '信息流项目就绪',
+    'setup.step.feed.waiting': '等待首批项目',
+    'setup.step.feed.guidance': '/feed 是默认目的地；来源审查、信号、简报和环境触达页面仍可访问。',
+    'setup.step.completion.complete': '完成',
+    'setup.step.completion.partial': '信息流可用，收集收尾中',
+    'setup.step.completion.waiting': '等待信息流项目',
+    'setup.step.completion.guidance': '完成需要最小本地设置检查、可读取的信息流数据以及首次收集完成信号。',
+    'setup.feedback.first_run_succeeded': '首次运行成功',
+    'setup.feedback.feed_usable': '收集完成前信息流已可用',
+    'setup.feedback.in_progress': '首次运行进行中',
+    'setup.feedback.not_started': '首次运行未开始',
+    'setup.feedback.ready_count': '信息流已准备好 {count} 个项目。打开 /feed 开始阅读你的个人算法。',
+    'setup.feedback.partial_count': '本地 SQLite 中有 {count} 个可读取的信息流项目。请留在 /setup，等待收集完成检查。',
+    'setup.feedback.progress_ready': '必需的本地设置已就绪，Hedwig 正在等待首批信息流项目。请保持此页面打开直到 /feed 解锁。',
+    'setup.feedback.start_after_key': '保存 OpenAI key 后启动首次收集；进度、成功和失败反馈会显示在这里。',
+    'setup.progress.complete_title': '设置/信息流初始化完成',
+    'setup.progress.partial_title': '收集完成前信息流已可用',
+    'setup.progress.running_title': '设置/信息流初始化运行中',
+    'setup.progress.idle_title': '设置/信息流初始化尚未开始',
+    'setup.progress.complete_message': '信息流项目已就绪。继续前往 /feed。',
+    'setup.progress.partial_message': '现在可从本地 SQLite 读取信息流项目。设置会锁定信息流导航，直到跟踪的首次收集完成。',
+    'setup.progress.running_message': '标准和本地 SQLite 已就绪。Hedwig 正在收集并评分首个信息流；此页面会继续轮询。',
+    'setup.progress.local_saved_message': '必需的本地设置已保存。启动首次收集以开始信息流初始化。',
+    'setup.progress.save_key_message': '保存 OPENAI_API_KEY 以启用本地设置和首个信息流初始化。',
+    'setup.result.feed_ready': '信息流已准备好 {count} 个项目。',
+    'setup.result.open_feed': '打开 /feed',
+    'setup.result.progressing': '设置正在进行。Hedwig 验证首个本地信息流时请留在此页面。',
+    'setup.success.copy': '首次设置已完成：OpenAI、本地 SQLite、生成的标准，以及仪表盘信息流中的 {count} 个项目已可用。',
+    'setup.partial.copy': '{count} 个 SQLite 支持的信息流项目可读取，但请留在 /setup，直到跟踪的首次收集完成。完成后信息流导航会解锁。',
+    'setup.completion.pill.complete': '完成',
+    'setup.completion.pill.partial': '信息流可用',
+    'setup.completion.pill.waiting': '等待中',
+    'setup.completion.message.complete': '首次设置已完成。打开仪表盘信息流，开始阅读你的个人算法。',
+    'setup.completion.message.partial': '本地 SQLite 信息流数据现在可用，但设置会锁定信息流导航直到跟踪的首次收集完成。',
+    'setup.completion.message.waiting': '首次收集完成时，设置可在此继续运行。信息流仍可作为后备路径访问，但此完成门槛只会在项目可用后变绿。',
+    'setup.completion.link.complete': '打开已完成的 /feed',
+    'setup.completion.link.partial': '收集后解锁信息流',
+    'setup.completion.link.waiting': '就绪后打开信息流',
+    'setup.completion.count_ready': '{count} 个信息流项目',
+    'setup.completion.count_empty': '暂无信息流项目',
+    'setup.completion.pending': '等待就绪标准',
+    'setup.completion.redirect_waiting': '等待信息流项目',
+    'setup.completion.nav.complete': '/feed 已就绪',
+    'setup.completion.nav.partial': '信息流可用，收尾中',
+    'setup.completion.nav.waiting': '等待首个信息流',
+    'setup.post_nav.complete': '设置已完成。继续前往 Hedwig 主要界面。',
+    'setup.post_nav.partial': '信息流数据现在可用，但设置会把导航留在这里直到收集完成。',
+    'setup.post_nav.waiting': '设置等待首批信息流项目时，这些主要界面仍可访问。',
+    'setup.progress_step.feed_items': '信息流项目可用{countSuffix}',
+    'setup.preview.pending_title': '首个信息流预览等待中',
+    'setup.preview.waiting_count': '等待中',
+    'setup.preview.waiting_meta': '首次收集保存项目后，本地 SQLite 信息流数据会显示在这里。',
+    'setup.preview.ready_summary': '此项目已在你的本地仪表盘信息流中就绪。',
+    'setup.preview.waiting_summary': '此内联预览使用与 /feed 相同的本地 SQLite 信息流数据。启动首次收集后，保持此页面打开以查看就绪状态和恢复信息。',
+    'setup.preview.open_source': '打开原始项目',
+    'setup.preview.open_feed': '打开 /feed',
+    'setup.preview.waiting_link': '等待 /feed 就绪',
+    'setup.collection.status': '状态 {status}：收集 {collected}，过滤 {filtered}，评分 {scored}，保存 {saved}。',
+    'setup.primary_path.start': '开始必需设置',
+    'setup.primary_path.instructions': '首次引导请使用这条合并路径。必需设置保持 OpenAI-only 和本地模式；现有存储、delivery、来源、资料、导入/导出、设置和元控制仍可在下方折叠的可选区访问。',
+    'setup.action.optional_interest': '可选兴趣',
+    'setup.action.first_run_progress': '首次运行进度',
+    'setup.action.view_feed': '查看信息流',
+    'setup.action.review_setup_summary': '查看设置摘要',
+    'setup.action.keep_watching_progress': '继续查看进度',
+    'setup.action.optional_advanced_controls': '可选高级控制',
+    'setup.action.open_advanced_controls': '打开高级设置控制',
+    'setup.action.configure_delivery': '配置 delivery 渠道',
+    'setup.action.configure_source_keys': '配置来源 API key',
+    'setup.action.configure_model_backend': '配置模型/后端设置',
+    'setup.action.open_general_settings': '打开通用设置区',
+    'setup.action.open_detailed_source_settings': '打开详细来源设置',
+    'setup.action.open_profile_export': '打开资料和导出',
+    'setup.action.export_import_algorithm': '导出/导入算法',
+    'setup.action.save_required_inputs': '保存必需输入',
+    'setup.action.continue_optional_interests': '继续到可选兴趣',
+    'setup.action.skip_default_criteria': '跳过并使用默认标准',
+    'setup.action.continue_with_interests': '用这些兴趣继续',
+    'setup.action.enter_key_continue': '输入 OpenAI key 后继续',
+    'setup.action.save_required_continue': '保存必需输入后继续',
+    'setup.action.save_source_toggles': '保存来源开关',
+    'setup.action.view_source_registry': '查看来源注册表',
+    'setup.action.continue_first_run_status': '继续到首次运行状态',
+    'setup.action.retry_first_collection': '重试首次收集',
+    'setup.action.enter_key_retry': '输入 OpenAI key 后重试',
+    'setup.action.save_required_retry': '保存必需输入后重试',
+    'setup.action.refresh_status': '刷新状态',
+    'setup.action.open_status': '打开 /status',
+    'setup.action.start_first_collection': '启动首次收集',
+    'setup.action.enter_key_start_collection': '输入 OpenAI key 后启动首次收集',
+    'setup.action.save_required_start_collection': '保存必需输入后启动首次收集',
+    'setup.action.open_ambient_surface': '打开环境触达界面',
+    'setup.action.open_brief_surface': '打开简报界面',
+    'setup.action.refresh_until_ready': '刷新直到就绪',
+    'setup.action.skip_to_advanced': '跳到高级设置',
+    'setup.action.create_supabase_tables': '创建 Supabase 表',
+    'setup.action.save_delivery_settings': '保存 delivery 设置',
+    'setup.action.test_delivery_settings': '测试 delivery 设置',
+    'setup.action.open_ambient_delivery': '打开环境 delivery',
+    'setup.action.open_brief_delivery': '打开简报 delivery',
+    'setup.action.skip_delivery': '暂时跳过 delivery',
+    'setup.action.defer_delivery': '推迟到首个信息流之后',
+    'setup.action.save_source_api_keys': '保存来源/API key 设置',
+    'setup.action.open_source_toggles': '打开来源开关',
+    'setup.action.save_model_backend_settings': '保存模型/后端设置',
+    'setup.action.open_model_backend_settings': '打开现有模型/后端设置',
+    'setup.action.open_backend_health_status': '打开后端健康状态',
+    'setup.action.open_source_settings': '打开来源设置',
+    'setup.control.import_algorithm_bundle': '导入算法包',
+    'setup.action.download_algorithm_bundle': '下载算法包',
+    'setup.action.dry_run_import': '试运行导入',
+    'setup.action.confirm_import': '确认导入',
+    'setup.action.open_profile_export_surface': '打开资料导出界面',
+    'setup.action.open_existing_profile': '打开现有资料页',
+    'setup.action.open_existing_settings': '打开现有设置页',
+    'setup.action.back_to_source_defaults': '返回来源默认值',
+    'setup.action.open_existing_status': '打开现有状态页',
+    'setup.action.back_to_first_run_progress': '返回首次运行进度',
+    'setup.action.test_all_keys': '测试所有 key',
+    'setup.action.save_all': '全部保存',
+    'setup.action.back_to_dashboard': '返回仪表盘',
+    'setup.step.essential.eyebrow': '必需',
+    'setup.step.essential.title': 'OpenAI key + 本地 SQLite',
+    'setup.step.essential.badge': '最小设置',
+    'setup.step.essential.instructions': '这是唯一阻塞步骤。本地 SQLite 是默认存储模式，完成设置不需要外部 delivery 渠道。',
+    'setup.step.criteria.eyebrow': '可选兴趣',
+    'setup.step.criteria.title': '使用默认标准，或添加一行调校',
+    'setup.step.criteria.badge': '可选',
+    'setup.step.criteria.instructions': '兴趣选择不是必需的。如果跳过此卡片，Hedwig 会保留面向 AI 构建者的快速开始默认标准，关注 AI agent、LLM 工具和研究论文。',
+    'setup.step.sources.eyebrow': '自动来源',
+    'setup.step.sources.title': '默认来源配置会自动应用',
+    'setup.step.sources.badge': '无需操作',
+    'setup.step.sources.instructions': '一次性设置会自动使用当前启用的 registry/source_settings 来源集合。来源选择不是必需设置步骤；只有想覆盖首次运行预设时才展开可选控制。',
+    'setup.step.progress.eyebrow': '进度',
+    'setup.step.progress.title': '首次运行状态',
+    'setup.step.progress.instructions': '较长的首次收集可能需要一些时间。Hedwig 收集和评分期间，此页面会保持有用；通过就绪标准后会显示 /feed 导航。',
+    'setup.step.feed.eyebrow': '阅读和操作',
+    'setup.step.feed.title': '信息流优先仪表盘',
+    'setup.step.feed.badge': '默认目标',
+    'setup.step.feed.instructions': 'Hedwig 的首个 delivery 目标是仪表盘信息流。监控和来源审查保持就近可用；高级用户界面仍保留在 Advanced 中。',
+    'setup.step.completion.eyebrow': '完成门槛',
+    'setup.step.completion.title': '信息流就绪完成',
+    'setup.step.advanced.eyebrow': '高级',
+    'setup.step.advanced.title': '可选配置',
+    'setup.step.advanced.badge': '默认折叠',
+    'setup.step.advanced.instructions': '这些控制保留旧设置向导和高级用户路径，同时不阻塞首次运行设置。'
+  },
+  en: {
+    'setup.status.openai_missing': 'Enter an OpenAI key to enable first-run local setup. Supabase can stay blank; local SQLite is the storage default.',
+    'setup.status.openai_present': 'OpenAI key is present. Starting the first collection will save the local SQLite setup automatically.',
+    'setup.status.supabase_selected': 'Supabase hosted/team mode selected for advanced storage; fill SUPABASE_URL and SUPABASE_KEY for that mode. The one-shot setup action still creates a local SQLite first feed.',
+    'setup.status.ready': 'Ready for one-shot local setup. Your API key will be saved to .env, not browser storage.',
+    'setup.supabase.selected': 'SUPABASE_URL and SUPABASE_KEY are needed only for the advanced '
+      + 'Supabase hosted/team mode selected here.',
+    'setup.supabase.local': 'Local SQLite selected: Supabase can stay blank. SUPABASE_URL and SUPABASE_KEY are only needed if you later choose Supabase hosted/team mode.',
+    'setup.button.collection_running': 'First collection running...',
+    'setup.button.start_collection': 'Start first collection',
+    'setup.button.enter_key': 'Enter OpenAI key to start',
+    'setup.criteria.custom': 'This one-line interest will seed the generated AI-builder criteria profile.',
+    'setup.criteria.default': 'You can skip interest selection and still complete setup with the default criteria.',
+    'setup.step.status_prefix': 'Status: {status}',
+    'setup.step.guidance_prefix': 'Guidance: {guidance}',
+    'setup.step.essential.ready': 'ready',
+    'setup.step.essential.needs_key': 'needs OpenAI key',
+    'setup.step.essential.guidance': 'paste the key, then continue. SQLite is applied automatically; Supabase and delivery stay optional.',
+    'setup.step.progress.guidance': 'refresh here during slow collection; if items are not ready yet, stay on this progress card.',
+    'setup.step.feed.ready': 'feed items ready',
+    'setup.step.feed.waiting': 'waiting for first items',
+    'setup.step.feed.guidance': '/feed is the default destination; source review, signals, briefs, and ambient surfaces remain reachable.',
+    'setup.step.completion.complete': 'complete',
+    'setup.step.completion.partial': 'feed usable, collection finishing',
+    'setup.step.completion.waiting': 'waiting on feed items',
+    'setup.step.completion.guidance': 'completion requires the minimum local setup checks, readable feed data, and the first collection completion signal.',
+    'setup.feedback.first_run_succeeded': 'First run succeeded',
+    'setup.feedback.feed_usable': 'Feed usable while collection finishes',
+    'setup.feedback.in_progress': 'First run in progress',
+    'setup.feedback.not_started': 'First run not started',
+    'setup.feedback.ready_count': 'Feed is ready with {count} item{plural}. Open /feed to start consuming your personal algorithm.',
+    'setup.feedback.partial_count': 'Local SQLite has {count} readable feed item{plural}. Stay on /setup while it keeps polling for collection completion.',
+    'setup.feedback.progress_ready': 'Required local setup is ready and Hedwig is waiting for first feed items. Keep this page open until /feed unlocks.',
+    'setup.feedback.start_after_key': 'Start the first collection after saving your OpenAI key; progress, success, and failure feedback appears here.',
+    'setup.progress.complete_title': 'Setup/feed initialization complete',
+    'setup.progress.partial_title': 'Feed usable while collection finishes',
+    'setup.progress.running_title': 'Setup/feed initialization is running',
+    'setup.progress.idle_title': 'Setup/feed initialization has not started',
+    'setup.progress.complete_message': 'Feed items are ready. Continue to /feed.',
+    'setup.progress.partial_message': 'Feed items are readable from local SQLite now. Setup keeps feed navigation locked until the tracked first collection completes.',
+    'setup.progress.running_message': 'Criteria and local SQLite are ready. Hedwig is collecting and scoring the first feed; this page will keep polling.',
+    'setup.progress.local_saved_message': 'Required local setup is saved. Start the first collection to begin feed initialization.',
+    'setup.progress.save_key_message': 'Save OPENAI_API_KEY to enable local setup and first-feed initialization.',
+    'setup.result.feed_ready': 'Feed ready with {count} item{plural}.',
+    'setup.result.open_feed': 'Open /feed',
+    'setup.result.progressing': 'Setup is progressing. Stay on this page while Hedwig verifies the first local feed.',
+    'setup.success.copy': 'First-run setup completed with OpenAI, local SQLite, generated criteria, and {count} feed item{plural} available in the dashboard feed.',
+    'setup.partial.copy': '{count} SQLite-backed feed item{plural} are readable, but stay on /setup until the tracked first collection completes. Feed navigation unlocks after completion.',
+    'setup.completion.pill.complete': 'Complete',
+    'setup.completion.pill.partial': 'Feed usable',
+    'setup.completion.pill.waiting': 'Waiting',
+    'setup.completion.message.complete': 'First-run setup is complete. Open the dashboard feed to start consuming your personal algorithm.',
+    'setup.completion.message.partial': 'Local SQLite feed data is usable now, but setup keeps feed navigation locked until the tracked first collection finishes.',
+    'setup.completion.message.waiting': 'Setup can keep running here while the first collection finishes. The feed remains reachable as a fallback, but this completion gate only turns green once items are available.',
+    'setup.completion.link.complete': 'Open completed /feed',
+    'setup.completion.link.partial': 'Feed unlocks after collection',
+    'setup.completion.link.waiting': 'Feed opens after readiness',
+    'setup.completion.count_ready': '{count} feed item{plural}',
+    'setup.completion.count_empty': 'No feed items yet',
+    'setup.completion.pending': 'Pending readiness criteria',
+    'setup.completion.redirect_waiting': 'Waiting for feed items',
+    'setup.completion.nav.complete': 'Ready for /feed',
+    'setup.completion.nav.partial': 'Feed usable, finishing',
+    'setup.completion.nav.waiting': 'Waiting on first feed',
+    'setup.post_nav.complete': 'Setup is complete. Continue with the primary Hedwig surfaces.',
+    'setup.post_nav.partial': 'Feed data is usable now, but setup keeps navigation here until collection finishes.',
+    'setup.post_nav.waiting': 'These primary surfaces remain reachable while setup waits for first feed items.',
+    'setup.progress_step.feed_items': 'Feed items available{countSuffix}',
+    'setup.preview.pending_title': 'First feed preview pending',
+    'setup.preview.waiting_count': 'Waiting',
+    'setup.preview.waiting_meta': 'Local SQLite feed data will appear here after the first collection saves items.',
+    'setup.preview.ready_summary': 'This item is ready in your local dashboard feed.',
+    'setup.preview.waiting_summary': 'This inline preview uses the same local SQLite feed data as /feed. Start the first collection, then keep this page open for ready-state content and recovery.',
+    'setup.preview.open_source': 'Open source item',
+    'setup.preview.open_feed': 'Open /feed',
+    'setup.preview.waiting_link': 'Waiting for /feed readiness',
+    'setup.collection.status': 'Status {status}: collected {collected}, filtered {filtered}, scored {scored}, saved {saved}.',
+    'setup.primary_path.start': 'Start required setup',
+    'setup.primary_path.instructions': 'Use this consolidated path for first-run onboarding. It keeps required setup OpenAI-only and local, while existing storage, delivery, source, profile, import/export, settings, and meta controls remain reachable below as collapsed optional sections.',
+    'setup.action.optional_interest': 'Optional interest',
+    'setup.action.first_run_progress': 'First-run progress',
+    'setup.action.view_feed': 'View feed',
+    'setup.action.review_setup_summary': 'Review setup summary',
+    'setup.action.keep_watching_progress': 'Keep watching progress',
+    'setup.action.optional_advanced_controls': 'Optional advanced controls',
+    'setup.action.open_advanced_controls': 'Open advanced setup controls',
+    'setup.action.configure_delivery': 'Configure delivery channels',
+    'setup.action.configure_source_keys': 'Configure source API keys',
+    'setup.action.configure_model_backend': 'Configure model/backend settings',
+    'setup.action.open_general_settings': 'Open general settings section',
+    'setup.action.open_detailed_source_settings': 'Open detailed source settings',
+    'setup.action.open_profile_export': 'Open profile and export',
+    'setup.action.export_import_algorithm': 'Export/import algorithm',
+    'setup.action.save_required_inputs': 'Save required inputs',
+    'setup.action.continue_optional_interests': 'Continue to optional interests',
+    'setup.action.skip_default_criteria': 'Skip and use default criteria',
+    'setup.action.continue_with_interests': 'Continue with these interests',
+    'setup.action.enter_key_continue': 'Enter OpenAI key to continue',
+    'setup.action.save_required_continue': 'Save required inputs to continue',
+    'setup.action.save_source_toggles': 'Save source toggles',
+    'setup.action.view_source_registry': 'View source registry',
+    'setup.action.continue_first_run_status': 'Continue to first run status',
+    'setup.action.retry_first_collection': 'Retry first collection',
+    'setup.action.enter_key_retry': 'Enter OpenAI key to retry',
+    'setup.action.save_required_retry': 'Save required inputs to retry',
+    'setup.action.refresh_status': 'Refresh status',
+    'setup.action.open_status': 'Open /status',
+    'setup.action.start_first_collection': 'Start first collection',
+    'setup.action.enter_key_start_collection': 'Enter OpenAI key to start first collection',
+    'setup.action.save_required_start_collection': 'Save required inputs to start first collection',
+    'setup.action.open_ambient_surface': 'Open ambient surface',
+    'setup.action.open_brief_surface': 'Open brief surface',
+    'setup.action.refresh_until_ready': 'Refresh until ready',
+    'setup.action.skip_to_advanced': 'Skip to Advanced',
+    'setup.action.create_supabase_tables': 'Create Supabase Tables',
+    'setup.action.save_delivery_settings': 'Save delivery settings',
+    'setup.action.test_delivery_settings': 'Test delivery settings',
+    'setup.action.open_ambient_delivery': 'Open ambient delivery',
+    'setup.action.open_brief_delivery': 'Open brief delivery',
+    'setup.action.skip_delivery': 'Skip delivery for now',
+    'setup.action.defer_delivery': 'Defer until after first feed',
+    'setup.action.save_source_api_keys': 'Save source/API key settings',
+    'setup.action.open_source_toggles': 'Open source toggles',
+    'setup.action.save_model_backend_settings': 'Save model/backend settings',
+    'setup.action.open_model_backend_settings': 'Open existing model/backend settings',
+    'setup.action.open_backend_health_status': 'Open backend health status',
+    'setup.action.open_source_settings': 'Open source settings',
+    'setup.control.import_algorithm_bundle': 'Import algorithm bundle',
+    'setup.action.download_algorithm_bundle': 'Download algorithm bundle',
+    'setup.action.dry_run_import': 'Dry-run import',
+    'setup.action.confirm_import': 'Confirm import',
+    'setup.action.open_profile_export_surface': 'Open profile export surface',
+    'setup.action.open_existing_profile': 'Open existing profile page',
+    'setup.action.open_existing_settings': 'Open existing settings page',
+    'setup.action.back_to_source_defaults': 'Back to source defaults',
+    'setup.action.open_existing_status': 'Open existing status page',
+    'setup.action.back_to_first_run_progress': 'Back to first-run progress',
+    'setup.action.test_all_keys': 'Test All Keys',
+    'setup.action.save_all': 'Save All',
+    'setup.action.back_to_dashboard': 'Back to Dashboard',
+    'setup.step.essential.eyebrow': 'Essential',
+    'setup.step.essential.title': 'OpenAI key + local SQLite',
+    'setup.step.essential.badge': 'Minimum setup',
+    'setup.step.essential.instructions': 'This is the only blocking step. Local SQLite is the default storage mode, and no external delivery channel is required to complete setup.',
+    'setup.step.criteria.eyebrow': 'Optional interests',
+    'setup.step.criteria.title': 'Use default criteria or add one line of steering',
+    'setup.step.criteria.badge': 'Optional',
+    'setup.step.criteria.instructions': 'Interest selection is not mandatory. If you skip this card, Hedwig keeps the quickstart default criteria for an AI builder focused on AI agents, LLM tooling, and research papers.',
+    'setup.step.sources.eyebrow': 'Automatic sources',
+    'setup.step.sources.title': 'Default source configuration is applied automatically',
+    'setup.step.sources.badge': 'No action needed',
+    'setup.step.sources.instructions': 'One-shot setup uses the currently enabled source set from registry/source_settings automatically. Source selection is not a required setup step; expand the optional controls only if you want to override the first-run preset.',
+    'setup.step.progress.eyebrow': 'Progress',
+    'setup.step.progress.title': 'First run status',
+    'setup.step.progress.instructions': 'Long first collections can take a while. This page stays useful while Hedwig collects and scores; /feed navigation appears after the readiness criteria pass.',
+    'setup.step.feed.eyebrow': 'Consume and operate',
+    'setup.step.feed.title': 'Feed-first dashboard',
+    'setup.step.feed.badge': 'Default target',
+    'setup.step.feed.instructions': 'Hedwig’s first delivery target is the dashboard feed. Monitoring and source review stay close at hand; power-user surfaces remain in Advanced.',
+    'setup.step.completion.eyebrow': 'Completion gate',
+    'setup.step.completion.title': 'Feed-ready completion',
+    'setup.step.advanced.eyebrow': 'Advanced',
+    'setup.step.advanced.title': 'Optional configuration',
+    'setup.step.advanced.badge': 'Collapsed by default',
+    'setup.step.advanced.instructions': 'These controls preserve the old setup wizard and power-user paths without blocking first-run setup.'
+  }
+};
+
+function setupPageLanguage() {
+  try {
+    return HEDWIG_LANGUAGE_STATE.current || 'ko';
+  } catch (_error) {
+    return 'ko';
+  }
+}
+
+function setupPageDictionary() {
+  return SETUP_PAGE_I18N[setupPageLanguage()] || SETUP_PAGE_I18N.ko;
+}
+
+function setupPageText(key, fallback, replacements = {}) {
+  const template = setupPageDictionary()[key] || fallback;
+  return Object.entries(replacements).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    template
+  );
+}
+
+function setupPlural(count) {
+  return Number(count) === 1 ? '' : 's';
+}
+
+function renderSetupStaticInstructionCopy() {
+  document.querySelectorAll('[data-setup-i18n]').forEach((node) => {
+    const key = node.dataset.setupI18n;
+    node.textContent = setupPageText(key, node.textContent.trim());
+  });
+}
+
+function renderLocalizedSetupPage() {
+  renderSetupStaticInstructionCopy();
+  updateSetupClientState();
+  if (setupClientState.latestSetupState) {
+    renderSetupState(setupClientState.latestSetupState);
+  }
+  if (setupClientState.latestCollectionProgress) {
+    renderCollectionProgressLifecycle(setupClientState.latestCollectionProgress);
+  }
+}
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -2245,41 +2807,44 @@ function updateSetupClientState(options = {}) {
   if (status) {
     status.classList.toggle('warn', !setupClientState.openaiKeyPresent);
     if (!setupClientState.openaiKeyPresent) {
-      status.textContent = 'Enter an OpenAI key to enable first-run local setup. Supabase can stay blank; local SQLite is the storage default.';
+      status.textContent = setupPageText('setup.status.openai_missing', 'Enter an OpenAI key to enable first-run local setup. Supabase can stay blank; local SQLite is the storage default.');
     } else if (!setupClientState.requiredOnboardingSaved) {
-      status.textContent = 'OpenAI key is present. Starting the first collection will save the local SQLite setup automatically.';
+      status.textContent = setupPageText('setup.status.openai_present', 'OpenAI key is present. Starting the first collection will save the local SQLite setup automatically.');
     } else if (!localMode) {
-      status.textContent = 'Supabase hosted/team mode selected for advanced storage; fill SUPABASE_URL and SUPABASE_KEY for that mode. The one-shot setup action still creates a local SQLite first feed.';
+      status.textContent = setupPageText('setup.status.supabase_selected', 'Supabase hosted/team mode selected for advanced storage; fill SUPABASE_URL and SUPABASE_KEY for that mode. The one-shot setup action still creates a local SQLite first feed.');
     } else {
-      status.textContent = 'Ready for one-shot local setup. Your API key will be saved to .env, not browser storage.';
+      status.textContent = setupPageText('setup.status.ready', 'Ready for one-shot local setup. Your API key will be saved to .env, not browser storage.');
     }
   }
   const supabaseRequirementMessage = document.querySelector('[data-supabase-requirement-message]');
   if (supabaseRequirementMessage) {
-    const supabaseRequiredMessage = [
-      'SUPABASE_URL and SUPABASE_KEY',
-      'are needed only for the advanced Supabase hosted/team mode selected here.'
+    const supabaseRequiredFallback = [
+      'SUPABASE_URL and SUPABASE_KEY are needed only for the advanced',
+      'Supabase hosted/team mode selected here.'
     ].join(' ');
+    const supabaseRequiredMessage = setupPageText('setup.supabase.selected', supabaseRequiredFallback);
     supabaseRequirementMessage.classList.toggle('warn', setupClientState.supabaseModeSelected);
     supabaseRequirementMessage.textContent = setupClientState.supabaseModeSelected
       ? supabaseRequiredMessage
-      : 'Local SQLite selected: Supabase can stay blank. SUPABASE_URL and SUPABASE_KEY are only needed if you later choose Supabase hosted/team mode.';
+      : setupPageText('setup.supabase.local', 'Local SQLite selected: Supabase can stay blank. SUPABASE_URL and SUPABASE_KEY are only needed if you later choose Supabase hosted/team mode.');
   }
 
   oneShotStartControls().forEach((button) => {
     const pollingActive = setupClientState.collectionLifecycleActive
       && !setupClientState.collectionLifecycleTerminal;
     const enabled = setupClientState.openaiKeyPresent && !pollingActive;
+    const readyLabel = button.dataset.readyI18n
+      ? setupPageText(button.dataset.readyI18n, button.dataset.readyLabel || setupPageText('setup.button.start_collection', 'Start first collection'))
+      : (button.dataset.readyLabel || setupPageText('setup.button.start_collection', 'Start first collection'));
+    const missingKeyLabel = button.dataset.missingKeyI18n
+      ? setupPageText(button.dataset.missingKeyI18n, button.dataset.missingKeyLabel || setupPageText('setup.button.enter_key', 'Enter OpenAI key to start'))
+      : (button.dataset.missingKeyLabel || setupPageText('setup.button.enter_key', 'Enter OpenAI key to start'));
     button.disabled = !enabled;
     button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
     if (pollingActive) {
-      button.textContent = 'First collection running...';
+      button.textContent = setupPageText('setup.button.collection_running', 'First collection running...');
     } else {
-      button.textContent = enabled
-        ? (button.dataset.readyLabel || 'Start first collection')
-        : (
-          button.dataset.missingKeyLabel || 'Enter OpenAI key to start'
-        );
+      button.textContent = enabled ? readyLabel : missingKeyLabel;
     }
   });
   applySetupNavigationLock();
@@ -2289,8 +2854,8 @@ function updateSetupClientState(options = {}) {
   if (criteriaStatus && interest) {
     const hasInterest = interest.value.trim().length > 0;
     criteriaStatus.textContent = hasInterest
-      ? 'This one-line interest will seed the generated AI-builder criteria profile.'
-      : 'You can skip interest selection and still complete setup with the default criteria.';
+      ? setupPageText('setup.criteria.custom', 'This one-line interest will seed the generated AI-builder criteria profile.')
+      : setupPageText('setup.criteria.default', 'You can skip interest selection and still complete setup with the default criteria.');
   }
 
   const appliedSourcePresetState = setupClientState.sourcePresetState?.preset_id === selectedSourcePreset()
@@ -2325,8 +2890,12 @@ function updateStepState(key, stateClass, statusText, guidanceText) {
   cardState.classList.toggle('pending', stateClass === 'pending');
   const status = cardState.querySelector('strong');
   const guidance = cardState.querySelector('span:not(.setup-status-dot)');
-  if (status) status.textContent = `Status: ${statusText}`;
-  if (guidance) guidance.textContent = `Guidance: ${guidanceText}`;
+  if (status) {
+    status.textContent = setupPageText('setup.step.status_prefix', 'Status: {status}', {status: statusText});
+  }
+  if (guidance) {
+    guidance.textContent = setupPageText('setup.step.guidance_prefix', 'Guidance: {guidance}', {guidance: guidanceText});
+  }
 }
 
 function renderSetupRunFeedback(stateClass, titleText, messageText) {
@@ -2423,32 +2992,39 @@ function renderSetupFeedPreview(state) {
   preview.classList.toggle('ready', ready);
   preview.classList.toggle('waiting', !ready);
   if (title) {
-    title.textContent = ready ? item.title : 'First feed preview pending';
+    title.textContent = ready ? item.title : setupPageText('setup.preview.pending_title', 'First feed preview pending');
   }
   if (countLabel) {
-    countLabel.textContent = ready ? `${count} ready` : 'Waiting';
+    countLabel.textContent = ready ? `${count} ready` : setupPageText('setup.preview.waiting_count', 'Waiting');
     countLabel.classList.toggle('ready', ready);
   }
   if (meta) {
     const metaParts = ready
       ? [item.platform, item.author, item.urgency, item.relevance_score !== null && item.relevance_score !== undefined && item.relevance_score !== '' ? `Score ${Number(item.relevance_score).toFixed(2)}` : '']
         .filter(Boolean)
-      : ['Local SQLite feed data will appear here after the first collection saves items.'];
+      : [setupPageText('setup.preview.waiting_meta', 'Local SQLite feed data will appear here after the first collection saves items.')];
     meta.textContent = metaParts.join(' · ');
   }
   if (summary) {
-    const previewText = item.why_relevant || item.content || 'This item is ready in your local dashboard feed.';
+    const previewText = item.why_relevant || item.content || setupPageText('setup.preview.ready_summary', 'This item is ready in your local dashboard feed.');
     summary.textContent = ready
       ? String(previewText).slice(0, 240)
-      : 'This inline preview uses the same local SQLite feed data as /feed. Start the first collection, then keep this page open for ready-state content and recovery.';
+      : setupPageText('setup.preview.waiting_summary', 'This inline preview uses the same local SQLite feed data as /feed. Start the first collection, then keep this page open for ready-state content and recovery.');
   }
   if (link) {
     link.href = ready && item.url ? item.url : (feedNavigationAvailable ? '/feed' : '#setup-progress');
-    link.textContent = ready && item.url ? 'Open source item' : (feedNavigationAvailable ? 'Open /feed' : 'Waiting for /feed readiness');
+    link.textContent = ready && item.url
+      ? setupPageText('setup.preview.open_source', 'Open source item')
+      : (
+        feedNavigationAvailable
+          ? setupPageText('setup.preview.open_feed', 'Open /feed')
+          : setupPageText('setup.preview.waiting_link', 'Waiting for /feed readiness')
+      );
   }
 }
 
 function renderSetupState(state) {
+  setupClientState.latestSetupState = state;
   const pill = document.getElementById('first-run-pill');
   const result = document.getElementById('one-shot-results');
   const successState = document.querySelector('[data-setup-success-state]');
@@ -2513,39 +3089,59 @@ function renderSetupState(state) {
   updateStepState(
     'essential',
     localReady ? 'complete' : 'attention',
-    localReady ? 'ready' : 'needs OpenAI key',
-    'paste the key, then continue. SQLite is applied automatically; Supabase and delivery stay optional.'
+    localReady
+      ? setupPageText('setup.step.essential.ready', 'ready')
+      : setupPageText('setup.step.essential.needs_key', 'needs OpenAI key'),
+    setupPageText('setup.step.essential.guidance', 'paste the key, then continue. SQLite is applied automatically; Supabase and delivery stay optional.')
   );
   updateStepState(
     'progress',
     progressClass,
     progressStatus,
-    'refresh here during slow collection; if items are not ready yet, stay on this progress card.'
+    setupPageText('setup.step.progress.guidance', 'refresh here during slow collection; if items are not ready yet, stay on this progress card.')
   );
   updateStepState(
     'feed',
     ready ? 'complete' : 'pending',
-    ready ? 'feed items ready' : 'waiting for first items',
-    '/feed is the default destination; source review, signals, briefs, and ambient surfaces remain reachable.'
+    ready
+      ? setupPageText('setup.step.feed.ready', 'feed items ready')
+      : setupPageText('setup.step.feed.waiting', 'waiting for first items'),
+    setupPageText('setup.step.feed.guidance', '/feed is the default destination; source review, signals, briefs, and ambient surfaces remain reachable.')
   );
   updateStepState(
     'completion',
     setupComplete ? 'complete' : 'attention',
-    setupComplete ? 'complete' : (partiallyReady ? 'feed usable, collection finishing' : 'waiting on feed items'),
-    'completion requires the minimum local setup checks, readable feed data, and the first collection completion signal.'
+    setupComplete
+      ? setupPageText('setup.step.completion.complete', 'complete')
+      : (
+        partiallyReady
+          ? setupPageText('setup.step.completion.partial', 'feed usable, collection finishing')
+          : setupPageText('setup.step.completion.waiting', 'waiting on feed items')
+      ),
+    setupPageText('setup.step.completion.guidance', 'completion requires the minimum local setup checks, readable feed data, and the first collection completion signal.')
   );
   renderSetupRunFeedback(
     feedbackState,
-    setupComplete ? 'First run succeeded' : (partiallyReady ? 'Feed usable while collection finishes' : (progressReady ? 'First run in progress' : 'First run not started')),
     setupComplete
-      ? `Feed is ready with ${count} item${count === 1 ? '' : 's'}. Open /feed to start consuming your personal algorithm.`
+      ? setupPageText('setup.feedback.first_run_succeeded', 'First run succeeded')
       : (
         partiallyReady
-          ? `Local SQLite has ${count} readable feed item${count === 1 ? '' : 's'}. Stay on /setup while it keeps polling for collection completion.`
+          ? setupPageText('setup.feedback.feed_usable', 'Feed usable while collection finishes')
+          : (
+            progressReady
+              ? setupPageText('setup.feedback.in_progress', 'First run in progress')
+              : setupPageText('setup.feedback.not_started', 'First run not started')
+          )
+      ),
+    setupComplete
+      ? setupPageText('setup.feedback.ready_count', 'Feed is ready with {count} item{plural}. Open /feed to start consuming your personal algorithm.', {count, plural: setupPlural(count)})
+      : (
+        partiallyReady
+          ? setupPageText('setup.feedback.partial_count', 'Local SQLite has {count} readable feed item{plural}. Stay on /setup while it keeps polling for collection completion.', {count, plural: setupPlural(count)})
           : (
         progressReady
-          ? 'Required local setup is ready and Hedwig is waiting for first feed items. Keep this page open until /feed unlocks.'
-          : 'Start the first collection after saving your OpenAI key; progress, success, and failure feedback appears here.'
+          ? setupPageText('setup.feedback.progress_ready', 'Required local setup is ready and Hedwig is waiting for first feed items. Keep this page open until /feed unlocks.')
+          : setupPageText('setup.feedback.start_after_key', 'Start the first collection after saving your OpenAI key; progress, success, and failure feedback appears here.')
           )
       )
   );
@@ -2553,28 +3149,36 @@ function renderSetupState(state) {
     setupComplete ? 'complete' : (ready ? 'partial' : (firstRunActive ? 'active' : 'idle')),
     progressPercent,
     setupComplete
-      ? 'Setup/feed initialization complete'
-      : (ready ? 'Feed usable while collection finishes' : (firstRunActive ? 'Setup/feed initialization is running' : 'Setup/feed initialization has not started')),
-    setupComplete
-      ? 'Feed items are ready. Continue to /feed.'
+      ? setupPageText('setup.progress.complete_title', 'Setup/feed initialization complete')
       : (
         ready
-          ? 'Feed items are readable from local SQLite now. Setup keeps feed navigation locked until the tracked first collection completes.'
+          ? setupPageText('setup.progress.partial_title', 'Feed usable while collection finishes')
+          : (
+            firstRunActive
+              ? setupPageText('setup.progress.running_title', 'Setup/feed initialization is running')
+              : setupPageText('setup.progress.idle_title', 'Setup/feed initialization has not started')
+          )
+      ),
+    setupComplete
+      ? setupPageText('setup.progress.complete_message', 'Feed items are ready. Continue to /feed.')
+      : (
+        ready
+          ? setupPageText('setup.progress.partial_message', 'Feed items are readable from local SQLite now. Setup keeps feed navigation locked until the tracked first collection completes.')
           : (
         firstRunActive
-          ? 'Criteria and local SQLite are ready. Hedwig is collecting and scoring the first feed; this page will keep polling.'
+          ? setupPageText('setup.progress.running_message', 'Criteria and local SQLite are ready. Hedwig is collecting and scoring the first feed; this page will keep polling.')
           : (
             localReady
-              ? 'Required local setup is saved. Start the first collection to begin feed initialization.'
-              : 'Save OPENAI_API_KEY to enable local setup and first-feed initialization.'
+              ? setupPageText('setup.progress.local_saved_message', 'Required local setup is saved. Start the first collection to begin feed initialization.')
+              : setupPageText('setup.progress.save_key_message', 'Save OPENAI_API_KEY to enable local setup and first-feed initialization.')
           )
           )
       )
   );
   if (result) {
     result.innerHTML = feedNavigationAvailable
-      ? `<div class="test-row ok">Feed ready with ${count} item${count === 1 ? '' : 's'}. <a href="/feed">Open /feed</a></div>`
-      : '<div class="test-row ok">Setup is progressing. Stay on this page while Hedwig verifies the first local feed.</div>';
+      ? `<div class="test-row ok">${setupPageText('setup.result.feed_ready', 'Feed ready with {count} item{plural}.', {count, plural: setupPlural(count)})} <a href="/feed">${setupPageText('setup.result.open_feed', 'Open /feed')}</a></div>`
+      : `<div class="test-row ok">${setupPageText('setup.result.progressing', 'Setup is progressing. Stay on this page while Hedwig verifies the first local feed.')}</div>`;
   }
   if (successState) {
     successState.hidden = !setupComplete;
@@ -2586,7 +3190,7 @@ function renderSetupState(state) {
     successState.classList.toggle('visible', setupComplete);
     const successCopy = successState.querySelector('[data-setup-success-copy]');
     if (successCopy && setupComplete) {
-      successCopy.textContent = `First-run setup completed with OpenAI, local SQLite, generated criteria, and ${count} feed item${count === 1 ? '' : 's'} available in the dashboard feed.`;
+      successCopy.textContent = setupPageText('setup.success.copy', 'First-run setup completed with OpenAI, local SQLite, generated criteria, and {count} feed item{plural} available in the dashboard feed.', {count, plural: setupPlural(count)});
     }
   }
   if (partialState) {
@@ -2595,7 +3199,7 @@ function renderSetupState(state) {
     partialState.classList.toggle('visible', partiallyReady);
     const partialCopy = partialState.querySelector('[data-setup-partial-feed-copy]');
     if (partialCopy && partiallyReady) {
-      partialCopy.textContent = `${count} SQLite-backed feed item${count === 1 ? '' : 's'} are readable, but stay on /setup until the tracked first collection completes. Feed navigation unlocks after completion.`;
+      partialCopy.textContent = setupPageText('setup.partial.copy', '{count} SQLite-backed feed item{plural} are readable, but stay on /setup until the tracked first collection completes. Feed navigation unlocks after completion.', {count, plural: setupPlural(count)});
     }
   }
   if (completionCard) {
@@ -2611,20 +3215,32 @@ function renderSetupState(state) {
     completionCard.classList.toggle('waiting', !setupComplete && !partiallyReady);
   }
   if (completionPill) {
-    completionPill.textContent = setupComplete ? 'Complete' : (partiallyReady ? 'Feed usable' : 'Waiting');
+    completionPill.textContent = setupComplete
+      ? setupPageText('setup.completion.pill.complete', 'Complete')
+      : (
+        partiallyReady
+          ? setupPageText('setup.completion.pill.partial', 'Feed usable')
+          : setupPageText('setup.completion.pill.waiting', 'Waiting')
+      );
     completionPill.classList.toggle('ready', setupComplete);
   }
   if (completionMessage) {
     completionMessage.textContent = setupComplete
-      ? 'First-run setup is complete. Open the dashboard feed to start consuming your personal algorithm.'
+      ? setupPageText('setup.completion.message.complete', 'First-run setup is complete. Open the dashboard feed to start consuming your personal algorithm.')
       : (
         partiallyReady
-          ? 'Local SQLite feed data is usable now, but setup keeps feed navigation locked until the tracked first collection finishes.'
-          : 'Setup can keep running here while the first collection finishes. The feed remains reachable as a fallback, but this completion gate only turns green once items are available.'
+          ? setupPageText('setup.completion.message.partial', 'Local SQLite feed data is usable now, but setup keeps feed navigation locked until the tracked first collection finishes.')
+          : setupPageText('setup.completion.message.waiting', 'Setup can keep running here while the first collection finishes. The feed remains reachable as a fallback, but this completion gate only turns green once items are available.')
       );
   }
   if (finishFeedLink) {
-    finishFeedLink.textContent = setupComplete ? 'Open completed /feed' : (partiallyReady ? 'Feed unlocks after collection' : 'Feed opens after readiness');
+    finishFeedLink.textContent = setupComplete
+      ? setupPageText('setup.completion.link.complete', 'Open completed /feed')
+      : (
+        partiallyReady
+          ? setupPageText('setup.completion.link.partial', 'Feed unlocks after collection')
+          : setupPageText('setup.completion.link.waiting', 'Feed opens after readiness')
+      );
     finishFeedLink.href = feedNavigationHref;
     finishFeedLink.classList.toggle('is-waiting', !setupComplete);
     finishFeedLink.classList.toggle('is-locked', navigationLocked);
@@ -2632,11 +3248,13 @@ function renderSetupState(state) {
   }
   if (completionCount) {
     completionCount.textContent = ready
-      ? `${count} feed item${count === 1 ? '' : 's'}`
-      : 'No feed items yet';
+      ? setupPageText('setup.completion.count_ready', '{count} feed item{plural}', {count, plural: setupPlural(count)})
+      : setupPageText('setup.completion.count_empty', 'No feed items yet');
   }
   if (completionAction) {
-    completionAction.textContent = feedNavigationAvailable ? completionActionPath : 'Pending readiness criteria';
+    completionAction.textContent = feedNavigationAvailable
+      ? completionActionPath
+      : setupPageText('setup.completion.pending', 'Pending readiness criteria');
   }
   if (completionRedirect) {
     completionRedirect.textContent = redirectTarget || 'Waiting for feed items';
@@ -2646,7 +3264,15 @@ function renderSetupState(state) {
     completionNav.classList.toggle('waiting', !setupComplete);
     completionNav.setAttribute('aria-disabled', ready && !navigationLocked ? 'false' : 'true');
     const label = completionNav.querySelector('span');
-    if (label) label.textContent = setupComplete ? 'Ready for /feed' : (partiallyReady ? 'Feed usable, finishing' : 'Waiting on first feed');
+    if (label) {
+      label.textContent = setupComplete
+        ? setupPageText('setup.completion.nav.complete', 'Ready for /feed')
+        : (
+          partiallyReady
+            ? setupPageText('setup.completion.nav.partial', 'Feed usable, finishing')
+            : setupPageText('setup.completion.nav.waiting', 'Waiting on first feed')
+        );
+    }
   }
   if (postSetupPrimaryNav) {
     postSetupPrimaryNav.dataset.ready = setupComplete ? 'true' : 'false';
@@ -2657,11 +3283,11 @@ function renderSetupState(state) {
   }
   if (postSetupPrimaryNavLead) {
     postSetupPrimaryNavLead.textContent = setupComplete
-      ? 'Setup is complete. Continue with the primary Hedwig surfaces.'
+      ? setupPageText('setup.post_nav.complete', 'Setup is complete. Continue with the primary Hedwig surfaces.')
       : (
         partiallyReady
-          ? 'Feed data is usable now, but setup keeps navigation here until collection finishes.'
-          : 'These primary surfaces remain reachable while setup waits for first feed items.'
+          ? setupPageText('setup.post_nav.partial', 'Feed data is usable now, but setup keeps navigation here until collection finishes.')
+          : setupPageText('setup.post_nav.waiting', 'These primary surfaces remain reachable while setup waits for first feed items.')
       );
   }
   const navigationCriteriaPanel = document.querySelector('[data-feed-navigation-readiness-criteria]');
@@ -2686,7 +3312,9 @@ function renderSetupState(state) {
       const label = row.querySelector('p');
       if (label) {
         const count = Number(state.feed_items || 0);
-        label.textContent = `Feed items available${count ? `: ${count}` : ''}`;
+        label.textContent = setupPageText('setup.progress_step.feed_items', 'Feed items available{countSuffix}', {
+          countSuffix: count ? `: ${count}` : ''
+        });
       }
     }
   });
@@ -2762,10 +3390,17 @@ function collectionLifecycleMessage(data) {
   const filtered = Number(counts.posts_filtered || 0);
   const scored = Number(counts.signals_scored || 0);
   const saved = Number(counts.signals_saved || data?.state?.feed_items || 0);
-  return `Status ${status}: collected ${collected}, filtered ${filtered}, scored ${scored}, saved ${saved}.`;
+  return setupPageText('setup.collection.status', 'Status {status}: collected {collected}, filtered {filtered}, scored {scored}, saved {saved}.', {
+    status,
+    collected,
+    filtered,
+    scored,
+    saved
+  });
 }
 
 function renderCollectionProgressLifecycle(data) {
+  setupClientState.latestCollectionProgress = data;
   const progress = data?.collection_progress || {};
   const state = data?.state || {};
   const ready = Boolean(state.feed_items_available) && Number(state.feed_items || 0) > 0;
@@ -3193,6 +3828,10 @@ function wireSetupProgressiveDisclosureLinks() {
   window.addEventListener('hashchange', () => openSetupDisclosureTarget(window.location.hash));
   openSetupDisclosureTarget(window.location.hash, {scroll: false});
 }
+
+window.addEventListener('hedwig:languagechange', () => {
+  renderLocalizedSetupPage();
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   restoreSetupDraft();

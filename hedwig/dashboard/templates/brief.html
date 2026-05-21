@@ -3,16 +3,52 @@
 {% block content %}
 
 <div class="hero">
-  <h1>📰 Briefings</h1>
-  <p class="subtitle muted">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
+  <h1 data-i18n="brief.title">Briefings</h1>
+  <p class="subtitle muted" data-i18n="brief.subtitle">매일/주간 LLM 브리핑 보관소. Slack/Discord 안 붙였어도 여기서 읽습니다.</p>
 </div>
 
-<div class="section">
-  <div class="button-row" style="margin-bottom: 14px;">
-    <button class="btn{% if cycle == 'all' %} btn-primary{% endif %}" onclick="location='/brief'">All</button>
-    <button class="btn{% if cycle == 'daily' %} btn-primary{% endif %}" onclick="location='/brief?cycle=daily'">Daily</button>
-    <button class="btn{% if cycle == 'weekly' %} btn-primary{% endif %}" onclick="location='/brief?cycle=weekly'">Weekly</button>
+<nav
+  class="setup-primary-nav ready"
+  aria-label="Post-brief navigation"
+  data-i18n-aria-label="brief.entry.nav_label"
+  data-brief-entrypoint-i18n="HEDWIG_LANGUAGE_STATE"
+>
+  <p class="setup-primary-nav-lead" data-i18n="brief.nav_lead">
+    Brief is the summary surface. Continue reading, ask questions, or review how recommendations are shifting.
+  </p>
+  <div class="setup-primary-nav-links">
+    <a href="/feed" data-brief-nav-target="feed">
+      <strong data-i18n="brief.entry.feed.label">Feed</strong>
+      <span data-i18n="brief.entry.feed.description">Return to the source signal cards behind the briefing.</span>
+    </a>
+    <a href="/chat" data-brief-nav-target="chat">
+      <strong data-i18n="brief.entry.chat.label">Chat</strong>
+      <span data-i18n="brief.entry.chat.description">Ask natural-language follow-up questions about a briefing.</span>
+    </a>
+    <a href="/evolution" data-brief-nav-target="evolution">
+      <strong data-i18n="brief.entry.evolution.label">Evolution</strong>
+      <span data-i18n="brief.entry.evolution.description">Review how recommendation direction changes over time.</span>
+    </a>
   </div>
+</nav>
+
+<div class="section">
+  <section
+    class="feed-action-bar"
+    aria-label="Brief actions"
+    data-i18n-aria-label="brief.actions_label"
+    data-brief-actions
+  >
+    <div>
+      <strong data-i18n="brief.controls">Brief controls</strong>
+      <span data-i18n="brief.controls_help">Switch quickly between all, daily, and weekly briefs.</span>
+    </div>
+    <div class="feed-action-controls">
+      <button class="btn{% if cycle == 'all' %} btn-primary{% endif %}" onclick="location='/brief'" data-i18n="brief.all">All</button>
+      <button class="btn{% if cycle == 'daily' %} btn-primary{% endif %}" onclick="location='/brief?cycle=daily'" data-i18n="brief.daily">Daily</button>
+      <button class="btn{% if cycle == 'weekly' %} btn-primary{% endif %}" onclick="location='/brief?cycle=weekly'" data-i18n="brief.weekly">Weekly</button>
+    </div>
+  </section>
 
   {% if briefings %}
     {% for b in briefings %}
@@ -64,30 +100,48 @@
         {% endif %}
 
         <details class="full-text">
-          <summary>📄 원문 전체 보기</summary>
+          <summary data-i18n="brief.full_text">View full original</summary>
           <div class="full-text-body" data-raw="{{ b.content|e }}">{{ b.content }}</div>
         </details>
 
         <div class="quick-actions">
-          <a href="/chat?q={{ ('이 브리핑 더 자세히 설명해줘 — ' + headline_text)|urlencode }}">💬 Chat에서 더 깊이</a>
-          <a href="/evolution">🧬 evolution timeline</a>
+          <a href="/chat?q={{ ('이 브리핑 더 자세히 설명해줘 — ' + headline_text)|urlencode }}" data-i18n="brief.action.deep_chat">Go deeper in Chat</a>
+          <a href="/evolution" data-i18n="brief.action.evolution">Evolution timeline</a>
         </div>
       </div>
     </details>
     {% endfor %}
   {% else %}
     <div class="empty-state">
-      <p class="muted">아직 브리핑이 없습니다.</p>
+      <p class="muted" data-i18n="brief.empty">아직 브리핑이 없습니다.</p>
       <ol class="muted">
-        <li>홈 또는 Chat에서 "daily 파이프라인 실행" 요청</li>
-        <li>또는 <code>python -m hedwig</code> 1회 실행 → daily brief 생성</li>
-        <li>주간은 <code>python -m hedwig --weekly</code></li>
+        <li data-i18n="brief.empty.run_daily">Ask Home or Chat to run the daily pipeline.</li>
+        <li data-i18n="brief.empty.run_local">Or run python -m hedwig once to generate a daily brief.</li>
+        <li data-i18n="brief.empty.run_weekly">For weekly briefings, run python -m hedwig --weekly.</li>
       </ol>
     </div>
   {% endif %}
 </div>
 
 <script>
+function renderBriefLocalizedContent() {
+  const dictionary = window.HEDWIG_LANGUAGE_STATE?.dictionary || window.HEDWIG_I18N?.ko || {};
+  document
+    .querySelectorAll('[data-brief-entrypoint-i18n] [data-i18n], [data-brief-actions] [data-i18n], .headline-card [data-i18n], .empty-state [data-i18n]')
+    .forEach((node) => {
+      const text = dictionary[node.dataset.i18n];
+      if (text) node.textContent = text;
+    });
+  document
+    .querySelectorAll('[data-brief-entrypoint-i18n][data-i18n-aria-label], [data-brief-actions][data-i18n-aria-label]')
+    .forEach((node) => {
+      const text = dictionary[node.dataset.i18nAriaLabel];
+      if (text) node.setAttribute('aria-label', text);
+    });
+  if (typeof renderHedwigLocalizedShell === 'function') renderHedwigLocalizedShell();
+}
+window.addEventListener('hedwig:languagechange', renderBriefLocalizedContent);
+
 function renderMD(s) {
   if (!s) return '';
   let t = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

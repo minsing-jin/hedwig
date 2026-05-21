@@ -43,8 +43,47 @@ body { background: #f5f5f7 !important; color: #111827 !important; }
 .nav { background: white !important; border-bottom: 1px solid #e5e7eb !important; }
 .nav-brand .name { color: #0f172a !important; }
 .nav-brand .version { color: #6b7280 !important; }
-.nav-links a { color: #1f2937 !important; }
-.nav-links a:hover { color: #1d4ed8 !important; }
+.nav-links a, .nav-group summary { color: #1f2937 !important; }
+.nav-links a:hover, .nav-group summary:hover { color: #1d4ed8 !important; }
+.nav-links a:focus-visible, .nav-group summary:focus-visible, .language-rail select:focus-visible {
+  color: #1d4ed8 !important;
+  outline: 3px solid rgba(37, 99, 235, 0.35) !important;
+  outline-offset: 3px;
+}
+.nav-primary, .nav-group summary, .language-rail select {
+  background: #f8fafc !important;
+  border-color: #dbe3ef !important;
+}
+.nav-group-kicker {
+  color: #64748b !important;
+}
+.nav-group-advanced .nav-group-kicker {
+  color: #b45309 !important;
+}
+.nav-group-saas .nav-group-kicker {
+  color: #047857 !important;
+}
+.nav-overflow-label {
+  color: #0f172a !important;
+}
+.nav-group[open] summary {
+  border-color: #2563eb !important;
+  color: #1d4ed8 !important;
+}
+.nav-links a[aria-current="page"], .nav-group[data-current-navigation="true"] summary {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  color: #1d4ed8 !important;
+}
+.nav-menu a[aria-current="page"] {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+.nav-menu {
+  background: white !important;
+  border-color: #dbe3ef !important;
+}
+.language-rail label { color: #4b5563 !important; }
 .footer { background: transparent; }
 .footer span { color: #6b7280 !important; }
 .feed-card a, .brief-card a, .meta-card a, .sov-card a, .diff-card a,

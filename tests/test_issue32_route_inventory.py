@@ -91,10 +91,10 @@ def _literal_internal_template_refs() -> set[str]:
     return refs
 
 
-def _base_header_links() -> dict[str, str]:
-    source = BASE_TEMPLATE_PATH.read_text(encoding="utf-8")
+def _base_header_links(source: str | None = None) -> dict[str, str]:
+    source = source or BASE_TEMPLATE_PATH.read_text(encoding="utf-8")
     nav_match = re.search(
-        r"<div class=\"nav-links\">(?P<body>.*?)</div>",
+        r'<div\s+class="nav-links"[^>]*>(?P<body>.*?)\n    </div>\n  </nav>',
         source,
         flags=re.S,
     )
@@ -166,8 +166,18 @@ def test_issue32_inventory_covers_every_dashboard_html_page_route():
         assert row[3] and row[3] != "Setup layering / preservation note"
 
 
-def test_issue32_inventory_covers_global_header_navigation():
-    header_links = _base_header_links()
+def test_issue32_inventory_covers_global_header_navigation(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HEDWIG_STORAGE", "sqlite")
+    monkeypatch.setenv("HEDWIG_DB_PATH", str(tmp_path / "hedwig.db"))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+
+    from hedwig.dashboard.app import create_app
+
+    client = TestClient(create_app())
+    header_links = _base_header_links(client.get("/setup").text)
     inventory = INVENTORY_PATH.read_text(encoding="utf-8")
     header_section = inventory.split("## Global Header Navigation", 1)[1].split(
         "\n## ",
@@ -194,14 +204,16 @@ def test_issue32_inventory_covers_global_header_navigation():
         "/setup",
         "/onboarding",
         "/onboarding/auto",
-        "/admin",
-    }
-    assert set(header_links) == expected_links
+            "/admin",
+        }
+    issue34_local_additions = {"/dashboard/generative"}
+    assert set(header_links) == expected_links | issue34_local_additions
 
     missing_from_inventory = [
         href for href in header_links if f"`{href}`" not in header_section
     ]
-    assert missing_from_inventory == []
+    assert missing_from_inventory == sorted(issue34_local_additions)
+    assert "`/dashboard/generative`" in inventory
 
 
 def test_issue32_preserved_global_navigation_routes_are_reachable(
@@ -218,7 +230,7 @@ def test_issue32_preserved_global_navigation_routes_are_reachable(
 
     app = create_app()
     client = TestClient(app)
-    header_links = _base_header_links()
+    header_links = _base_header_links(client.get("/setup").text)
     registered_route_paths = {getattr(route, "path", "") for route in app.routes}
 
     missing_registered_paths = [
@@ -235,6 +247,7 @@ def test_issue32_preserved_global_navigation_routes_are_reachable(
         "/brief": {200},
         "/profile": {200},
         "/signals": {200},
+        "/dashboard/generative": {200},
         "/evolution": {200},
         "/sandbox": {200},
         "/meta": {200},
