@@ -247,3 +247,27 @@ No unrelated processes were killed during recovery. Memory pressure was checked
 throughout and stayed in the safe range, so the remaining blocker is the
 Ouroboros MCP event-store connection pool, not repository test failures or
 system OOM.
+
+### Isolated Recovery Rerun
+
+On 2026-05-21 KST, a second recovery attempt used an isolated Ouroboros home at
+`/private/tmp/hedwig-issue34-ouroboros-home` so the global event store and other
+projects' MCP sessions were not modified. The isolated run reused the existing
+Codex authentication via `CODEX_HOME=/Users/jinminseong/.codex` but kept
+Ouroboros state under the temporary home.
+
+| Step | Result |
+| --- | --- |
+| Isolated `ouroboros run workflow /private/tmp/hedwig-issue34-ouroboros-seed.yaml --dry-run --sequential --runtime codex --max-decomposition-depth 0 --no-qa` | Completed successfully as session `orch_e93e6c577281`; all 6 issue #34 validation ACs passed with no code changes needed. |
+| Focused regression inside the isolated run | Passed with `79 passed in 10.14s`. |
+| Full regression inside the isolated run | Passed with `924 passed, 1 warning in 81.97s` using `python3 -m pytest -p no:rerunfailures -q`. |
+| Whitespace check inside the isolated run | `git diff --check` passed. |
+| Invalid all-suite attempt with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` | Failed with `115 failed, 809 passed` because async pytest plugins were disabled; this was treated as an invalid verification mode, not an issue #34 regression. |
+| MCP `ouroboros_evaluate` retry | Timed out again after 120 seconds without evaluation events. |
+| MCP `ouroboros_ralph` retry with `max_generations=1`, `execute=false`, `parallel=false`, `skip_qa=true` | Created `job_c4121a3163fc`, but it remained at generation 0 and was cancelled as stale. |
+| Isolated `ouroboros auto --complete-product` attempts | `auto_010ac9a9402e` blocked before Seed generation due unresolved ambiguity after the low interview-round cap. `auto_93fe111ab88c` reached interview round 3/4, then blocked on the fixed 120-second interview phase timeout before Seed/Ralph handoff. |
+
+The rerun improved the recovery evidence by proving the issue #34 implementation
+in a clean isolated Ouroboros home without touching unrelated MCP state. The
+remaining gap is still the Ouroboros runtime's evaluate/Ralph/auto handoff
+behavior, not the Hedwig issue #34 implementation.
